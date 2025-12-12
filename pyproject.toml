@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "leap-utilities"
+version = "0.1.0"
+description = "Shared LEAP helpers (COM, Excel IO, reconciliation) for LEAP integrations."
+authors = [{ name = "LEAP Team" }]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas",
+    "openpyxl",
+    "pywin32 ; platform_system == 'Windows'",
+]
+
+[project.urls]
+Homepage = "https://example.com/leap-utilities"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["leap_utils*"]

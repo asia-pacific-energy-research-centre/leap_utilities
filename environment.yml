@@ -1,0 +1,11 @@
+name: leap_utilities
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pandas
+  - openpyxl
+  - pywin32  # required for LEAP COM on Windows
+  - pip
+  - pip:
+      - -e .
