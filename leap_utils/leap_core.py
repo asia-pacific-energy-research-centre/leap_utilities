@@ -181,7 +181,8 @@ def safe_set_variable(L, obj, varname, expr, unit_name=None, context=""):
             except Exception:
                 pass
         var.Expression = expr
-        short_expr = expr[:80] + ("..." if len(expr) > 80 else "")
+        #check that the expression is a string
+        short_expr = var.Expression[:80] + ("..." if len(var.Expression) > 80 else "")
         print(f"[SET] {context} → {varname} = {short_expr}")
         
         ########
@@ -754,12 +755,14 @@ def create_branches_from_export_file(
         Filter by scenario if column exists
     region : str, optional
         Filter by region if column exists
+    branch_root : str, optional
+        Root path which prepends branches paths. Example: "Key Assumptions/Energy Balances". This is not used in branch creation but can be used in branch_type_mapping, for exmaple in the Energy Balances context you dont want to look up mappings for "Key Assumptions/Energy Balances/XYZ", instead you jsut want to look up "XYZ"
     branch_type_mapping : dict, optional
         Maps branch paths to specific branch types. Example:
         {"Key\\Population": BRANCH_KEY_ASSUMPTION_BRANCH}
     default_branch_type : tuple
         Three-element tuple (non_leaf, second_to_leaf, leaf) defining branch types
-        for different positions in the path hierarchy.
+        for different positions in the path hierarchy.bused when branch_type_mapping does not provide a type.
         Default: (BRANCH_KEY_ASSUMPTION_CATEGORY, BRANCH_KEY_ASSUMPTION_CATEGORY, BRANCH_KEY_ASSUMPTION_BRANCH)
     RAISE_ERROR_ON_FAILED_BRANCH_CREATION : bool
         If True, raises error when branch creation fails. If False, logs warning.
@@ -796,8 +799,14 @@ def create_branches_from_export_file(
 
     if scenario is not None and "Scenario" in df.columns:
         df = df[df["Scenario"] == scenario]
+        if len(df) == 0:
+            breakpoint()
+            raise ValueError(f"No rows found for scenario '{scenario}' in {leap_export_filename} (sheet '{sheet_name}').")
     if region is not None and "Region" in df.columns:
         df = df[df["Region"] == region]
+        if len(df) == 0:
+            breakpoint()
+            raise ValueError(f"No rows found for region '{region}' in {leap_export_filename} (sheet '{sheet_name}').")
 
     branch_paths = [bp for bp in df[branch_path_col].dropna().unique() if isinstance(bp, str)]
     branch_paths = sorted(branch_paths, key=lambda x: len(x.split("\\")))
@@ -807,6 +816,7 @@ def create_branches_from_export_file(
     failed = []
     branch_type_mapping = branch_type_mapping or {}#if we were provided a branchtype mapping then the branch types will be inferred from that where possible
     branch_paths_copy = branch_paths.copy()
+    breakpoint()
     for bp in branch_paths:
         if safe_branch_call(L, bp, AUTO_SET_MISSING_BRANCHES=False, THROW_ERROR_ON_MISSING=False) is not None:
             skipped.append(bp)
@@ -888,18 +898,30 @@ def fill_branches_from_export_file(
     # Filter by scenario/region if specified
     if scenario is not None and "Scenario" in df.columns:
         df = df[df["Scenario"] == scenario]
+        if len(df) == 0:
+            breakpoint()
+            raise ValueError(f"No rows found for scenario '{scenario}' in {leap_export_filename} (sheet '{sheet_name}').")
     if region is not None and "Region" in df.columns:
         df = df[df["Region"] == region]
+        if len(df) == 0:
+            breakpoint()
+            raise ValueError(f"No rows found for region '{region}' in {leap_export_filename} (sheet '{sheet_name}').")
 
-    # Identify year columns (numeric or str columns that have 4 digits)
-    year_cols = [col for col in df.columns if len(str(col)) == 4 and str(col).isdigit()]
+    #if the df contains year cols then we use those instead of expression cols.
+    if 'Expression' in df.columns:
+        print(f"[INFO] 'Expression' column found in {leap_export_filename}, using it to set variable expressions directly.")
+        year_cols = ['Expression']
+    else:
+        # Identify year columns (numeric or str columns that have 4 digits)
+        year_cols = [col for col in df.columns if len(str(col)) == 4 and str(col).isdigit()]
     
     if not year_cols:
+        breakpoint()
         raise ValueError(f"No year columns found in {leap_export_filename}")
 
     success = []
     failed = []
-
+    
     # Group by branch path and variable
     for (bp, var), group in df.groupby(["Branch Path", "Variable"]):
         branch = safe_branch_call(L, bp, AUTO_SET_MISSING_BRANCHES=False, THROW_ERROR_ON_MISSING=False)
@@ -912,25 +934,28 @@ def fill_branches_from_export_file(
                 print(f"[WARN] {msg}")
                 failed.append((bp, var))
                 continue
+        if ['Expression'] == year_cols:
+            #we just need to set the expression directly
+            expr = group['Expression'].iloc[0]
+        else:
+            # Extract year-value pairs
+            points = []
+            for year in year_cols:
+                val = group[year].iloc[0]
+                if pd.notna(val):
+                    try:
+                        points.append((int(year), float(val)))
+                    except (ValueError, TypeError):
+                        print(f"[WARN] Invalid value for {bp}\\{var} in year {year}: {val}")
+                        continue
 
-        # Extract year-value pairs
-        points = []
-        for year in year_cols:
-            val = group[year].iloc[0]
-            if pd.notna(val):
-                try:
-                    points.append((int(year), float(val)))
-                except (ValueError, TypeError):
-                    print(f"[WARN] Invalid value for {bp}\\{var} in year {year}: {val}")
-                    continue
+            if not points:
+                print(f"[WARN] No valid data points for {bp}\\{var}")
+                failed.append((bp, var))
+                continue
 
-        if not points:
-            print(f"[WARN] No valid data points for {bp}\\{var}")
-            failed.append((bp, var))
-            continue
-
-        # Build expression
-        expr = build_expr(points, expression_type="")
+            # Build expression
+            expr = build_expr(points, expression_type="")
         
         if expr is None:
             if RAISE_ERROR_ON_FAILED_SET:
@@ -944,6 +969,7 @@ def fill_branches_from_export_file(
         if SET_UNITS:
             unit_name = group['Units'].iloc[0] if 'Units' in group.columns else None
         # Set the variable
+        breakpoint()
         set_success = safe_set_variable(L, branch, var, expr,unit_name=unit_name, context=bp)
         
         if set_success:

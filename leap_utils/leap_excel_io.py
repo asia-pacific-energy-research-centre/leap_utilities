@@ -2,11 +2,7 @@
 import pandas as pd
 from pathlib import Path
 
-try:  # pragma: no cover - optional dependency
-    from transport_branch_mappings import LEAP_MEASURE_CONFIG
-except Exception:  # pragma: no cover - optional dependency
-    LEAP_MEASURE_CONFIG = None
-
+from .economy_config import region_id_name_dict, scenario_dict
 
 # def get_leap_metadata(measure):
 #     """Fetch LEAP_units, LEAP_Scale, LEAP_Per from LEAP_MEASURE_CONFIG if available."""
@@ -181,7 +177,50 @@ def save_export_files(leap_export_df, export_df_for_viewing, leap_export_filenam
     print(f" - Variables: {leap_export_df['Variable'].nunique()}")
     print(f" - Branches: {export_df_for_viewing['Branch Path'].nunique()}")
     print("=" * 60)
+
+
+def check_scenario_and_region_ids(import_df, scenario, region):
+    #check the region id and name dict for this region and change the values in import df to match those. If they are not availble then raise an error since this will cause issues later that will be harder to identify than here. it can be imported from transport_economy_config
+    dict_regions = [region['region_name'] for region in region_id_name_dict.values()]
+    if region not in dict_regions:#what is region
+        breakpoint()
+        raise ValueError(f"[ERROR] The region {region} specified for structure checking is not found in the region_id_name_dict: {dict_regions}. Make sure to load the correct region data for structure checking.")
+    #CONCERN what if the regions in the dict are incorrect for a new user. I guess it will be noticed later on when the region ids dont match up...
+    import_regions = import_df['Region'].unique()
+    if len(import_regions) != 1:
+        breakpoint()
+        raise ValueError(f"[ERROR] More or less than one region found in import_df during structure checks: {import_regions}.")
+    if region not in import_regions:
+        #we will change the region names in the import df to match those in the dict:
+        import_df['Region'] = region
+        region_id = [region_id_name_dict[key]['region_id'] for key in region_id_name_dict if region_id_name_dict[key]['region_name'] == region]
+        if len(region_id) != 1:
+            raise ValueError(f"[ERROR] Multiple region ids found for region {region} in region_id_name_dict.")
+        import_df['RegionID'] = region_id[0]
+        # raise ValueError(f"[ERROR] The region {region} specified for structure checking is not found in the import dataframe regions: {import_regions}. Make sure to load the correct region data for structure checking.")
+        
+    #do the same for scenario ids
+    dict_scenarios = [scenario_dict[key]['scenario_name'] for key in scenario_dict]
+    if scenario not in dict_scenarios:#what is scenario
+        breakpoint()
+        raise ValueError(f"[ERROR] The scenario {scenario} specified for structure checking is not found in the scenario_dict: {dict_scenarios}. Make sure to load the correct scenario data for structure checking.")
+    import_scenarios = import_df['Scenario'].unique()
+    #drop current accounts from this list since we will handle it separately
+    import_scenarios = [s for s in import_scenarios if s != "Current Accounts"]
+    if len(import_scenarios) != 1:
+        breakpoint()
+        raise ValueError(f"[ERROR] More or less than one scenario found in import_df during structure checks: {import_scenarios}. There should be a Current Accounts scenario and the projected scenario.")
+    if scenario not in import_scenarios:
+        #we will change the scenario names in the import df to match those in the dict where Current Accounts is not the scenario:
+        import_df.loc[import_df['Scenario'] != "Current Accounts", 'Scenario'] = scenario
+        scenario_id = [scenario_dict[key]['scenario_id'] for key in scenario_dict if scenario_dict[key]['scenario_name'] == scenario]
+        if len(scenario_id) != 1:
+            raise ValueError(f"[ERROR] Multiple scenario ids found for scenario {scenario} in scenario_dict.")
+        import_df.loc[import_df['Scenario'] != "Current Accounts", 'ScenarioID'] = scenario_id[0]
+        # raise ValueError(f"[ERROR] The scenario {scenario} specified for structure checking is not found in the import dataframe scenarios: {import_scenarios}. Make sure to load the correct scenario data for structure checking.")
     
+    return import_df
+
 def join_and_check_import_structure_matches_export_structure(import_filename, export_df, export_df_for_viewing, scenario, region, STRICT_CHECKS=True, current_accounts_label="Current Accounts"):
     new_current_account_df = pd.DataFrame()
     current_accounts_only_rows = pd.DataFrame()
@@ -190,7 +229,8 @@ def join_and_check_import_structure_matches_export_structure(import_filename, ex
     if len(non_current_scenarios) != 1:
         breakpoint()
         raise ValueError("[ERROR] More or less than one non-Current Accounts scenario found in export_df during structure checks.")
-    
+    # breakpoint()
+    import_df = check_scenario_and_region_ids(import_df, scenario, region)
     #########################
     #FIRST HANDLE CURRENT ACCOUNTS SPECIAL CASE
     #########################
@@ -523,7 +563,7 @@ def separate_current_accounts_from_scenario(export_df, base_year,scenario, curre
 #         "Branch Path": [
 #             "Key Assumptions",
             
-            
+             
 def copy_energy_spreadsheet_into_leap_import_file(
     leap_export_filename='../results/leap_balances_export_file.xlsx',
     energy_spreadsheet_filename='../data/merged_file_energy_ALL_20250814.csv',

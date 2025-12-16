@@ -24,6 +24,8 @@ from .energy_use_reconciliation import (
     reconcile_energy_use,
 )
 
+from .economy_config import region_id_name_dict, scenario_dict
+
 __all__ = [
     # core
     "connect_to_leap",
@@ -45,4 +47,7 @@ __all__ = [
     # reconciliation
     "build_branch_rules_from_mapping",
     "reconcile_energy_use",
+    # economy config
+    "region_id_name_dict",
+    "scenario_dict",
 ]

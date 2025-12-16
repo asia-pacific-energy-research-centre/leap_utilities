@@ -68,16 +68,6 @@ if COPY_ENERGY_SPREADSHEET_INTO_LEAP_IMPORT_FILE:
 #%%
 CREATE_BRANCHES_FROM_EXPORT_FILE = True
 
-# Define parameters
-leap_export_filename = '../data/industry export.xlsx'
-ECONOMY = '20_USA'
-BASE_YEAR = 2022
-SUBTOTAL_COLUMN = 'subtotal_layout'
-SCENARIO = "Reference"
-ROOT = r""
-REGION = "United States of America"
-sheet_name = "Export"
-
 if CREATE_BRANCHES_FROM_EXPORT_FILE:
     # Create branches from export file
     create_branches_from_export_file(
@@ -89,7 +79,7 @@ if CREATE_BRANCHES_FROM_EXPORT_FILE:
         scenario=SCENARIO,
         region=REGION,
         branch_type_mapping=None,
-        default_branch_type=(BRANCH_DEMAND_CATEGORY, BRANCH_DEMAND_CATEGORY, BRANCH_DEMAND_TECHNOLOGY),
+        default_branch_type=(BRANCH_KEY_ASSUMPTION_CATEGORY, BRANCH_KEY_ASSUMPTION_CATEGORY, BRANCH_KEY_ASSUMPTION_BRANCH),
         RAISE_ERROR_ON_FAILED_BRANCH_CREATION=True,
     )
 #%%
