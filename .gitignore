@@ -17,7 +17,7 @@
 *.dll
 *.code-workspace
 !.gitkeep
-
+!docs/images/*.png
 env_leap/*
 #######################################
 
