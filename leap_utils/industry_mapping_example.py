@@ -1,3 +1,4 @@
+#%%
 BRANCH_DEMAND_CATEGORY = 1
 BRANCH_DEMAND_TECHNOLOGY = 4
 BRANCH_DEMAND_FUEL = 36
@@ -31,19 +32,18 @@ leap_export_filename = '../data/industry export.xlsx'
 ECONOMY = '20_USA'
 BASE_YEAR = 2022
 SUBTOTAL_COLUMN = 'subtotal_layout'
-SCENARIO = "Reference"
-ROOT = r""
+SCENARIO = "Current Accounts"
 REGION = "United States of America"
 sheet_name = "Export"
-
+#%%
 if CREATE_BRANCHES_FROM_EXPORT_FILE:
     # Create branches from export file
+    breakpoint()
     create_branches_from_export_file(
         L,
         leap_export_filename,
         sheet_name=sheet_name,
         branch_path_col="Branch Path",
-        branch_root=ROOT,
         scenario=SCENARIO,
         region=REGION,
         branch_type_mapping=None,
@@ -61,6 +61,9 @@ if FILL_BRANCHES_FROM_EXPORT_FILE:
         scenario=SCENARIO,
         region=REGION,
         RAISE_ERROR_ON_FAILED_SET=True,
+        SET_UNITS=True,
     )
-
+#NOTE THAT YOU WILL PROBABLY NEED TO SET THE SCALE WITHIN THE LEAP GUI MANUALLY.IT SEEMS THAT THE SCALE DEFAULTS TO A UNKNOWN AND NOT SHOWN VALUE CAUSING INCORRECT RESULTS ESPECIALLY FOR PERCENTAGE BASED VARIABLES.
+#SPECIFICALLY FOR THE AVTIVITY LEVEL VARIABLE in the industry model or other models using share based variables that are throwing errors such as not adding up to 100 percent etc:
+#you will need to manually set the unit to 'share' within the leap gui, and this will make it so the scale is set to what it needs to be automatically. do that within the fuel leaf node for the sector you are working on. double click the unit cell, double click 'share' from the dropdown. this will set the scale correctly.
 #%%

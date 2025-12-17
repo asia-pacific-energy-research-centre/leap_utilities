@@ -181,15 +181,17 @@ def save_export_files(leap_export_df, export_df_for_viewing, leap_export_filenam
 
 def check_scenario_and_region_ids(import_df, scenario, region):
     #check the region id and name dict for this region and change the values in import df to match those. If they are not availble then raise an error since this will cause issues later that will be harder to identify than here. it can be imported from transport_economy_config
+    # if there are multiple region in the import df then keep only the ones matching the region
     dict_regions = [region['region_name'] for region in region_id_name_dict.values()]
     if region not in dict_regions:#what is region
         breakpoint()
         raise ValueError(f"[ERROR] The region {region} specified for structure checking is not found in the region_id_name_dict: {dict_regions}. Make sure to load the correct region data for structure checking.")
+    import_df = import_df[import_df['Region'] == region]
     #CONCERN what if the regions in the dict are incorrect for a new user. I guess it will be noticed later on when the region ids dont match up...
     import_regions = import_df['Region'].unique()
     if len(import_regions) != 1:
         breakpoint()
-        raise ValueError(f"[ERROR] More or less than one region found in import_df during structure checks: {import_regions}.")
+        raise ValueError(f"[ERROR] Less than one region found in import_df during structure checks: {import_regions}.")
     if region not in import_regions:
         #we will change the region names in the import df to match those in the dict:
         import_df['Region'] = region
@@ -199,11 +201,14 @@ def check_scenario_and_region_ids(import_df, scenario, region):
         import_df['RegionID'] = region_id[0]
         # raise ValueError(f"[ERROR] The region {region} specified for structure checking is not found in the import dataframe regions: {import_regions}. Make sure to load the correct region data for structure checking.")
         
-    #do the same for scenario ids
+    #do the same for scenario ids. if there are multiple scenarios in the import df then keep only the ones matching the target scenario and current accounts
     dict_scenarios = [scenario_dict[key]['scenario_name'] for key in scenario_dict]
     if scenario not in dict_scenarios:#what is scenario
         breakpoint()
         raise ValueError(f"[ERROR] The scenario {scenario} specified for structure checking is not found in the scenario_dict: {dict_scenarios}. Make sure to load the correct scenario data for structure checking.")
+    #drop scnearios that arent the scneario or the current accounts scenario
+    import_df = import_df[(import_df['Scenario'] == scenario) | (import_df['Scenario'] == "Current Accounts")]
+    
     import_scenarios = import_df['Scenario'].unique()
     #drop current accounts from this list since we will handle it separately
     import_scenarios = [s for s in import_scenarios if s != "Current Accounts"]
@@ -262,15 +267,20 @@ def join_and_check_import_structure_matches_export_structure(import_filename, ex
         missing_in_import_df = missing_in_import_df[~missing_in_import_df['Variable'].isin(unneeded_vars)]
         #if there are some right only rows then that is kind of unexpected..
         if len(missing_in_import_df[missing_in_import_df['_merge'] == 'right_only']) > 0:
-            breakpoint()#if this is occuring then it means we have rows in current accounts df that arent in the import df for the target scenario and need to invesitgate why
-            raise ValueError(f"[ERROR] Some rows need to be removed from Current Accounts scenario that do not exist in the import dataframe for that scenario: {missing_in_import_df[missing_in_import_df['_merge'] == 'right_only']}")
-            print("[WARN] Some rows are missing in Current Accounts scenario that exist in the import dataframe for the target scenario:")
+            if STRICT_CHECKS:
+                breakpoint()#if this is occuring then it means we have rows in current accounts df that arent in the import df for the target scenario and need to invesitgate why
+                raise ValueError(f"[ERROR] Some rows need to be removed from Current Accounts scenario that do not exist in the import dataframe for that scenario: {missing_in_import_df[missing_in_import_df['_merge'] == 'right_only']}")
+            else:
+                print("[WARN] Some rows are missing in Current Accounts scenario that exist in the import dataframe for the target scenario:")
         #search for the left only rows in the export df to see if they exist there. if they do, we will extract them now and add them to the new_current_account_df
         current_accounts_only_rows = missing_in_import_df[missing_in_import_df['_merge'] == 'left_only'][['Branch Path', 'Variable', 'Region', "BranchID", "VariableID", "ScenarioID", "RegionID"]]
         if len(current_accounts_only_rows) > 0:
             breakpoint()
-            raise ValueError(f"[ERROR] Some rows are missing in the import dataframe for Current Accounts scenario that exist in the export dataframe for that scenario: {current_accounts_only_rows}")
-        
+            if STRICT_CHECKS:
+                breakpoint()#if this is occuring then it means we have rows in the export df df that arent in the new_current_account_df for the target scenario and need to invesitgate why
+                raise ValueError(f"[ERROR] Some rows are missing in the import dataframe for Current Accounts scenario that exist in the export dataframe for that scenario: {current_accounts_only_rows}")
+            else:
+                print("[WARN] Some rows are missing in the import dataframe for Current Accounts scenario that exist in the export dataframe for that scenario:")
         # rows_to_add = export_df.merge(
         #     current_accounts_only_rows,
         #     how='right',
@@ -339,6 +349,7 @@ def join_and_check_import_structure_matches_export_structure(import_filename, ex
         "Mileage Correction Factor",
         "First Sales Year"
         ]
+        
         #drop those with unneeded variables: (these arent needed becase they default to reasonable numbers which are by default correct so we dont need to have it in output)
         different_cols = different_cols[~different_cols['Variable'].isin(unneeded_vars)]
         if not different_cols.empty:

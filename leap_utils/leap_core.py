@@ -202,7 +202,12 @@ def safe_set_variable(L, obj, varname, expr, unit_name=None, context=""):
                 raise ValueError(f"Unit not found: {unit_name}")
             else:
                 print(f"[WARN] Unit not found: {unit_name}. Proceeding without setting unit.")
-                
+        ########
+        # Set scale if provided #NOTE i tried to set scale here but it didnt work. cannot access Scales from var.
+        # if scale_value is None:
+        #     return True
+        # breakpoint()#is there a L.Scales var? how to set scale? its important for % especially
+        # scales = L.Scales
         ########
         return True
     except Exception as e:
@@ -846,6 +851,7 @@ def fill_branches_from_export_file(
     region=None,
     RAISE_ERROR_ON_FAILED_SET=True,
     SET_UNITS=True,
+    # SET_SCALE=True,
 ):
     """
     NOTE THAT THIS FUCTION HAS BEEN BUILT TO WORK INDEPENDTLY OF THE TRANSPORT BASED SYSTEM.
@@ -966,11 +972,17 @@ def fill_branches_from_export_file(
             continue
         
         unit_name = None
+        # scale_value = None
         if SET_UNITS:
             unit_name = group['Units'].iloc[0] if 'Units' in group.columns else None
+        # if SET_SCALE:#kept this here in case someone wants to try again to insert scale value.. its also kind of proof that it wont work but was considered
+        #     #if the scale column exists and the value is not na then we set the scale
+        #     scale_value = group['Scale'].iloc[0] if 'Scale' in group.columns else None   
+        #     if pd.isna(scale_value):
+        #         scale_value = None           
         # Set the variable
-        breakpoint()
-        set_success = safe_set_variable(L, branch, var, expr,unit_name=unit_name, context=bp)
+        # breakpoint()
+        set_success = safe_set_variable(L, branch, var, expr,unit_name=unit_name, context=bp)#scale_value=scale_value,
         
         if set_success:
             success.append((bp, var))
