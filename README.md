@@ -48,9 +48,12 @@ These utilities were designed first for transport applications, so some function
 
 Image below shows the end result of running the example script to copy data from the LEAP industry model (i.e. USA industry area) to the LEAP transport model (i.e. USA transport area), creating branches as needed and filling in data from the export file. It also shows how the scale and units are set correctly for the variables imported - after a manual fix for the scale issue mentioned above.
 
-![image showing usa transport model with industry model in leap](docs/images/image showing usa transport model with industry model in leap.png)
+![image showing usa transport model with industry model in leap](docs/images/usa-transport-industry.png)
 
 # Balance tables example:
 This was a quick project to generate balance tables from the 9th edition energy dataset. See `leap_utils/balance_table_example.py` for an example of how to use the `copy_energy_spreadsheet_into_leap_import_file` module to build balance tables within LEAP for checking against the ESTO data while modelling. The script connects to LEAP, extracts energy use data, and generates branches and data within the assumptions folder for this.
 
-![balance table example](docs/images/balance table example.png)
+![balance table example](docs/images/balance-table-example.png)
+
+# Common issues:
+- Units need to be manually set within the LEAP GUI to ensure correct scale value if it is not already. This is because it seems that when we use the create_branches_from_export_file() funciton to create branches, they seem to default to some unknown value that seems to be making LEAP project incorrect values. See Industry example comments for more details.

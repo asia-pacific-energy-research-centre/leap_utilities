@@ -1,4 +1,7 @@
 #%%
+#NOTES AT THE BOTTOM OF THE SCRIPT
+# Industry mapping example using leap_utils to create and fill branches from an export file. Useful for setting up industry models in LEAP using data from an Excel export which can be created manually or by exporting the model from another LEAP project.
+#%%
 BRANCH_DEMAND_CATEGORY = 1
 BRANCH_DEMAND_TECHNOLOGY = 4
 BRANCH_DEMAND_FUEL = 36
@@ -25,14 +28,13 @@ from leap_utils.leap_excel_io import (
 L = connect_to_leap()
 leap_export_filename = '../results/leap_balances_export_file.xlsx'
 sheet_name = "Energy_Balances"
-CREATE_BRANCHES_FROM_EXPORT_FILE = True
+CREATE_BRANCHES_FROM_EXPORT_FILE = False
 
 # Define parameters
 leap_export_filename = '../data/industry export.xlsx'
 ECONOMY = '20_USA'
 BASE_YEAR = 2022
-SUBTOTAL_COLUMN = 'subtotal_layout'
-SCENARIO = "Current Accounts"
+SCENARIO = "Target"
 REGION = "United States of America"
 sheet_name = "Export"
 #%%
@@ -65,5 +67,7 @@ if FILL_BRANCHES_FROM_EXPORT_FILE:
     )
 #NOTE THAT YOU WILL PROBABLY NEED TO SET THE SCALE WITHIN THE LEAP GUI MANUALLY.IT SEEMS THAT THE SCALE DEFAULTS TO A UNKNOWN AND NOT SHOWN VALUE CAUSING INCORRECT RESULTS ESPECIALLY FOR PERCENTAGE BASED VARIABLES.
 #SPECIFICALLY FOR THE AVTIVITY LEVEL VARIABLE in the industry model or other models using share based variables that are throwing errors such as not adding up to 100 percent etc:
-#you will need to manually set the unit to 'share' within the leap gui, and this will make it so the scale is set to what it needs to be automatically. do that within the fuel leaf node for the sector you are working on. double click the unit cell, double click 'share' from the dropdown. this will set the scale correctly.
+#Where % is missing from the scale for where the unit is 'Share' or 'Saturation' you will need to manually set the unit to 'share'/'saturation within the leap gui, and this will make it so the scale is set to what it needs to be automatically. do that within the fuel leaf node for the sector you are working on for the share units, and at the most upper level category (e.g. Manufacturing) set the saturation level. double click the unit cell, double click 'share'/'saturation' from the dropdown. this will set the scale correctly.
+#There is a chance that the intensity unit may have a similar issue so check that as well> there arent many intensity variables which need a scale value to be set in the inudstry model so there arent many that need to be checked.
+#when you think you're done i recommend using the tables view in the results tab to verify that the values are correct.
 #%%
