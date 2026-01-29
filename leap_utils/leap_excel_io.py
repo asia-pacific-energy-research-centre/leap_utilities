@@ -2,7 +2,7 @@
 import pandas as pd
 from pathlib import Path
 
-from .economy_config import region_id_name_dict, scenario_dict
+from .config import region_id_name_dict, scenario_dict
 
 # def get_leap_metadata(measure):
 #     """Fetch LEAP_units, LEAP_Scale, LEAP_Per from LEAP_MEASURE_CONFIG if available."""
@@ -172,7 +172,7 @@ def save_export_files(leap_export_df, export_df_for_viewing, leap_export_filenam
     with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
         export_df_for_viewing2.to_excel(writer, sheet_name="FOR_VIEWING", index=False, header=False, startrow=0)
         leap_export_df2.to_excel(writer, sheet_name="LEAP", index=False, header=False, startrow=0)
-    print(f"✅ Created file for importing into leap, and viewing at {leap_export_filename}, with {len(export_df_for_viewing)} entries.")
+    print(f"[OK] Created file for importing into leap, and viewing at {leap_export_filename}, with {len(export_df_for_viewing)} entries.")
     print(f" - Years covered: {base_year}–{final_year}")
     print(f" - Variables: {leap_export_df['Variable'].nunique()}")
     print(f" - Branches: {export_df_for_viewing['Branch Path'].nunique()}")
@@ -180,7 +180,7 @@ def save_export_files(leap_export_df, export_df_for_viewing, leap_export_filenam
 
 
 def check_scenario_and_region_ids(import_df, scenario, region):
-    #check the region id and name dict for this region and change the values in import df to match those. If they are not availble then raise an error since this will cause issues later that will be harder to identify than here. it can be imported from transport_economy_config
+    #check the region id and name dict for this region and change the values in import df to match those. If they are not availble then raise an error since this will cause issues later that will be harder to identify than here. it can be imported from config
     # if there are multiple region in the import df then keep only the ones matching the region
     dict_regions = [region['region_name'] for region in region_id_name_dict.values()]
     if region not in dict_regions:#what is region

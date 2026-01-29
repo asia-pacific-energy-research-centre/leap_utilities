@@ -2,13 +2,6 @@
 # Constants mapped to LEAP BranchType enumeration values
 # According to LEAP TypeLib: 1 = DemandCategoryBranchType,
 # 4 = DemandTechnologyBranchType, 36 = DemandFuelBranchType
-BRANCH_DEMAND_CATEGORY = 1
-BRANCH_DEMAND_TECHNOLOGY = 4
-BRANCH_DEMAND_FUEL = 36
-BRANCH_KEY_ASSUMPTION_BRANCH = 9#contains number
-BRANCH_KEY_ASSUMPTION_CATEGORY = 10#contains many sub-branches
-# Hypothetical value for key assumptions
-#below are all teh unique values from the leap typelib for branch types
 import sys
 from pathlib import Path
 from traitlets import Tuple
@@ -17,6 +10,14 @@ from traitlets import Tuple
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if REPO_ROOT.exists() and str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+from leap_utils.config import (
+    BRANCH_DEMAND_CATEGORY,
+    BRANCH_DEMAND_TECHNOLOGY,
+    BRANCH_DEMAND_FUEL,
+    BRANCH_KEY_ASSUMPTION_BRANCH,
+    BRANCH_KEY_ASSUMPTION_CATEGORY,
+)
 
 from leap_utils.leap_core import (
     fill_branches_from_export_file,

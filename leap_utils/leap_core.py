@@ -6,8 +6,42 @@
 # and activity level utilities shared by loader scripts.
 # ============================================================
 
+import contextlib
+import io
+import math
+import re
+
 import pandas as pd
-from win32com.client import Dispatch, GetActiveObject, gencache
+
+try:  # pragma: no cover - windows-only
+    from win32com.client import Dispatch, GetActiveObject, gencache
+    _WIN32COM_AVAILABLE = True
+except ImportError:  # pragma: no cover - windows-only
+    Dispatch = GetActiveObject = gencache = None
+    _WIN32COM_AVAILABLE = False
+
+from .config import (
+    BRANCH_DEMAND_CATEGORY,
+    BRANCH_DEMAND_TECHNOLOGY,
+    BRANCH_DEMAND_FUEL,
+    BRANCH_KEY_ASSUMPTION_BRANCH,
+    BRANCH_KEY_ASSUMPTION_CATEGORY,
+    BRANCH_TRANSFORMATION_MODULE,
+    BRANCH_TRANSFORMATION_PROCESS,
+    BRANCH_PROCESS_CATEGORY,
+    BRANCH_OUTPUT_CATEGORY,
+    BRANCH_OUTPUT,
+    BRANCH_FEEDSTOCK_CATEGORY,
+    BRANCH_FEEDSTOCK_BRANCH,
+    BRANCH_RESOURCE_ROOT,
+    BRANCH_RESOURCE_PRIMARY_CATEGORY,
+    BRANCH_RESOURCE_SECONDARY_CATEGORY,
+    BRANCH_RESOURCE_BRANCH,
+    BRANCH_RESOURCE_DISAG,
+    BRANCH_AUX_CATEGORY,
+    BRANCH_AUX_BRANCH,
+    LEAP_UNITS_BY_ID
+)
 
 # Optional transport-specific mappings; if unavailable, functions accept injected mappings instead
 try:  # pragma: no cover - optional dependency
@@ -42,6 +76,23 @@ except Exception:  # pragma: no cover - optional dependency
     LEAP_BRANCH_TO_EXPRESSION_MAPPING = None
     ALL_YEARS = None
 
+# Prompt on branch-creation warnings to pause execution (default on).
+ASK_ON_MISSING_BRANCH_CREATION = True
+
+
+def _prompt_on_missing_branch_creation(message: str) -> None:
+    """Pause execution on branch-creation warnings so the user can decide to continue."""
+    if not ASK_ON_MISSING_BRANCH_CREATION:
+        return
+    prompt = f"{message}\nEnter 'c' to continue or 'b' to break: "
+    while True:
+        choice = input(prompt).strip().lower()
+        if choice in ("c", "continue", ""):
+            return
+        if choice in ("b", "break", "q", "quit"):
+            raise RuntimeError(f"User aborted after warning: {message}")
+        print("Please enter 'c' to continue or 'b' to break.")
+
 
 def _require_global(name: str, val):
     if val is None:
@@ -54,23 +105,54 @@ def _require_global(name: str, val):
 # Connection & Core Helpers
 # ------------------------------------------------------------
 
-def connect_to_leap():
+
+def is_leap_api_available():
+    """Return True when win32com/LEAP API is importable."""
+    return _WIN32COM_AVAILABLE
+
+_LEAP_TYPELIB = ("{6161465F-91BE-4B6B-8BB0-361F5BFA612A}", 0, 2, 3)
+
+
+def _quiet_com_cache_refresh():
+    """Rebuild win32com cache and ensure LEAP typelibs, suppressing noisy makepy output."""
+    if gencache is None:
+        return
+    buffer = io.StringIO()
+    with contextlib.redirect_stdout(buffer), contextlib.redirect_stderr(buffer):
+        try:
+            gencache.Rebuild()
+        except Exception:
+            pass
+        try:
+            gencache.EnsureModule(*_LEAP_TYPELIB)
+        except Exception:
+            pass
+
+
+def _ensure_leap_com_wrappers():
+    """Ensure LEAP COM wrappers exist; rebuild cache quietly on failure."""
+    if gencache is None:
+        return
+    try:
+        gencache.EnsureDispatch("LEAP.LEAPApplication")
+    except Exception:
+        _quiet_com_cache_refresh()
+        gencache.EnsureDispatch("LEAP.LEAPApplication")
+
+
+def connect_to_leap(force_rebuild: bool = True):
     """Enhanced LEAP connection with project readiness checks."""
+    if not _WIN32COM_AVAILABLE:
+        raise RuntimeError(
+            "LEAP API (`win32com`) is unavailable in this environment (Linux/WSL). "
+            "Run this script from Windows with pywin32 installed to reach LEAP."
+        )
     print("[INFO] Connecting to LEAP...")
     
     try:
-        # Clear win32com cache to fix corrupted type library
-        import shutil
-        import tempfile
-        gen_py_path = gencache.GetGeneratePath()
-        if gen_py_path:
-            try:
-                shutil.rmtree(gen_py_path)
-                print("[INFO] Cleared win32com cache")
-            except Exception as e:
-                print(f"[WARN] Could not clear cache: {e}")
-        
-        gencache.EnsureDispatch("LEAP.LEAPApplication")
+        if force_rebuild:
+            _quiet_com_cache_refresh()
+        _ensure_leap_com_wrappers()
         try:
             leap_app = GetActiveObject("LEAP.LEAPApplication")
             print("[SUCCESS] Connected to existing LEAP instance")
@@ -185,24 +267,7 @@ def safe_set_variable(L, obj, varname, expr, unit_name=None, context=""):
         short_expr = var.Expression[:80] + ("..." if len(var.Expression) > 80 else "")
         print(f"[SET] {context} → {varname} = {short_expr}")
         
-        ########
-        
-        # Set units if provided
-        if unit_name is None:
-            return True
-        units = L.Units
-        if units.Exists(unit_name):
-            unit = units.Item(unit_name)      # returns ILEAPUnit
-            var.DataUnit = unit               # or: var.DataUnitID = unit.ID
-            # optional: var.Scale = <scale_id>  # if you also need to set the scale (config lines 1299-1302)
-        else:
-            breakpoint()
-            THROW_ERROR_ON_MISSING=True
-            if THROW_ERROR_ON_MISSING:
-                raise ValueError(f"Unit not found: {unit_name}")
-            else:
-                print(f"[WARN] Unit not found: {unit_name}. Proceeding without setting unit.")
-        ########
+        _set_variable_unit(L, var, unit_name, context=context)
         # Set scale if provided #NOTE i tried to set scale here but it didnt work. cannot access Scales from var.
         # if scale_value is None:
         #     return True
@@ -213,6 +278,32 @@ def safe_set_variable(L, obj, varname, expr, unit_name=None, context=""):
     except Exception as e:
         print(f"[ERROR] Failed setting {varname} on {context}: {e}")
         return False
+
+
+def _set_variable_unit(L, var, unit_name, context=""):
+    """Assign DataUnit when available; warn or raise when missing."""
+    if unit_name is None:
+        return True
+    if isinstance(unit_name, float) and math.isnan(unit_name):
+        return True
+    if isinstance(unit_name, str) and unit_name.strip().lower() in {"", "nan"}:
+        return True
+    units = L.Units
+    if not units.Exists(unit_name):
+        raise ValueError(f"Unit not found: {unit_name}. Unit not set.")
+    unit = units.Item(unit_name)  # returns ILEAPUnit
+    if unit is None:
+        known_units = {u.get("name") for u in LEAP_UNITS_BY_ID.values()}
+        if unit_name not in known_units:
+            print(
+                f"[WARN] Unit name '{unit_name}' not found in LEAP units list. Proceeding without setting unit."
+            )
+            return True
+        raise ValueError(
+            f"Unit name '{unit_name}' found in LEAP_UNITS_BY_ID but ILEAPUnit not found in LEAP. Cannot set unit."
+        )
+    var.DataUnit = unit  # or: var.DataUnitID = unit.ID
+    return True
 
 def define_value_based_on_src_tuple(meta_values, src_tuple):
     ttype, medium, vtype, drive, fuel = tuple(list(src_tuple) + [None] * (5 - len(src_tuple)))[:5]
@@ -414,11 +505,6 @@ def build_expression_from_mapping(
 # Constants mapped to LEAP BranchType enumeration values
 # According to LEAP TypeLib: 1 = DemandCategoryBranchType,
 # 4 = DemandTechnologyBranchType, 36 = DemandFuelBranchType
-BRANCH_DEMAND_CATEGORY = 1
-BRANCH_DEMAND_TECHNOLOGY = 4
-BRANCH_DEMAND_FUEL = 36
-BRANCH_KEY_ASSUMPTION_BRANCH = 9#contains number
-BRANCH_KEY_ASSUMPTION_CATEGORY = 10#contains many sub-branches
 # Hypothetical value for key assumptions
 #below are all teh unique values from the leap typelib for branch types
 #  1=DemandCategoryBranchType, 2=TransformationModuleBranchType, 3=TransformationProcessBranchType, 4=DemandTechnologyBranchType, 5=TransformationProcessCategoryType, 6=TransformationOutputCategoryType, 7=TransformationOutputBranchType, 9=KeyAssumptionCategoryType, 10=KeyAssumptionBranchType, 11=ResourceRootType, 12=PrimaryBranchCategoryType, 13=SecondaryBranchCategoryType, 15=ResourceBranchType, 16=ResourceDisagType, 18=StatDiffRootType, 19=StockChangeRootType, 20=StatDiffPrimaryCategoryType, 21= StatDiffSecondaryCategoryType, 22=StockChangePrimaryCategoryType, 23=StockChangeSecondaryCategoryType, 24=StatDiffBranchType, 25=  StockChangeBranchType, 26=NonEnergyCategoryType, 27=NonEnergyBranchType, 30=AuxCategoryType, 31=AuxBranchType, 32=FeedstockCategoryType, 33= FeedstockBranchType, 34=DMDPollutionBranchType, 35=TransformationPollutionBranchType, 36=DemandFuelBranchType, 37=IndicatorCategoryType, 38=IndicatorBranchType, 39=EmissionConstraintBranchType"
@@ -653,6 +739,194 @@ def diagnose_measures_in_leap_branch(L, branch_path, leap_tuple, expected_vars=N
     print("=" * 50)
     return
 
+
+# ------------------------------------------------------------
+# Transformation & Resource helpers
+# ------------------------------------------------------------
+
+def _resolve_branch_reference(L, branch_reference, description="branch"):
+    """Return a LEAP branch object given a path or existing branch."""
+    if isinstance(branch_reference, str):
+        branch = safe_branch_call(
+            L, branch_reference, AUTO_SET_MISSING_BRANCHES=False, THROW_ERROR_ON_MISSING=False
+        )
+        if branch is None:
+            raise RuntimeError(f"Could not locate {description} at '{branch_reference}'.")
+        return branch
+    if branch_reference is None:
+        raise ValueError(f"{description.capitalize()} reference cannot be None.")
+    return branch_reference
+
+
+def create_transformation_module(
+    L,
+    parent_branch,
+    module_name,
+    *,
+    is_simple=True,
+    use_efficiencies=True,
+    use_capacities=False,
+    use_load_curve=False,
+    use_co_prod=False,
+    use_output_shares=False,
+    meet_aux_from_outputs=True,
+    coproduct_fuel=None,
+    output_scale="",
+    output_unit="",
+    capacity_scale="",
+    capacity_unit="",
+):
+    """Create a transformation module (LEAP.AddModule) beneath the given parent."""
+    try:
+        parent = _resolve_branch_reference(L, parent_branch, description="module parent")
+        return L.AddModule(
+            module_name,
+            bool(is_simple),
+            bool(use_efficiencies),
+            bool(use_capacities),
+            bool(use_load_curve),
+            bool(use_co_prod),
+            bool(use_output_shares),
+            bool(meet_aux_from_outputs),
+            coproduct_fuel or "",
+            output_scale,
+            output_unit,
+            capacity_scale,
+            capacity_unit,
+        )
+    except Exception as exc:
+        print(f"[ERROR] Failed to create transformation module '{module_name}': {exc}")
+        breakpoint()
+        raise
+
+
+def create_transformation_process(
+    L,
+    parent_branch,
+    process_name,
+    feedstock_fuel="",
+    dispatch_rule=0,
+):
+    """Create a transformation process branch (LEAP.AddProcess) under a process category."""
+    try:
+        parent = _resolve_branch_reference(L, parent_branch, description="process parent")
+        sanitized_feedstock = sanitize_leap_name(feedstock_fuel) if feedstock_fuel else ""
+        if sanitized_feedstock:
+            ensure_fuel_exists(L, sanitized_feedstock)
+        return L.AddProcess(parent.ID, process_name, sanitized_feedstock or "", int(dispatch_rule))
+    except Exception as exc:
+        print(f"[ERROR] Failed to create transformation process '{process_name}': {exc}")
+        breakpoint()
+        raise
+
+
+def create_transformation_output(
+    L,
+    parent_branch,
+    fuel_name,
+    shortfall_import=0,
+    surplus_export=0,
+    domestic_priority=0,
+    is_priority_fuel=False,
+):
+    """Attach an output fuel branch to a transformation process."""
+    try:
+        parent = _resolve_branch_reference(L, parent_branch, description="output parent")
+        sanitized_fuel = sanitize_leap_name(fuel_name)
+        ensure_fuel_exists(L, sanitized_fuel)
+        return L.AddOutput(
+            parent.ID,
+            sanitized_fuel,
+            int(shortfall_import),
+            int(surplus_export),
+            int(domestic_priority),
+            bool(is_priority_fuel),
+        )
+    except Exception as exc:
+        print(f"[ERROR] Failed to add transformation output '{fuel_name}': {exc}")
+        breakpoint()
+        raise
+
+
+def create_transformation_feedstock(L, parent_branch, fuel_name):
+    """Attach a feedstock fuel branch under the specified transformation process."""
+    try:
+        parent = _resolve_branch_reference(L, parent_branch, description="feedstock parent")
+        sanitized_fuel = sanitize_leap_name(fuel_name)
+        ensure_fuel_exists(L, sanitized_fuel)
+        return L.AddFeedstock(parent.ID, sanitized_fuel)
+    except Exception as exc:
+        print(f"[ERROR] Failed to add transformation feedstock '{fuel_name}': {exc}")
+        breakpoint()
+        raise
+
+
+def create_simple_transformation_process(
+    L, parent_branch, process_name, input_fuel, output_fuel
+):
+    """Simplified constructor for single-input single-output transformation processes."""
+    try:
+        parent = _resolve_branch_reference(L, parent_branch, description="process parent")
+        sanitized_input = sanitize_leap_name(input_fuel)
+        sanitized_output = sanitize_leap_name(output_fuel)
+        ensure_fuel_exists(L, sanitized_input)
+        ensure_fuel_exists(L, sanitized_output)
+        return L.AddSimpleProcess(
+            parent.ID, process_name, sanitized_input, sanitized_output
+        )
+    except Exception as exc:
+        print(f"[ERROR] Failed to create simple process '{process_name}': {exc}")
+        breakpoint()
+        raise
+
+
+def get_resource_branch_for_fuel(L, fuel_name):
+    """Returns the supply branch assigned to the fuel (Resources → Primary/Secondary)."""
+    try:
+        sanitized_fuel = sanitize_leap_name(fuel_name)
+        branch = L.ResourceBranchFromFuel(sanitized_fuel)
+        if branch is None:
+            raise RuntimeError(
+                f"No resource branch found for fuel '{fuel_name}'."
+            )
+        return branch
+    except Exception as exc:
+        print(f"[ERROR] Failed to retrieve resource branch for '{fuel_name}': {exc}")
+        breakpoint()
+        raise
+
+
+def ensure_fuel_exists(L, fuel_name, copy_from=None, fuel_state=2):
+    """Create a new fuel entry if one does not already exist."""
+    sanitized_fuel = sanitize_leap_name(fuel_name)
+    if not sanitized_fuel:
+        raise ValueError(f"Fuel name '{fuel_name}' is empty after sanitization.")
+    sanitized_copy_from = sanitize_leap_name(copy_from) if copy_from else ""
+    try:
+        fuels = L.Fuels
+        if fuels.Exists(sanitized_fuel):
+            return fuels.Item(sanitized_fuel)
+        # breakpoint()
+        return fuels.Add(sanitized_fuel, sanitized_copy_from or "", int(fuel_state))
+    except Exception as exc:
+        print(f"[ERROR] Could not create fuel '{fuel_name}': {exc}")
+        breakpoint()
+        raise
+
+
+def ensure_unit_exists(L, unit_name):
+    """Return a Unit object, raising if it does not exist."""
+    try:
+        units = L.Units
+        if units.Exists(unit_name):
+            return units.Item(unit_name)
+        raise ValueError(f"Unit not found in LEAP: {unit_name}")
+    except Exception as exc:
+        print(f"[ERROR] Could not load unit '{unit_name}': {exc}")
+        breakpoint()
+        raise
+
+
 # ------------------------------------------------------------
 # Branch creation from an export spreadsheet
 # ------------------------------------------------------------
@@ -688,7 +962,157 @@ def identify_branch_type_from_mapping(bp, other_branch_paths, branch_root, branc
     return branch_type
 
 
-def _ensure_path_exists_create_if_not(L, full_path, branch_root, other_branch_paths, branch_type_mapping, default_branch_type, SCALE=1, UNIT="PJ"):
+def _find_first_feedstock_for_process(process_path, branch_paths):
+    """Return the first feedstock fuel name discovered under a process path."""
+    if not branch_paths:
+        return ""
+    feedstock_prefix = process_path + "\\Feedstock Fuels\\"
+    for path in branch_paths:
+        if path.startswith(feedstock_prefix):
+            parts = [p for p in path.split("\\") if p]
+            if parts:
+                return parts[-1]
+    return ""
+
+
+def _normalize_label(raw: str) -> str:
+    """Normalize branch labels for comparison (replace '-' with space)."""
+    if raw is None:
+        return ""
+    return raw.replace("-", " ").strip().lower()
+
+
+_LEAP_NAME_SANITIZE_RE = re.compile(r"[^A-Za-z0-9\s]+")
+_LEAP_AND_REPLACEMENTS = {
+    "&": " and ",
+    "/": " and ",
+    "-": " ",
+}
+
+
+def sanitize_leap_name(raw: str | None) -> str:
+    """
+    Normalize names before sending them to LEAP to avoid unsupported characters.
+
+    Args:
+        raw: The user-provided label.
+
+    Returns:
+        A version of the label where ``&`` is replaced with `` and ``, ``-`` becomes
+        `` and ``, ``/`` becomes `` and ``, and other non-alphanumeric characters are stripped.
+    """
+    if not raw:
+        return ""
+    normalized = str(raw)
+    for target, replacement in _LEAP_AND_REPLACEMENTS.items():
+        normalized = normalized.replace(target, replacement)
+    normalized = _LEAP_NAME_SANITIZE_RE.sub(" ", normalized)
+    return " ".join(normalized.split()).strip()
+
+
+def sanitize_leap_branch_path(raw: str | None) -> str:
+    """Return a branch path with each segment sanitized for LEAP compatibility."""
+    if not raw:
+        return ""
+    segments = [segment.strip() for segment in str(raw).split("\\") if segment.strip()]
+    sanitized_segments = [sanitize_leap_name(segment) for segment in segments]
+    sanitized_segments = [segment for segment in sanitized_segments if segment]
+    return "\\".join(sanitized_segments)
+
+
+def _collect_transformation_category_paths(branch_paths):
+    """Return transformation-specific category paths (process/output/feedstock/aux)."""
+    category_types = {
+        BRANCH_PROCESS_CATEGORY,
+        BRANCH_OUTPUT_CATEGORY,
+        BRANCH_FEEDSTOCK_CATEGORY,
+        BRANCH_AUX_CATEGORY,
+    }
+    categories = set()
+    for path in branch_paths:
+        parts = [p for p in path.split("\\") if p]
+        if not parts:
+            continue
+        branch_type = _guess_branch_type_for_segment(parts, len(parts) - 1)
+        if branch_type in category_types:
+            categories.add(path)
+    return categories
+
+
+def _guess_branch_type_for_segment(parts, index):
+    """Guess special branch types for transformation and resources based on path parts."""
+    if not parts or index >= len(parts):
+        return None
+    root = _normalize_label(parts[0])
+    name = parts[index]
+    name_lower = _normalize_label(name)
+    parent = _normalize_label(parts[index - 1]) if index > 0 else ""
+    if root == "transformation":
+        if name_lower == "output fuels":
+            return BRANCH_OUTPUT_CATEGORY
+        if parent == "output fuels":
+            return BRANCH_OUTPUT
+        if name_lower == "processes":
+            return BRANCH_PROCESS_CATEGORY
+        if parent == "processes":
+            return BRANCH_TRANSFORMATION_PROCESS
+        if name_lower == "auxiliary fuels":
+            return BRANCH_AUX_CATEGORY
+        if parent == "auxiliary fuels":
+            return BRANCH_AUX_BRANCH
+        if name_lower == "feedstock fuels":
+            return BRANCH_FEEDSTOCK_CATEGORY
+        if parent == "feedstock fuels":
+            return BRANCH_FEEDSTOCK_BRANCH
+        if index == 1:
+            # Transformation/<Sector> must be process category level
+            return BRANCH_PROCESS_CATEGORY
+
+    if root == "resources":
+        if index == 0:
+            return BRANCH_RESOURCE_ROOT
+        if index == 1:
+            if name_lower == "primary":
+                return BRANCH_RESOURCE_PRIMARY_CATEGORY
+            if name_lower == "secondary":
+                return BRANCH_RESOURCE_SECONDARY_CATEGORY
+            # Anything directly under Resources is a resource category
+            return BRANCH_RESOURCE_BRANCH
+        if index >= 2:
+            return BRANCH_RESOURCE_BRANCH
+
+    return None
+
+
+def build_branch_type_mapping_from_paths(branch_paths):
+    """
+    Build a fallback branch_type_mapping by inferring branch_type from path segments.
+
+    This mirrors the structure exposed in `leap_utils/transformation_analysis_utils.py`
+    where processes, outputs, feedstocks and auxiliaries live under the Transformation root.
+    """
+    mapping = {}
+    for path in branch_paths:
+        parts = [p for p in path.split("\\") if p]
+        if not parts:
+            continue
+        branch_type = _guess_branch_type_for_segment(parts, len(parts) - 1)
+        if branch_type:
+            mapping[path] = branch_type
+    return mapping
+
+
+def _ensure_path_exists_create_if_not(
+    L,
+    full_path,
+    branch_root,
+    other_branch_paths,
+    branch_type_mapping,
+    default_branch_type,
+    missing_process_categories,
+    SCALE=1,
+    UNIT="PJ",
+):
     """
     NOTE THAT THIS FUCTION HAS BEEN BUILT TO WORK INDEPENDTLY OF THE TRANSPORT BASED SYSTEM.
     Create a chain of key assumption style categories (just one number, no inference of the kind of category it is, e.g. technology/fuel/stock/intensity style branches)."""
@@ -704,13 +1128,74 @@ def _ensure_path_exists_create_if_not(L, full_path, branch_root, other_branch_pa
             print(f"[WARN] Cannot create '{current_path}' because its parent is missing. Ensure root branches exist.")
             return None
         
-        branch_type = identify_branch_type_from_mapping(current_path, other_branch_paths, branch_root, branch_type_mapping, default_branch_type)
-        
+        branch_type = identify_branch_type_from_mapping(
+            current_path, other_branch_paths, branch_root, branch_type_mapping, default_branch_type
+        )
+        guessed = _guess_branch_type_for_segment(parts[:i + 1], i)
+        branch_type = guessed or branch_type
+
         if branch_type == BRANCH_DEMAND_CATEGORY:
             parent_branch = L.AddCategory(parent_branch.ID, part, "", "")
         elif branch_type == BRANCH_DEMAND_TECHNOLOGY:
             print(f"[INFO] Creating technology branch '{part}' under parent ID {parent_branch.ID}. Remember to set units manually in LEAP.")
             parent_branch = L.AddTechnology(parent_branch.ID, part, "", "", part, "")
+        elif branch_type == BRANCH_KEY_ASSUMPTION_BRANCH:
+            parent_branch = L.AddKeyAssumption(parent_branch.ID, part, SCALE, UNIT)
+        elif branch_type == BRANCH_KEY_ASSUMPTION_CATEGORY:
+            parent_branch = L.AddKeyAssumptionCategory(parent_branch.ID, part)
+        elif branch_type in (
+            BRANCH_PROCESS_CATEGORY,
+            BRANCH_OUTPUT_CATEGORY,
+            BRANCH_FEEDSTOCK_CATEGORY,
+            BRANCH_AUX_CATEGORY,
+        ):
+            warning = (
+                f"Transformation category '{current_path}' must exist in LEAP "
+                "before child branches can be created."
+            )
+            print(f"[WARN] {warning}")
+            _prompt_on_missing_branch_creation(warning)
+            if missing_process_categories is not None:
+                missing_process_categories.add(current_path)
+            return None
+        elif branch_type in (
+            BRANCH_TRANSFORMATION_MODULE,
+            BRANCH_RESOURCE_ROOT,
+            BRANCH_RESOURCE_PRIMARY_CATEGORY,
+            BRANCH_RESOURCE_SECONDARY_CATEGORY,
+        ):
+            parent_branch = L.AddCategory(parent_branch.ID, part, "", "")
+        elif branch_type == BRANCH_TRANSFORMATION_PROCESS:
+            try:
+                parent_branch = create_transformation_process(
+                    L,
+                    parent_branch,
+                    part,
+                    feedstock_fuel=_find_first_feedstock_for_process(
+                        current_path, other_branch_paths
+                    ),
+                )
+            except Exception:
+                warning = (
+                    f"Transformation process '{current_path}' could not be created via the API. "
+                    "Please add it manually so its child branches can be filled."
+                )
+                print(f"[WARN] {warning}")
+                _prompt_on_missing_branch_creation(warning)
+                if missing_process_categories is not None:
+                    missing_process_categories.add(current_path)
+                return None
+        elif branch_type == BRANCH_OUTPUT:
+            parent_branch = create_transformation_output(L, parent_branch, part)
+        elif branch_type == BRANCH_FEEDSTOCK_BRANCH:
+            parent_branch = create_transformation_feedstock(L, parent_branch, part)
+        elif branch_type == BRANCH_AUX_BRANCH:
+            sanitized_aux = sanitize_leap_name(part)
+            ensure_fuel_exists(L, sanitized_aux)
+            unit_obj = ensure_unit_exists(L, "Gigajoule")
+            parent_branch = L.AddAuxiliary(
+                parent_branch.ID, sanitized_aux, unit_obj, unit_obj, 1
+            )
         elif branch_type == BRANCH_DEMAND_FUEL:
             breakpoint()
             raise RuntimeError(
@@ -718,10 +1203,6 @@ def _ensure_path_exists_create_if_not(L, full_path, branch_root, other_branch_pa
                 "does not expose an AddDemandFuel method. Create the associated "
                 "technology (with its fuel) in LEAP, or handle this branch manually."
             )
-        elif branch_type == BRANCH_KEY_ASSUMPTION_BRANCH:
-            parent_branch = L.AddKeyAssumption(parent_branch.ID, part, SCALE, UNIT)
-        elif branch_type == BRANCH_KEY_ASSUMPTION_CATEGORY:
-            parent_branch = L.AddKeyAssumptionCategory(parent_branch.ID, part)
         else:
             print(f"[WARN] Unsupported branch_type {branch_type} for '{current_path}'. Skipping creation.")
             return None
@@ -784,7 +1265,8 @@ def create_branches_from_export_file(
         * First element: for branches with 2+ children below them
         * Second element: for branches with exactly 1 child below them
         * Third element: for leaf branches (no children)
-    - branch_type_mapping overrides default_branch_type for specific paths
+        > this arg is used when branch_type_mapping does not provide a type for a given path. this is currently only used for demand branches. in future it would be good to shift to only using branch_type_mapping for all branch types but its a bit difficult to do that right now without breaking existing functionality.
+    - branch_type_mapping overrides default_branch_type for specific paths. set in create_branches_from_export_file 
     """
     if L is None:
         raise RuntimeError("LEAP application instance (L) is required to create branches.")
@@ -813,7 +1295,15 @@ def create_branches_from_export_file(
             breakpoint()
             raise ValueError(f"No rows found for region '{region}' in {leap_export_filename} (sheet '{sheet_name}').")
 
-    branch_paths = [bp for bp in df[branch_path_col].dropna().unique() if isinstance(bp, str)]
+    branch_paths_raw = [bp for bp in df[branch_path_col].dropna().unique() if isinstance(bp, str)]
+    branch_paths = []
+    seen = set()
+    for bp in branch_paths_raw:
+        sanitized_bp = sanitize_leap_branch_path(bp)
+        if not sanitized_bp or sanitized_bp in seen:
+            continue
+        seen.add(sanitized_bp)
+        branch_paths.append(sanitized_bp)
     branch_paths = sorted(branch_paths, key=lambda x: len(x.split("\\")))
 
     created = []
@@ -821,25 +1311,54 @@ def create_branches_from_export_file(
     failed = []
     branch_type_mapping = branch_type_mapping or {}#if we were provided a branchtype mapping then the branch types will be inferred from that where possible
     branch_paths_copy = branch_paths.copy()
-    breakpoint()
+    inferred_mapping = build_branch_type_mapping_from_paths(branch_paths)
+    for path, bt in inferred_mapping.items():
+        branch_type_mapping.setdefault(path, bt)
+    missing_process_categories = set()
+    transformation_categories = _collect_transformation_category_paths(branch_paths)
+    for category in transformation_categories:
+        if safe_branch_call(
+            L, category, AUTO_SET_MISSING_BRANCHES=False, THROW_ERROR_ON_MISSING=False
+        ) is None:
+            missing_process_categories.add(category)
+    # breakpoint()#investiage how to handle tranformation process categories sych as Transformation\Transfers\Processes\Upstream liquids transfers
     for bp in branch_paths:
         if safe_branch_call(L, bp, AUTO_SET_MISSING_BRANCHES=False, THROW_ERROR_ON_MISSING=False) is not None:
             skipped.append(bp)
             continue
                 
-        node = _ensure_path_exists_create_if_not(L, bp, branch_root, branch_paths_copy, branch_type_mapping, default_branch_type)
+        node = _ensure_path_exists_create_if_not(
+            L,
+            bp,
+            branch_root,
+            branch_paths_copy,
+            branch_type_mapping,
+            default_branch_type,
+            missing_process_categories,
+        )
         
         if node:
             created.append(bp)
-        else:
-            if RAISE_ERROR_ON_FAILED_BRANCH_CREATION:
-                breakpoint()
-                raise RuntimeError(f"Failed to create branch at '{bp}'.")
-            else:
-                failed.append(bp)
-                print(f"[WARN] Failed to create branch at '{bp}'.")
+            continue
+        if missing_process_categories and any(
+            bp.startswith(f"{cat}\\") or bp == cat for cat in missing_process_categories
+        ):
+            skipped.append(bp)
+            continue
+        if RAISE_ERROR_ON_FAILED_BRANCH_CREATION:
+            breakpoint()
+            raise RuntimeError(f"Failed to create branch at '{bp}'.")
+        failed.append(bp)
+        print(f"[WARN] Failed to create branch at '{bp}'.")
 
     print(f"[INFO] Branch creation complete. Created {len(created)}, skipped existing {len(skipped)}.")
+    if missing_process_categories:
+        print(
+            "[WARN] The following Transformation process categories need to be "
+            "created manually in LEAP before importing child data:"
+        )
+        for category in sorted(missing_process_categories):
+            print(f"  - {category}")
     return {"created": created, "skipped": skipped, "failed": failed}
 
 
@@ -851,6 +1370,7 @@ def fill_branches_from_export_file(
     region=None,
     RAISE_ERROR_ON_FAILED_SET=True,
     SET_UNITS=True,
+    HANDLE_CURRENT_ACCOUNTS_TOO=False,
     # SET_SCALE=True,
 ):
     """
@@ -877,6 +1397,8 @@ def fill_branches_from_export_file(
         Filter by scenario if column exists
     region : str, optional
         Filter by region if column exists
+    HANDLE_CURRENT_ACCOUNTS_TOO : bool
+        If True and a scenario is provided, also process "Current Accounts"
     RAISE_ERROR_ON_FAILED_SET : bool
         Whether to raise error if setting a variable fails
         
@@ -901,97 +1423,160 @@ def fill_branches_from_export_file(
     if df is None or "Branch Path" not in df.columns:
         raise ValueError(f"Columns 'Branch Path' or 'Variable' not found in {leap_export_filename} (sheet '{sheet_name}').")
 
-    # Filter by scenario/region if specified
-    if scenario is not None and "Scenario" in df.columns:
-        df = df[df["Scenario"] == scenario]
-        if len(df) == 0:
-            breakpoint()
-            raise ValueError(f"No rows found for scenario '{scenario}' in {leap_export_filename} (sheet '{sheet_name}').")
-    if region is not None and "Region" in df.columns:
-        df = df[df["Region"] == region]
-        if len(df) == 0:
-            breakpoint()
-            raise ValueError(f"No rows found for region '{region}' in {leap_export_filename} (sheet '{sheet_name}').")
-
-    #if the df contains year cols then we use those instead of expression cols.
-    if 'Expression' in df.columns:
-        print(f"[INFO] 'Expression' column found in {leap_export_filename}, using it to set variable expressions directly.")
-        year_cols = ['Expression']
-    else:
-        # Identify year columns (numeric or str columns that have 4 digits)
-        year_cols = [col for col in df.columns if len(str(col)) == 4 and str(col).isdigit()]
-    
-    if not year_cols:
-        breakpoint()
-        raise ValueError(f"No year columns found in {leap_export_filename}")
-
-    success = []
-    failed = []
-    
-    # Group by branch path and variable
-    for (bp, var), group in df.groupby(["Branch Path", "Variable"]):
-        branch = safe_branch_call(L, bp, AUTO_SET_MISSING_BRANCHES=False, THROW_ERROR_ON_MISSING=False)
-        
-        if branch is None:
-            msg = f"Branch '{bp}' not found - skipping variable '{var}'"
-            if RAISE_ERROR_ON_FAILED_SET:
-                raise RuntimeError(msg)
-            else:
-                print(f"[WARN] {msg}")
-                failed.append((bp, var))
-                continue
-        if ['Expression'] == year_cols:
-            #we just need to set the expression directly
-            expr = group['Expression'].iloc[0]
-        else:
-            # Extract year-value pairs
-            points = []
-            for year in year_cols:
-                val = group[year].iloc[0]
-                if pd.notna(val):
-                    try:
-                        points.append((int(year), float(val)))
-                    except (ValueError, TypeError):
-                        print(f"[WARN] Invalid value for {bp}\\{var} in year {year}: {val}")
-                        continue
-
-            if not points:
-                print(f"[WARN] No valid data points for {bp}\\{var}")
-                failed.append((bp, var))
-                continue
-
-            # Build expression
-            expr = build_expr(points, expression_type="")
-        
-        if expr is None:
-            if RAISE_ERROR_ON_FAILED_SET:
+    def _fill_from_df(df_in):
+        # Filter by scenario/region if specified
+        if scenario is not None and "Scenario" in df_in.columns:
+            df_in = df_in[df_in["Scenario"] == scenario]
+            if len(df_in) == 0:
                 breakpoint()
-                raise RuntimeError(f"Failed to build expression for {bp}\\{var}")
-            print(f"[WARN] Failed to build expression for {bp}\\{var}")
-            failed.append((bp, var))
-            continue
-        
-        unit_name = None
-        # scale_value = None
-        if SET_UNITS:
-            unit_name = group['Units'].iloc[0] if 'Units' in group.columns else None
-        # if SET_SCALE:#kept this here in case someone wants to try again to insert scale value.. its also kind of proof that it wont work but was considered
-        #     #if the scale column exists and the value is not na then we set the scale
-        #     scale_value = group['Scale'].iloc[0] if 'Scale' in group.columns else None   
-        #     if pd.isna(scale_value):
-        #         scale_value = None           
-        # Set the variable
-        # breakpoint()
-        set_success = safe_set_variable(L, branch, var, expr,unit_name=unit_name, context=bp)#scale_value=scale_value,
-        
-        if set_success:
-            success.append((bp, var))
-        else:
-            if RAISE_ERROR_ON_FAILED_SET:
+                raise ValueError(f"No rows found for scenario '{scenario}' in {leap_export_filename} (sheet '{sheet_name}').")
+        if region is not None and "Region" in df_in.columns:
+            df_in = df_in[df_in["Region"] == region]
+            if len(df_in) == 0:
                 breakpoint()
-                raise RuntimeError(f"Failed to set variable '{var}' on branch '{bp}'")
-            else:
-                failed.append((bp, var))
+                raise ValueError(f"No rows found for region '{region}' in {leap_export_filename} (sheet '{sheet_name}').")
+        
+        df_in = df_in.copy()
+        df_in["_Sanitized Branch Path"] = df_in["Branch Path"].apply(
+            sanitize_leap_branch_path
+        )
+        df_in = df_in[df_in["_Sanitized Branch Path"] != ""]
 
-    print(f"[INFO] Data fill complete. Success: {len(success)}, Failed: {len(failed)}")
-    return {"success": success, "failed": failed}
+        #if the df contains year cols then we use those instead of expression cols.
+        if 'Expression' in df_in.columns:
+            print(f"[INFO] 'Expression' column found in {leap_export_filename}, using it to set variable expressions directly.")
+            year_cols = ['Expression']
+        else:
+            # Identify year columns (numeric or str columns that have 4 digits)
+            year_cols = [col for col in df_in.columns if len(str(col)) == 4 and str(col).isdigit()]
+        
+        if not year_cols:
+            breakpoint()
+            raise ValueError(f"No year columns found in {leap_export_filename}")
+
+        success = []
+        failed = []
+        
+        # Group by branch path and variable
+        
+        for (sanitized_bp, var), group in df_in.groupby(
+            ["_Sanitized Branch Path", "Variable"]
+        ):
+            branch_path_used = sanitized_bp
+            branch = safe_branch_call(
+                L,
+                sanitized_bp,
+                AUTO_SET_MISSING_BRANCHES=False,
+                THROW_ERROR_ON_MISSING=False,
+            )
+            if branch is None:
+                original_bp = group["Branch Path"].iloc[0]
+                branch = safe_branch_call(
+                    L,
+                    original_bp,
+                    AUTO_SET_MISSING_BRANCHES=False,
+                    THROW_ERROR_ON_MISSING=False,
+                )
+                branch_path_used = original_bp
+            
+            if branch is None:
+                original_bp = group["Branch Path"].iloc[0]
+                msg = (
+                    f"Branch '{original_bp}' (sanitized '{sanitized_bp}') not found - "
+                    f"skipping variable '{var}'"
+                )
+                if RAISE_ERROR_ON_FAILED_SET:
+                    breakpoint()
+                    raise RuntimeError(msg)
+                else:
+                    print(f"[WARN] {msg}")
+                    failed.append((branch_path_used, var))
+                    continue
+            if ['Expression'] == year_cols:
+                #we just need to set the expression directly
+                expr = group['Expression'].iloc[0]
+            else:
+                # Extract year-value pairs
+                points = []
+                for year in year_cols:
+                    val = group[year].iloc[0]
+                    if pd.notna(val):
+                        try:
+                            points.append((int(year), float(val)))
+                        except (ValueError, TypeError):
+                            print(
+                                f"[WARN] Invalid value for {branch_path_used}\\{var} "
+                                f"in year {year}: {val}"
+                            )
+                            continue
+
+                if not points:
+                    print(
+                        f"[WARN] No valid data points for {branch_path_used}\\{var}"
+                    )
+                    failed.append((branch_path_used, var))
+                    continue
+
+                # Build expression
+                expr = build_expr(points, expression_type="")
+            
+            if expr is None:
+                if RAISE_ERROR_ON_FAILED_SET:
+                    breakpoint()
+                    raise RuntimeError(
+                        f"Failed to build expression for {branch_path_used}\\{var}"
+                    )
+                print(
+                    f"[WARN] Failed to build expression for {branch_path_used}\\{var}"
+                )
+                failed.append((branch_path_used, var))
+                continue
+            
+            unit_name = None
+            # scale_value = None
+            if SET_UNITS:
+                unit_name = group['Units'].iloc[0] if 'Units' in group.columns else None
+            # if SET_SCALE:#kept this here in case someone wants to try again to insert scale value.. its also kind of proof that it wont work but was considered
+            #     #if the scale column exists and the value is not na then we set the scale
+            #     scale_value = group['Scale'].iloc[0] if 'Scale' in group.columns else None   
+            #     if pd.isna(scale_value):
+            #         scale_value = None           
+            # Set the variable
+            # if var == "Process Efficiency":
+            #     breakpoint()#trying to track down cause of [ERROR] Failed setting Process Efficiency on Transformation\Patent fuel plants\Processes\Patent fuel plants: (-2147352571, 'Type mismatch.', None, 1)
+            set_success = safe_set_variable(
+                L, branch, var, expr, unit_name=unit_name, context=branch_path_used
+            )
+            
+            if set_success:
+                success.append((branch_path_used, var))
+            else:
+                # breakpoint()
+                if RAISE_ERROR_ON_FAILED_SET:
+                    breakpoint()
+                    raise RuntimeError(
+                        f"Failed to set variable '{var}' on branch '{branch_path_used}'"
+                    )
+                failed.append((branch_path_used, var))
+
+        print(f"[INFO] Data fill complete. Success: {len(success)}, Failed: {len(failed)}")
+        return {"success": success, "failed": failed}
+
+    results = []
+    scenarios_to_run = [scenario]
+    if HANDLE_CURRENT_ACCOUNTS_TOO and scenario and scenario != "Current Accounts":
+        scenarios_to_run.append("Current Accounts")
+
+    for scen in scenarios_to_run:
+        if scen is not None:
+            print(f"[INFO] Filling data for scenario '{scen}'.")
+        prev_scenario = scenario
+        scenario = scen
+        results.append(_fill_from_df(df.copy()))
+        scenario = prev_scenario
+
+    combined = {"success": [], "failed": []}
+    for res in results:
+        combined["success"].extend(res["success"])
+        combined["failed"].extend(res["failed"])
+    return combined

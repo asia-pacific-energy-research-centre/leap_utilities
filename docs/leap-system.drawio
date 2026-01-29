@@ -1,0 +1,500 @@
+<mxfile host="65bd71144e">
+    <diagram id="leapFlow" name="High-level modelling flow">
+        <mxGraphModel dx="3012" dy="1198" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1600" pageHeight="1900" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="E_X_GAS_TO_LOSS" value="" style="edgeStyle=orthogonalEdgeStyle;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;rounded=0;exitX=0.149;exitY=-0.001;exitPerimeter=0;exitDx=0;exitDy=0;fontSize=14;" parent="1" source="G_X_GAS" target="L_LOSS_GAS" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="428" y="970"/>
+                            <mxPoint y="970"/>
+                            <mxPoint y="835"/>
+                            <mxPoint x="-180" y="835"/>
+                        </Array>
+                        <mxPoint x="-60" y="900" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="E_S_GAS_TO_TRN" value="Pipelines activity" style="edgeStyle=orthogonalEdgeStyle;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;rounded=0;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitPerimeter=1;fontSize=14;entryX=0.017;entryY=0.664;entryDx=0;entryDy=0;entryPerimeter=0;" parent="1" source="G_S_GAS" target="G_D_TRN" edge="1">
+                    <mxGeometry x="-0.2766" relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="510" y="1170"/>
+                            <mxPoint x="20" y="1170"/>
+                            <mxPoint x="20" y="430"/>
+                            <mxPoint x="75" y="430"/>
+                        </Array>
+                        <mxPoint x="-20" y="430" as="targetPoint"/>
+                        <mxPoint as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="L_STAGE" value="Stage labels" style="layer;fontSize=14;" parent="1"/>
+                <mxCell id="E_D_TO_T" value="Energy demand by fuel" style="endArrow=block;html=1;rounded=0;labelBackgroundColor=#ffffff;fontSize=14;" parent="L_STAGE" source="C_DEMAND" target="C_TRANS" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_T_TO_S" value="Transformation inputs by fuel" style="endArrow=block;html=1;rounded=0;labelBackgroundColor=#ffffff;fontSize=14;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;" parent="L_STAGE" source="C_TRANS" target="C_SUP" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_S_GAS_TO_X_GAS" value="LNG trade and gas supply" style="endArrow=block;html=1;rounded=0;exitX=0.657;exitY=0.026;exitPerimeter=0;entryX=0.5;entryY=1;entryPerimeter=1;exitDx=0;exitDy=0;fontSize=14;" parent="L_STAGE" source="G_S_GAS" target="G_X_GAS" edge="1">
+                    <mxGeometry x="0.1021" y="-71" relative="1" as="geometry">
+                        <mxPoint y="-1" as="offset"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="E_S_OIL_TO_TRN" value="" style="edgeStyle=orthogonalEdgeStyle;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;rounded=0;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;exitPerimeter=1;entryX=-0.006;entryY=0.669;entryPerimeter=0;entryDx=0;entryDy=0;fontSize=14;" parent="L_STAGE" source="G_S_OIL" target="G_D_TRN" edge="1">
+                    <mxGeometry x="0.0001" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="320" y="1170"/>
+                            <mxPoint x="20" y="1170"/>
+                            <mxPoint x="20" y="430"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="L_CONTEXT" value="Context inputs" style="layer;fontSize=14;" parent="1"/>
+                <mxCell id="C_MACRO" value="&lt;b&gt;Macro model&lt;/b&gt;&lt;br&gt;Projects GDP and population used in demand projections especially." style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;" parent="L_CONTEXT" vertex="1">
+                    <mxGeometry x="-340" y="90" width="280" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="C_ESTO_FMT" value="&lt;b&gt;ESTO data formatting&lt;/b&gt;&lt;br&gt;Permanent, code-friendly ESTO balances" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;" parent="L_CONTEXT" vertex="1">
+                    <mxGeometry x="-340" y="170" width="280" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="C_VIZ" value="&lt;b&gt;Visualisation&lt;/b&gt;&lt;br&gt;Analysis and report presentation" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;" parent="L_CONTEXT" vertex="1">
+                    <mxGeometry x="-340" y="250" width="280" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="L_DEMAND" value="Demand" style="layer;fontSize=14;" parent="1"/>
+                <mxCell id="C_DEMAND" value="Demand sectors" style="rounded=0;dashed=1;dashPattern=4 4;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontStyle=1;spacing=8;fillColor=#E8F1FB;fillOpacity=15;strokeColor=#4F83CC;fontColor=#000000;recursiveResize=0;fontSize=16;" parent="L_DEMAND" vertex="1">
+                    <mxGeometry x="50" y="100" width="1180" height="470" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_D_OTH" value="Other demand (e.g. agriculture, non-specified)" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#E8F1FB;strokeColor=#4F83CC;fontColor=#000000;fontSize=16;" parent="C_DEMAND" vertex="1">
+                    <mxGeometry x="890" y="46" width="270" height="374" as="geometry"/>
+                </mxCell>
+                <mxCell id="Ttk2usqYhinsMtB2YCgW-4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=14;" parent="G_D_OTH" source="D_OTH_CORE" target="D_OTH_CAL" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="Ttk2usqYhinsMtB2YCgW-6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=14;" parent="G_D_OTH" source="D_OTH_CAL" target="Ttk2usqYhinsMtB2YCgW-5" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="Ttk2usqYhinsMtB2YCgW-10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=14;" parent="G_D_OTH" source="Ttk2usqYhinsMtB2YCgW-5" target="Ttk2usqYhinsMtB2YCgW-9" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="D_OTH_CORE" value="Sector/fuel-based Activity &amp;amp; intensity estimation using ESTO balances (python or excel)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="G_D_OTH" vertex="1">
+                    <mxGeometry x="10" y="55.00000000000001" width="250" height="88" as="geometry"/>
+                </mxCell>
+                <mxCell id="D_OTH_CAL" value="Python: base-year calibration" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="G_D_OTH" vertex="1">
+                    <mxGeometry x="10" y="154" width="250" height="49.50000000000001" as="geometry"/>
+                </mxCell>
+                <mxCell id="Ttk2usqYhinsMtB2YCgW-5" value="LEAP import" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="G_D_OTH" vertex="1">
+                    <mxGeometry x="10" y="220.00000000000003" width="250" height="49.50000000000001" as="geometry"/>
+                </mxCell>
+                <mxCell id="Ttk2usqYhinsMtB2YCgW-9" value="Demand output" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="G_D_OTH" vertex="1">
+                    <mxGeometry x="10" y="286" width="250" height="49.50000000000001" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_D_TRN" value="Transport demand (incl. bunkers and pipeline)" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#E8F1FB;strokeColor=#4F83CC;fontColor=#000000;fontSize=16;recursiveResize=0;" parent="C_DEMAND" vertex="1">
+                    <mxGeometry x="20" y="46" width="300" height="424" as="geometry"/>
+                </mxCell>
+                <mxCell id="2" value="" style="edgeStyle=none;html=1;fontSize=14;" parent="G_D_TRN" source="D_TRN_SALES" target="D_TRN_ROAD" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_TRN_C" style="endArrow=block;html=1;rounded=0;fontSize=14;" parent="G_D_TRN" source="D_TRN_INTAKE" target="D_TRN_RECON" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_TRN_D1" style="endArrow=block;html=1;rounded=0;fontSize=14;" parent="G_D_TRN" source="D_TRN_RECON" target="D_TRN_SALES" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_TRN_D1B" style="endArrow=block;html=1;rounded=0;fontSize=14;" parent="G_D_TRN" source="D_TRN_SALES" target="D_TRN_ROAD" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_TRN_D2" style="endArrow=block;html=1;rounded=0;exitX=0.9;exitY=1;exitPerimeter=1;entryX=0.9;entryY=0;entryPerimeter=1;fontSize=14;" parent="G_D_TRN" source="D_TRN_RECON" target="D_TRN_NONROAD" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_TRN_E1" style="endArrow=block;html=1;rounded=0;fontSize=14;" parent="G_D_TRN" source="D_TRN_ROAD" target="D_TRN_MODEL" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_TRN_E2" style="endArrow=block;html=1;rounded=0;fontSize=14;" parent="G_D_TRN" source="D_TRN_NONROAD" target="D_TRN_MODEL" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="Ttk2usqYhinsMtB2YCgW-2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.585;exitY=0.983;exitDx=0;exitDy=0;exitPerimeter=0;fontSize=14;" parent="G_D_TRN" source="D_TRN_SURV" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="85.92592592592594" y="144" as="sourcePoint"/>
+                        <mxPoint x="85.92592592592594" y="154.5" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="E_TRN_F1" style="endArrow=block;html=1;rounded=0;exitX=0.1;exitY=1;exitPerimeter=1;fontSize=14;" parent="G_D_TRN" source="D_TRN_SURV" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="23.62962962962963" y="220" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="D_TRN_INTAKE" value="Historical data → Python format → LEAP import" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=15;spacing=6;" parent="G_D_TRN" vertex="1">
+                    <mxGeometry x="10" y="64" width="280" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="D_TRN_RECON" value="Python: base-year calibration" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=15;spacing=6;" parent="G_D_TRN" vertex="1">
+                    <mxGeometry x="155" y="124" width="135" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="D_TRN_SALES" value="Sales calaculation:&amp;nbsp;&lt;br&gt;Ownership and turnover → sales → stock" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=15;spacing=6;" parent="G_D_TRN" vertex="1">
+                    <mxGeometry x="10" y="184" width="280" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="D_TRN_ROAD" value="Transport road model (Stock flow)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=15;spacing=6;" parent="G_D_TRN" vertex="1">
+                    <mxGeometry x="10" y="264" width="135" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="D_TRN_NONROAD" value="Non-road model&lt;br&gt;(Activity*intensity)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=15;spacing=6;" parent="G_D_TRN" vertex="1">
+                    <mxGeometry x="155" y="264" width="135" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="D_TRN_MODEL" value="Transport model output (road, non-road, bunkers, pipelines and non-specified)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=15;spacing=6;" parent="G_D_TRN" vertex="1">
+                    <mxGeometry x="10" y="334" width="280" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="D_TRN_SURV" value="Vehicle age &amp;amp; survival curves" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=15;spacing=6;" parent="G_D_TRN" vertex="1">
+                    <mxGeometry x="10" y="124" width="135" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-82" value="Industry &amp;amp; non-energy demand" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#E8F1FB;strokeColor=#4F83CC;fontColor=#000000;fontSize=16;" parent="C_DEMAND" vertex="1">
+                    <mxGeometry x="610" y="46" width="270" height="340" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-83" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=14;" parent="3Vn5BuMNg00IzMXtSu-n-82" source="3Vn5BuMNg00IzMXtSu-n-86" target="3Vn5BuMNg00IzMXtSu-n-87" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-84" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=14;" parent="3Vn5BuMNg00IzMXtSu-n-82" source="3Vn5BuMNg00IzMXtSu-n-87" target="3Vn5BuMNg00IzMXtSu-n-88" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-85" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=14;" parent="3Vn5BuMNg00IzMXtSu-n-82" source="3Vn5BuMNg00IzMXtSu-n-88" target="3Vn5BuMNg00IzMXtSu-n-89" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-86" value="Sector/fuel-based Activity &amp;amp; intensity estimation using ESTO balances (python or excel)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="3Vn5BuMNg00IzMXtSu-n-82" vertex="1">
+                    <mxGeometry x="10" y="50" width="250" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-87" value="Python: base-year calibration" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="3Vn5BuMNg00IzMXtSu-n-82" vertex="1">
+                    <mxGeometry x="10" y="140" width="250" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-88" value="LEAP import" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="3Vn5BuMNg00IzMXtSu-n-82" vertex="1">
+                    <mxGeometry x="10" y="200" width="250" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-89" value="Demand output" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="3Vn5BuMNg00IzMXtSu-n-82" vertex="1">
+                    <mxGeometry x="10" y="260" width="250" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-90" value="Buildings demand (incl. datacentres)" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#E8F1FB;strokeColor=#4F83CC;fontColor=#000000;fontSize=16;recursiveResize=0;" parent="C_DEMAND" vertex="1">
+                    <mxGeometry x="330" y="46" width="270" height="374" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-91" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=14;" parent="3Vn5BuMNg00IzMXtSu-n-90" source="3Vn5BuMNg00IzMXtSu-n-94" target="3Vn5BuMNg00IzMXtSu-n-95" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-92" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=14;" parent="3Vn5BuMNg00IzMXtSu-n-90" source="3Vn5BuMNg00IzMXtSu-n-95" target="3Vn5BuMNg00IzMXtSu-n-96" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-93" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=14;" parent="3Vn5BuMNg00IzMXtSu-n-90" source="3Vn5BuMNg00IzMXtSu-n-96" target="3Vn5BuMNg00IzMXtSu-n-97" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-94" value="Sector/fuel-based Activity &amp;amp; intensity estimation using ESTO balances (python or excel)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="3Vn5BuMNg00IzMXtSu-n-90" vertex="1">
+                    <mxGeometry x="10" y="74" width="250" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-95" value="Python: base-year calibration" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="3Vn5BuMNg00IzMXtSu-n-90" vertex="1">
+                    <mxGeometry x="10" y="164" width="250" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-96" value="LEAP import" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="3Vn5BuMNg00IzMXtSu-n-90" vertex="1">
+                    <mxGeometry x="10" y="224" width="250" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-97" value="Demand output" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="3Vn5BuMNg00IzMXtSu-n-90" vertex="1">
+                    <mxGeometry x="10" y="284" width="250" height="45" as="geometry"/>
+                </mxCell>
+                <mxCell id="L_TRANS" value="Transformation" style="layer;fontSize=14;" parent="1"/>
+                <mxCell id="C_TRANS" value="Transformation sectors" style="rounded=0;dashed=1;dashPattern=4 4;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontStyle=1;spacing=8;fillColor=#FFF2E2;fillOpacity=15;strokeColor=#E18F4E;fontColor=#000000;fontSize=16;" parent="L_TRANS" vertex="1">
+                    <mxGeometry x="40" y="610" width="1180" height="550" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_X_REF" value="Refining" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#FFF2E2;strokeColor=#E18F4E;fontColor=#000000;fontSize=16;" parent="C_TRANS" vertex="1">
+                    <mxGeometry x="395" y="46.851851851851855" width="360" height="299.44444444444446" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_X_REF_LOOP" style="endArrow=block;html=1;rounded=0;fontSize=14;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" parent="G_X_REF" source="X_REF_CORE" edge="1" target="73">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="180" y="145.52440290758048" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="76" style="edgeStyle=none;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=14;" parent="G_X_REF" source="73" target="74" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="75" value="" style="edgeStyle=none;html=1;entryX=0.75;entryY=0;entryDx=0;entryDy=0;fontSize=14;" parent="G_X_REF" source="72" target="73" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="215" y="159.5171339563863" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="X_REF_CORE" value="&lt;div&gt;Project imports/export trends and capacity requirements&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="G_X_REF" vertex="1">
+                    <mxGeometry x="10" y="41.978193146417446" width="160" height="92.35202492211836" as="geometry"/>
+                </mxCell>
+                <mxCell id="73" value="&lt;div&gt;Base year calibration&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="G_X_REF" vertex="1">
+                    <mxGeometry x="10" y="148.32294911734164" width="340" height="54.57165109034268" as="geometry"/>
+                </mxCell>
+                <mxCell id="72" value="&lt;div&gt;&lt;span style=&quot;color: #000000; background-color: transparent;&quot;&gt;Project yield ratios, feedstock shares and losses ratios&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="G_X_REF" vertex="1">
+                    <mxGeometry x="175" y="41.978193146417446" width="185" height="97.94911734164069" as="geometry"/>
+                </mxCell>
+                <mxCell id="74" value="&lt;div&gt;Refining output&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="G_X_REF" vertex="1">
+                    <mxGeometry x="10" y="216.8873312564901" width="340" height="54.57165109034268" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_X_H2" value="Hydrogen &amp;amp; hydrogen-based fuels" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#FFF2E2;strokeColor=#E18F4E;fontColor=#000000;fontSize=16;" parent="C_TRANS" vertex="1">
+                    <mxGeometry x="770" y="46.851851851851855" width="390" height="299.44444444444446" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_X_H2_LOOP" style="endArrow=block;html=1;rounded=0;fontSize=14;" parent="G_X_H2" source="X_H2_CORE" target="X_H2_CAL" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="7" style="edgeStyle=none;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;fontSize=14;" parent="G_X_H2" source="5" target="X_H2_CAL" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="71" value="" style="edgeStyle=none;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontSize=14;" parent="G_X_H2" source="X_H2_CAL" target="70" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="195" y="213.4653465346535" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="X_H2_CORE" value="&lt;div&gt;&lt;font color=&quot;#000000&quot;&gt;Project imports/export trends and capacity requirements&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="G_X_H2" vertex="1">
+                    <mxGeometry x="10" y="44.471947194719476" width="180" height="74.11991199119912" as="geometry"/>
+                </mxCell>
+                <mxCell id="X_H2_CAL" value="Integrate electricity input with power model" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="G_X_H2" vertex="1">
+                    <mxGeometry x="10" y="139.34543454345436" width="370" height="57.81353135313532" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="&lt;div&gt;&lt;span style=&quot;background-color: transparent;&quot;&gt;&lt;font&gt;Project input ratios and emission intensities (colors)&lt;/font&gt;&lt;/span&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="G_X_H2" vertex="1">
+                    <mxGeometry x="200" y="44.471947194719476" width="180" height="74.11991199119912" as="geometry"/>
+                </mxCell>
+                <mxCell id="70" value="Hydrogen &amp;amp; hydrogen-based fuels output" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=16;spacing=6;" parent="G_X_H2" vertex="1">
+                    <mxGeometry x="10" y="211.9829482948295" width="370" height="57.81353135313532" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_X_GAS" value="Gas processing" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#FFF2E2;strokeColor=#E18F4E;fontColor=#000000;fontSize=16;" parent="C_TRANS" vertex="1">
+                    <mxGeometry x="340" y="366.6666666666667" width="320" height="152.7777777777778" as="geometry"/>
+                </mxCell>
+                <mxCell id="X_GAS_LNG" value="LNG processing&#xa;Liquefaction + regasification" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=15;spacing=6;" parent="G_X_GAS" vertex="1">
+                    <mxGeometry x="10" y="40.74074074074075" width="145" height="101.85185185185186" as="geometry"/>
+                </mxCell>
+                <mxCell id="X_GAS_OTH" value="Other gas processes&#xa;Gas to liquids plants&#xa;Natural gas blending plants&#xa;Gas works plants" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=14;spacing=6;" parent="G_X_GAS" vertex="1">
+                    <mxGeometry x="165" y="40.74074074074075" width="145" height="101.85185185185186" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_X_CHAR" value="Charcoal processing" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#FFF2E2;strokeColor=#E18F4E;fontColor=#000000;fontSize=16;" parent="C_TRANS" vertex="1">
+                    <mxGeometry x="670" y="366.6666666666667" width="170" height="56.018518518518526" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_X_NON" value="Non-specified transformation" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#FFF2E2;strokeColor=#E18F4E;fontColor=#000000;fontSize=16;" parent="C_TRANS" vertex="1">
+                    <mxGeometry x="860" y="366.6666666666667" width="185" height="56.018518518518526" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_X_PWR" value="Power sector (one of two modelling options)" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#FFF2E2;strokeColor=#E18F4E;fontColor=#000000;fontSize=16;" parent="C_TRANS" vertex="1">
+                    <mxGeometry x="20" y="30.555555555555557" width="360" height="319.81481481481484" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_X_PWR_N1" style="endArrow=block;html=1;rounded=0;fontSize=14;" parent="G_X_PWR" source="X_PWR_NEMO_DATA" target="X_PWR_NEMO_RUN" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_X_PWR_N2" style="endArrow=block;html=1;rounded=0;fontSize=14;" parent="G_X_PWR" source="X_PWR_NEMO_RUN" target="X_PWR_NEMO_EXPORT" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_X_PWR_N4" style="endArrow=block;html=1;rounded=0;fontSize=14;" parent="G_X_PWR" source="X_PWR_NEMO_EXPORT" target="X_PWR_OUT" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_X_PWR_L2" style="endArrow=block;html=1;rounded=0;fontSize=14;" parent="G_X_PWR" source="X_PWR_LEAP_PARAMS" target="X_PWR_LEAP_RUN" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_X_PWR_L3" style="endArrow=block;html=1;rounded=0;fontSize=14;" parent="G_X_PWR" source="X_PWR_LEAP_RUN" target="X_PWR_OUT" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="X_PWR_NEMO_DATA" value="NEMO input sheets&#xa;(OSeMOSYS-style)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=15;spacing=6;" parent="G_X_PWR" vertex="1">
+                    <mxGeometry x="10" y="32.19612229679345" width="160" height="64.3922445935869" as="geometry"/>
+                </mxCell>
+                <mxCell id="X_PWR_NEMO_RUN" value="Run NEMO via&#xa;Python wrapper" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=15;spacing=6;" parent="G_X_PWR" vertex="1">
+                    <mxGeometry x="10" y="107.32040765597814" width="160" height="64.3922445935869" as="geometry"/>
+                </mxCell>
+                <mxCell id="X_PWR_NEMO_EXPORT" value="Export to LEAP&#xa;structure (Python)" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=15;spacing=6;" parent="G_X_PWR" vertex="1">
+                    <mxGeometry x="10" y="182.44469301516287" width="160" height="64.3922445935869" as="geometry"/>
+                </mxCell>
+                <mxCell id="X_PWR_LEAP_PARAMS" value="Set parameters&#xa;within LEAP" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=15;spacing=6;" parent="G_X_PWR" vertex="1">
+                    <mxGeometry x="190" y="32.19612229679345" width="160" height="64.3922445935869" as="geometry"/>
+                </mxCell>
+                <mxCell id="X_PWR_LEAP_RUN" value="Run LEAP model" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=15;spacing=6;" parent="G_X_PWR" vertex="1">
+                    <mxGeometry x="190" y="107.32040765597814" width="160" height="42.928163062391256" as="geometry"/>
+                </mxCell>
+                <mxCell id="X_PWR_OUT" value="Power model output" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=15;spacing=6;" parent="G_X_PWR" vertex="1">
+                    <mxGeometry x="10" y="257.5689783743476" width="340" height="40.78175490927169" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_X_COAL" value="Coal transformation" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#FFF2E2;strokeColor=#E18F4E;fontColor=#000000;fontSize=16;" parent="C_TRANS" vertex="1">
+                    <mxGeometry x="30" y="366.6666666666667" width="300" height="171.11111111111111" as="geometry"/>
+                </mxCell>
+                <mxCell id="X_COAL_CORE" value="Coke ovens&#xa;Blast furnaces&#xa;BKB/PB plants&#xa;Liquefaction (coal to oil)&#xa;Patent fuel plants" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontSize=14;spacing=6;" parent="G_X_COAL" vertex="1">
+                    <mxGeometry x="10" y="40.74074074074075" width="280" height="120.18518518518519" as="geometry"/>
+                </mxCell>
+                <mxCell id="L_LOSS" value="Losses and own use" style="layer;fontSize=14;" parent="1"/>
+                <mxCell id="E_X_PWR_TO_LOSS" value="" style="endArrow=block;html=1;rounded=0;exitX=0;exitY=0.5;exitPerimeter=1;entryX=1;entryY=0.5;entryPerimeter=1;fontSize=14;" parent="L_LOSS" source="G_X_PWR" target="L_LOSS_PWR" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_X_REF_TO_LOSS" value="" style="edgeStyle=orthogonalEdgeStyle;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;rounded=0;exitX=0.25;exitY=0;entryX=0.769;entryY=0.018;entryPerimeter=0;entryDx=0;entryDy=0;exitDx=0;exitDy=0;fontSize=14;" parent="L_LOSS" source="G_X_REF" target="L_LOSS_REF" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="525" y="610"/>
+                            <mxPoint x="-110" y="610"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="E_S_COAL_TO_LOSS" value="" style="endArrow=block;html=1;rounded=0;exitX=0;exitY=0.5;exitPerimeter=1;entryX=1;entryY=0.5;entryPerimeter=1;fontSize=14;" parent="L_LOSS" source="G_S_COAL" target="L_LOSS_COAL_SUP" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_S_OIL_TO_LOSS" value="" style="endArrow=block;html=1;rounded=0;exitX=0.5;exitY=1;entryX=0.942;entryY=1.024;entryPerimeter=0;exitDx=0;exitDy=0;entryDx=0;entryDy=0;fontSize=14;" parent="L_LOSS" source="G_S_OIL" target="L_LOSS_OILGAS" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="320" y="1510"/>
+                            <mxPoint x="-65" y="1510"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="E_S_GAS_TO_LOSS" value="" style="endArrow=block;html=1;rounded=0;exitX=0.5;exitY=1;entryX=0.943;entryY=1.034;entryDx=0;entryDy=0;exitDx=0;exitDy=0;entryPerimeter=0;fontSize=14;" parent="L_LOSS" source="G_S_GAS" target="L_LOSS_OILGAS" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="510" y="1510"/>
+                            <mxPoint x="-65" y="1510"/>
+                        </Array>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="C_LOSS" value="Losses &amp; own use" style="rounded=0;dashed=1;dashPattern=3 3;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontStyle=1;spacing=8;fillColor=#FFF4D6;fillOpacity=20;strokeColor=#D49B3F;fontColor=#000000;recursiveResize=0;fontSize=16;" parent="L_LOSS" vertex="1">
+                    <mxGeometry x="-350" y="679" width="340" height="581" as="geometry"/>
+                </mxCell>
+                <mxCell id="L_LOSS_PWR" value="Power losses &amp; own use&#xa;Electricity CHP and heat plants&#xa;Pump storage plants&#xa;Transmission and distribution losses" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;fontSize=13;spacing=6;fillColor=#FFF9E6;strokeColor=#D49B3F;fontColor=#000000;" parent="C_LOSS" vertex="1">
+                    <mxGeometry x="40" y="120" width="260" height="91" as="geometry"/>
+                </mxCell>
+                <mxCell id="L_LOSS_GAS" value="Gas processing losses &amp; own use&#xa;Gas works plants&#xa;Liquefaction and regasification plants" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;fontSize=13;spacing=6;fillColor=#FFF9E6;strokeColor=#D49B3F;fontColor=#000000;" parent="C_LOSS" vertex="1">
+                    <mxGeometry x="40" y="221" width="260" height="73" as="geometry"/>
+                </mxCell>
+                <mxCell id="L_LOSS_COAL" value="Coal transformation losses &amp; own use&#xa;Coke ovens&#xa;Blast furnaces" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;fontSize=13;spacing=6;fillColor=#FFF9E6;strokeColor=#D49B3F;fontColor=#000000;" parent="C_LOSS" vertex="1">
+                    <mxGeometry x="40" y="304" width="260" height="73" as="geometry"/>
+                </mxCell>
+                <mxCell id="L_LOSS_REF" value="Refining losses &amp; own use&#xa;Oil refineries" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;fontSize=13;spacing=6;fillColor=#FFF9E6;strokeColor=#D49B3F;fontColor=#000000;" parent="C_LOSS" vertex="1">
+                    <mxGeometry x="40" y="50" width="260" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="L_LOSS_COAL_SUP" value="Coal supply losses &amp; own use&#xa;Coal mines" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;fontSize=13;spacing=6;fillColor=#FFF9E6;strokeColor=#D49B3F;fontColor=#000000;" parent="C_LOSS" vertex="1">
+                    <mxGeometry x="40" y="447" width="260" height="54" as="geometry"/>
+                </mxCell>
+                <mxCell id="L_LOSS_OILGAS" value="Oil and gas extraction losses &amp; own use" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;fontSize=13;spacing=6;fillColor=#FFF9E6;strokeColor=#D49B3F;fontColor=#000000;" parent="C_LOSS" vertex="1">
+                    <mxGeometry x="40" y="511" width="260" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="L_LOSS_NON" value="Non-specified own uses" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;fontSize=13;spacing=6;fillColor=#FFF9E6;strokeColor=#D49B3F;fontColor=#000000;" parent="C_LOSS" vertex="1">
+                    <mxGeometry x="40" y="387" width="260" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="L_SUPPLY" value="Supply" style="layer;fontSize=14;" parent="1"/>
+                <mxCell id="C_SUP" value="Supply sectors (by fuel group)" style="rounded=0;dashed=1;dashPattern=4 4;whiteSpace=wrap;html=1;align=left;verticalAlign=top;fontStyle=1;spacing=8;fillColor=#E9F7EF;fillOpacity=15;strokeColor=#3FA66A;fontColor=#000000;recursiveResize=0;fontSize=16;" parent="L_SUPPLY" vertex="1">
+                    <mxGeometry x="20" y="1220" width="1210" height="380" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_S_COAL" value="Coal supply" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#E9F7EF;strokeColor=#3FA66A;fontColor=#000000;fontSize=16;" parent="C_SUP" vertex="1">
+                    <mxGeometry x="20" y="40" width="180" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_S_OIL" value="Oil supply" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#E9F7EF;strokeColor=#3FA66A;fontColor=#000000;fontSize=16;" parent="C_SUP" vertex="1">
+                    <mxGeometry x="210" y="40" width="180" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_S_GAS" value="Gas supply" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#E9F7EF;strokeColor=#3FA66A;fontColor=#000000;fontSize=16;" parent="C_SUP" vertex="1">
+                    <mxGeometry x="400" y="40" width="180" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_S_ELEC" value="Electricity supply" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#E9F7EF;strokeColor=#3FA66A;fontColor=#000000;fontSize=16;" parent="C_SUP" vertex="1">
+                    <mxGeometry x="590" y="40" width="200" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_S_BIO" value="Bioenergy / waste supply" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#E9F7EF;strokeColor=#3FA66A;fontColor=#000000;fontSize=16;" parent="C_SUP" vertex="1">
+                    <mxGeometry x="800" y="40" width="210" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_S_OTH" value="Others (including fuels from transfomation sectors)" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#E9F7EF;strokeColor=#3FA66A;fontColor=#000000;fontSize=16;" parent="C_SUP" vertex="1">
+                    <mxGeometry x="1020" y="40" width="180" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="G_S_METHOD" value="Supply method (all fuels)" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=top;fontStyle=1;spacingTop=10;fillColor=#E9F7EF;strokeColor=#3FA66A;fontColor=#000000;fontSize=16;" parent="C_SUP" vertex="1">
+                    <mxGeometry x="20" y="120" width="1180" height="260" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_S_METHOD_1" value="" style="endArrow=block;html=1;rounded=0;exitX=0.5;exitY=1;exitPerimeter=1;entryX=0.5;entryY=0;entryPerimeter=1;fontSize=14;" parent="G_S_METHOD" source="S_METHOD_STEP1" target="S_METHOD_STEP2" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_S_METHOD_2" value="" style="endArrow=block;html=1;rounded=0;exitX=0.5;exitY=1;exitPerimeter=1;entryX=0.5;entryY=0;entryPerimeter=1;fontSize=14;" parent="G_S_METHOD" source="S_METHOD_STEP2" target="S_METHOD_STEP3" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_S_METHOD_3" value="" style="endArrow=block;html=1;rounded=0;exitX=0.5;exitY=1;exitPerimeter=1;entryX=0.5;entryY=0;entryPerimeter=1;fontSize=14;" parent="G_S_METHOD" source="S_METHOD_STEP3" target="S_METHOD_STEP4" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="S_METHOD_STEP1" value="Future capacity &amp; trade assessment" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;fontSize=14;spacing=4;" parent="G_S_METHOD" vertex="1">
+                    <mxGeometry x="20" y="34.82142857142856" width="1140" height="41.78571428571428" as="geometry"/>
+                </mxCell>
+                <mxCell id="S_METHOD_STEP2" value="Set production + import/export levels" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;fontSize=14;spacing=4;" parent="G_S_METHOD" vertex="1">
+                    <mxGeometry x="20" y="88.21428571428571" width="1140" height="41.78571428571428" as="geometry"/>
+                </mxCell>
+                <mxCell id="S_METHOD_STEP3" value="&lt;span style=&quot;color: rgb(0, 0, 0); font-size: 15px;&quot;&gt;Python: base-year calibration&lt;/span&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;fontSize=14;spacing=4;" parent="G_S_METHOD" vertex="1">
+                    <mxGeometry x="20" y="141.60714285714286" width="1140" height="41.78571428571428" as="geometry"/>
+                </mxCell>
+                <mxCell id="S_METHOD_STEP4" value="LEAP import" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=middle;fontSize=14;spacing=4;" parent="G_S_METHOD" vertex="1">
+                    <mxGeometry x="20" y="195" width="1140" height="41.78571428571428" as="geometry"/>
+                </mxCell>
+                <mxCell id="L_TOOL" value="Tooling" style="layer;fontSize=14;" parent="1"/>
+                <mxCell id="TOOL_HDR" value="Python tooling" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontStyle=1;spacing=6;fillColor=#D6F3F1;strokeColor=#3BA7A2;fontColor=#000000;fontSize=16;" parent="L_TOOL" vertex="1">
+                    <mxGeometry x="1240" y="80" width="320" height="39" as="geometry"/>
+                </mxCell>
+                <mxCell id="TOOL_REC" value="&lt;b&gt;Base-year calibration&lt;/b&gt;&lt;br&gt;Aligns modeled energy with ESTO.&lt;br&gt;Prevents minor and major differences between modelled energy data and ESTO data in the base year.&lt;br&gt;These are bound to occur but luckily a simple proportional adjustment to the input factors is a clean and easy fix!&lt;div&gt;Should be done across all sector/fuel combinations for the base year.&lt;br&gt;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fillColor=#E6FAF8;strokeColor=#3BA7A2;fontColor=#000000;fontSize=14;" parent="L_TOOL" vertex="1">
+                    <mxGeometry x="1240" y="130" width="320" height="200" as="geometry"/>
+                </mxCell>
+                <mxCell id="TOOL_IO" value="&lt;b&gt;Import / export tools&lt;br&gt;&lt;/b&gt;Moves data between LEAP + Python&lt;br&gt;Move models between LEAP areas&lt;div&gt;Intended to be as simple as possible but because of the way LEAP API is designed, it is currently very finnicky.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fillColor=#E6FAF8;strokeColor=#3BA7A2;fontColor=#000000;fontSize=14;" parent="L_TOOL" vertex="1">
+                    <mxGeometry x="1240" y="340" width="320" height="118" as="geometry"/>
+                </mxCell>
+                <mxCell id="L_INTEG" value="Integration" style="layer;fontSize=14;" parent="1"/>
+                <mxCell id="LEAP_AREA" value="Single integrated LEAP Area" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontStyle=1;spacing=10;fillColor=#F3F1EC;strokeColor=#8C7B6D;fontColor=#000000;fontSize=16;" parent="L_INTEG" vertex="1">
+                    <mxGeometry x="1300" y="620" width="120" height="156" as="geometry"/>
+                </mxCell>
+                <mxCell id="L_NOTES" value="Notes" style="layer;fontSize=14;" parent="1"/>
+                <mxCell id="N_DEMAND" value="Demand notes&lt;br&gt;-Has the most potential for change in method.&amp;nbsp;&lt;div&gt;-Input data is integral to method. e.g. without stocks, transport stock flow model cannot be used.&amp;nbsp;&lt;div&gt;-Input data needs to be maintained. For transport this doesnt have a structured process but it may need one.&lt;/div&gt;&lt;div&gt;-pipelines activity link from gas and oil supply helps to align pipeline energy use with supply assumptions.&lt;/div&gt;&lt;div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fillColor=#F7F7F7;strokeColor=#BDBDBD;fontSize=14;" parent="L_NOTES" vertex="1">
+                    <mxGeometry x="30" y="1730" width="370" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="N_TRANS" value="Transformation notes&lt;br&gt;-Power model is designed so it can use the more simple LEAP process or the NEMO process which provides more flexibility.&amp;nbsp;&lt;div&gt;-Many processes can be designed with a lot of complexity (e.g. hydrogen, refining, gas). How to manage this so we don&#39;t overreach?&amp;nbsp;&lt;/div&gt;&lt;div&gt;-All fuels have supply links because they may be traded. this interaction with &#39;supply&#39; isnt very clear.&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fillColor=#F7F7F7;strokeColor=#BDBDBD;fontSize=14;" parent="L_NOTES" vertex="1">
+                    <mxGeometry x="430" y="1740" width="370" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="N_SUP" value="Supply notes&lt;br&gt;-most modelling work is in assumptions development, such as capacity and trade assesment. For this reason the real supply modellers are not likely to be invovled in using LEAP, instead focused on qualitative aspects and simple spreadsheet analysis mainly." style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fillColor=#F7F7F7;strokeColor=#BDBDBD;fontSize=14;" parent="L_NOTES" vertex="1">
+                    <mxGeometry x="830" y="1740" width="420" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="N_INT" value="Integration &amp;amp; open questions&lt;br&gt;- major concern about LEAP performance when multiple models for many economies are merged. Should test this early.&lt;div&gt;- How should assumption development be done? How long should it take? Should it consider all elements of the model... but that is quite complex? Many economies will change their trajectories during the modelling process, how do we handle that?&lt;/div&gt;&lt;div&gt;- when a new fuel becomes important or is realised to be missing, how do we incorporate it into the modelling?&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;div&gt;&lt;br&gt;&lt;div&gt;&lt;br&gt;&lt;div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fillColor=#F7F7F7;strokeColor=#BDBDBD;fontSize=14;" parent="L_NOTES" vertex="1">
+                    <mxGeometry x="1300" y="1730" width="320" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-98" value="To do list&lt;div&gt;- Develop 9th replica for all models (where useful they can be designed differently)&lt;/div&gt;&lt;div&gt;&lt;div&gt;&lt;div&gt;- Macro modelling&lt;/div&gt;&lt;div&gt;- Leap export to energy balances formatting (using same format as esto energy balances)&lt;/div&gt;&lt;div&gt;- ESTO energy balances format&lt;/div&gt;&lt;div&gt;- Visualisation (we will use 9th edition system and balances format until this is ready)&lt;/div&gt;&lt;div&gt;&lt;div&gt;&lt;div&gt;-Costs&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fillColor=#F7F7F7;strokeColor=#BDBDBD;fontSize=14;" parent="L_NOTES" vertex="1">
+                    <mxGeometry x="-320" y="1730" width="320" height="280" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_X_COAL_TO_LOSS" value="" style="endArrow=block;html=1;rounded=0;exitX=0;exitY=0.5;exitPerimeter=1;entryX=1;entryY=0.5;entryPerimeter=1;fontSize=14;" parent="1" source="G_X_COAL" target="L_LOSS_COAL" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" value="Other models and projects" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontStyle=1;spacing=6;fillColor=#f8cecc;strokeColor=#b85450;fontSize=16;" parent="1" vertex="1">
+                    <mxGeometry x="-340" y="40" width="280" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_T_TO_AREA" value="Sector model import" style="edgeStyle=orthogonalEdgeStyle;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;rounded=0;labelBackgroundColor=#ffffff;fontSize=14;" parent="1" target="LEAP_AREA" edge="1">
+                    <mxGeometry x="0.0025" relative="1" as="geometry">
+                        <mxPoint as="offset"/>
+                        <Array as="points">
+                            <mxPoint x="1360" y="840"/>
+                        </Array>
+                        <mxPoint x="1360" y="790" as="targetPoint"/>
+                        <mxPoint x="1220" y="840" as="sourcePoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="E_S_TO_AREA" value="Sector model import" style="edgeStyle=orthogonalEdgeStyle;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;rounded=0;labelBackgroundColor=#ffffff;fontSize=14;" parent="1" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1410" y="1305"/>
+                        </Array>
+                        <mxPoint x="1231" y="1305" as="sourcePoint"/>
+                        <mxPoint x="1410" y="775" as="targetPoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="E_D_TO_AREA" value="Sector model import" style="edgeStyle=orthogonalEdgeStyle;orthogonalLoop=1;jettySize=auto;endArrow=block;html=1;rounded=0;labelBackgroundColor=#ffffff;fontSize=14;" parent="1" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <Array as="points">
+                            <mxPoint x="1323" y="478"/>
+                        </Array>
+                        <mxPoint x="1323" y="621" as="targetPoint"/>
+                        <mxPoint x="1230" y="478" as="sourcePoint"/>
+                    </mxGeometry>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-76" value="&lt;b&gt;Costs&lt;/b&gt;&lt;div&gt;Through LEAP or excel, develop estimates of major energy related costs, especially in power.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="-340" y="330" width="280" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-77" value="&lt;b&gt;Emissions and indicator development:&lt;/b&gt;&lt;div&gt;- emissions: simple emissions factor times energy use calculation&amp;nbsp;&lt;/div&gt;&lt;div&gt;- APEC goals&lt;/div&gt;&lt;div&gt;- common indicators&lt;/div&gt;&lt;div&gt;- key takeaways&lt;/div&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="-340" y="430" width="280" height="120" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-78" value="LEAP export&amp;nbsp;&lt;span style=&quot;color: light-dark(rgb(74, 61, 51), rgb(192, 181, 173)); background-color: transparent;&quot;&gt;→ energy balances format → visualisation, indicators and analysis" style="rounded=1;whiteSpace=wrap;html=1;align=center;verticalAlign=middle;fontStyle=1;spacing=10;fillColor=#F3F1EC;strokeColor=#8C7B6D;fontColor=#000000;fontSize=16;" parent="1" vertex="1">
+                    <mxGeometry x="1440" y="620" width="160" height="156" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-80" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;fontSize=14;" parent="1" source="LEAP_AREA" target="3Vn5BuMNg00IzMXtSu-n-78" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="3Vn5BuMNg00IzMXtSu-n-81" value="&lt;div&gt;&lt;b&gt;Assumptions development&lt;/b&gt;&lt;/div&gt;&lt;div&gt;Aspire to pre-plan all modelling parameters before any modelling is done. However these will likely change throughout the process.&lt;/div&gt;" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacing=8;fillColor=#f8cecc;strokeColor=#b85450;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="-340" y="555" width="280" height="105" as="geometry"/>
+                </mxCell>
+                <mxCell id="X9I6xFIEpoW_02_gxf76-76" value="&lt;font style=&quot;font-size: 32px;&quot;&gt;&lt;b style=&quot;&quot;&gt;The APERC Outlook modelling system (10th edition)&lt;/b&gt;" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=14;" parent="1" vertex="1">
+                    <mxGeometry x="70" y="40" width="850" height="36" as="geometry"/>
+                </mxCell>
+                <mxCell id="E_TRANS_TO_NONLOSS" value="" style="endArrow=block;html=1;rounded=0;entryX=1;entryY=0.5;entryPerimeter=1;exitX=0;exitY=0.889;exitDx=0;exitDy=0;exitPerimeter=0;fontSize=14;" parent="1" source="C_TRANS" target="L_LOSS_NON" edge="1">
+                    <mxGeometry relative="1" as="geometry">
+                        <mxPoint x="40" y="1016" as="sourcePoint"/>
+                    </mxGeometry>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

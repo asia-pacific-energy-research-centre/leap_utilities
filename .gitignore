@@ -21,6 +21,9 @@
 env_leap/*
 #######################################
 
+# Local machine cache blobs and extracted app bundles
+config/[0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F][0-9A-F]
+squashfs-root/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
