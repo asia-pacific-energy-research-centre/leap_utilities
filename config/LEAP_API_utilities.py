@@ -20,11 +20,11 @@ if CURRENT_DIR != REPO_ROOT:
 if str(CURRENT_DIR) not in sys.path:
     sys.path.insert(0, str(CURRENT_DIR))
 
-# Also add the leap_utils folder to the path.
-if str("leap_utils") not in [p for p in sys.path if p.endswith("leap_utils")]:
-    sys.path.insert(0, str(REPO_ROOT / "leap_utils"))
+# Also add the code folder to the path.
+if str("code") not in [p for p in sys.path if p.endswith("code")]:
+    sys.path.insert(0, str(REPO_ROOT / "code"))
 
-from leap_utils.leap_core import connect_to_leap
+from code.leap_core import connect_to_leap
 
 # ---------------------------------------------------------------------------
 # Helpers

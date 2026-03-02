@@ -11,8 +11,12 @@ These are project-level instructions for Codex (and similar agents).
 - Put instructions here that you want Codex to follow every time it edits this repo.
 - Keep rules short and specific; avoid large, complex policies.
 - For file-specific rules, include path globs like `docs/leap-system*.drawio`.
-- When updating transfer category mappings, re-run `leap_utils/scrapbook/transfers_mapping_exploration.py`
-  and paste the printed `TRANSFER_PROCESS_CONFIG` into `leap_utils/transfers_workflow.py`.
+- Workflow-file pattern for small projects: create/maintain one `*_workflow.py` entry script per task area and make it notebook-safe.
+- In workflow scripts, always define `REPO_ROOT = Path(__file__).resolve().parents[1]` (or correct repo level), add it to `sys.path` only if missing, and resolve all relative paths via a `_resolve()` helper against `REPO_ROOT`.
+- Why: notebooks run with arbitrary CWD, so this prevents `FileNotFoundError` and import failures.
+- Normalize user-provided path strings by replacing `\\` with `/` before `Path(...)` when needed.
+- When updating transfer category mappings, re-run `codebase/scrapbook/transfers_mapping_exploration.py`
+  and paste the printed `TRANSFER_PROCESS_CONFIG` into `codebase/transfers_workflow.py`.
 
 ## LEAP Export File Structure
 
@@ -24,12 +28,13 @@ These are project-level instructions for Codex (and similar agents).
 
 ## Balance Table Structures (ESTO vs 9th)
 
-These two balance tables are the core inputs for `leap_utils/transformation_analysis_workflow.py`.
+These two balance tables are the core inputs for `codebase/transformation_analysis_workflow.py`.
 Keep this structure in mind when adding new transformations or debugging data issues.
 
 ### 9th structure (sector/fuel hierarchy)
 
-- Source file: `data/merged_file_energy_ALL_20250814.csv` (loaded as "9th" in the script).
+- Source file: `data/merged_file_energy_ALL_20250814_pre_trump.csv` (loaded as "9th" in the script).
+  - Use `data/merged_file_energy_ALL_20251106.csv` and `data/merged_file_energy_00_APEC_20251106` when you need to exactly match 9th edition projections.
 - Key columns:
   - `scenarios`, `economy`
   - Sector hierarchy: `sectors`, `sub1sectors`, `sub2sectors`, `sub3sectors`, `sub4sectors`

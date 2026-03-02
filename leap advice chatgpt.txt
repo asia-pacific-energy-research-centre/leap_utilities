@@ -1,0 +1,517 @@
+According to LEAP Help24 (2024) and the LEAP COM Type Library (TypeLib IDL v2.3), the Results View automation functions you listed are controlled by (a) the active Results View settings (branch, variable, scenario/region/year/unit, chart/table layout, axis/legend dimensions) and (b) optional “results filters” that select a single element from certain disaggregation dimensions.
+
+1) ResultsXAxis / ResultsLegend: dimension names and how to select subsets
+What these properties accept
+
+ResultsXAxis and ResultsLegend set the dimension used on the chart X-axis and legend. The API exposes the currently available dimensions via the Dimensions collection. 
+
+
+
+Each
+
+
+
+es given: “years, fuels, branches, regions, scenarios, etc.”). 
+
+
+
+Ke
+
+
+
+obal, hard-coded list documented for axis/legend dimensions; the authoritative list is the set of items currently present in LEAP.Dimensions for the active Results View context. 
+
+
+
+
+
+
+
+
+
+ (core + conditional)
+
+The following are explicitly indicated by the TypeLib and/or LEAP help as valid dimensions in Results contexts:
+
+Core dimensions (commonly available)
+
+years (a.k.a. year) 
+
+
+
+**s
+
+
+
+
+
+**r
+
+
+
+n areas) 
+
+
+
+**b
+
+
+
+
+
+**f
+
+
+
+
+
+####
+
+
+
+ppear when relevant to the chosen result)
+LEAP’s “results filter” documentation lists allowable filter dimensions as:
+fuel, cost, time slice, effect, balance category, module cost category, tag.
+These correspond to disaggregations that can also appear as Results View dimensions (and therefore can be candidates for axis/legend depending on the selected result category).
+
+Grouping dimensions (available if you use groups)
+
+region groups (LEAP supports multiple region-group sets). 
+
+
+
+fuel groups / balance categories (LEAP supports multiple fuel-group sets). 
+
+
+
+Tag dimensions (if tagging is enabled for Results View)
+
+Tag groups can be 
+
+
+
+aying results in Results View charts/tables.
+
+Selecting subsets of a dimension (how you control “which elements show up”)
+
+There are three distinct mechanisms, depending on the dimension:
+
+A) Scenario and Region subsets (explicit API flags)
+
+Scenarios: each scenario has ResultsShown = whether it will be “shown for the scenario in the Results View”. 
+
+
+
+Regions: each region has ResultsShown = whether “results for the region will be calculated and displayed in Results view.” 
+
+
+
+
+
+ an explicit “shown in Results View” toggle in the TypeLib.
+
+ActiveScenario/ActiveRegion restriction (important):
+In Results V
+
+
+
+ or ActiveRegion if that dimension is not currently assigned to the chart’s X axis or legend. 
+
+
+
+
+
+B) Year subset (interval + active year, not a general “pick list”)
+
+ResultsViewYearlyInterval sets the *display interval
+
+
+
+
+
+
+
+ResultsEvery sets the calculation/results-saving interval: results “only be saved if the year is divisible by this value.” 
+
+
+
+
+
+ults/Energy Balance views when year is not being used as an axis/legend dimension. 
+
+
+
+LEAP do
+
+
+
+ear subset selection” API for axis/legend (e.g., only 2030/2040/2050). In practice, that kind of selection is usually manage
+
+
+
+) Fuels / Effects / Time slices / Costs / Balance categories / Module cost categories / Tags
+For these, LEAP’s documented mechanism is results filters (used both in expressions and exposed via the Filter argument in variable result retrieval).
+This selects a single element (or excludes a single element) from a dimension, rather than toggling “shown/not shown” across many elements.
+
+Favorites (the most reliable way to get exact Results View layouts)
+
+The TypeLib explicitly supports:
+
+Favorite.Activate() → “Selects the chart in Results View.” 
+
+
+
+SaveFavorite(...) → saves a favorite using current Results View settings. 
+
+
+
+Practical meaning (documented by capability): if you need an exact axis/legend configuration and non-default element sel
+
+
+
+operties, the intended approach is to configure the Results View in LEAP, save 
+
+
+
+omation before exporting. 
+
+
+
+
+
+2) What branches/variables get exported in Results View tables, and how to request a specific subtree + variable
+What ExportResultsCSV / ExportResultsXLS actually export
+
+Both functions export 
+
+
+
+
+
+lts View):
+
+ExportResultsCSV(FileName) → “Exports the current results view table … in comma separated value format (CSV).” 
+
+
+
+ExportResultsXLS(XLTabTitle) → “Exports the current results view table to Microsoft Excel.” 
+
+
+
+So the exported content is determined by the current state of:
+
+whether Results View is showing table (`
+
+
+
+
+
+the active branch and active variable 
+
+
+
+
+
+
+
+the active scenario/region/year/unit (subject to axis/legend restrictions) 
+
+
+
+
+
+
+
+
+
+R
+
+
+
+
+
+be set equal to “a branch name (full branch path)”. 
+
+
+
+
+
+
+
+
+
+ckslashes).
+
+How the subtree affects Results View: Results View tables are organized around the currently selected
+
+
+
+ch and/or its children depending on table layout). The API does not expose a separate “subtree depth” selector in the TypeLib, so exact row inclusion (expanded/collapsed levels, “show branches as rows” vs “as legend”, etc.) is typically handled via Favorites. 
+
+
+
+Requesting a specific variable (e.g., activity vs energy)
+
+ActiveVariable can be set to a variable name or variable object. 
+
+
+
+For a given branch, variables are represented by LEAPVariable objects, and LEAP explicitly supports retrieving result values by reg
+
+
+
+
+
+Key limitation: LEAP distinguishes between:
+
+data variables (entered in Analysis View
+
+
+
+ated internally; include things like total final energy demand, emissions, costs).
+
+Which variable list is available depends on the branch type and the Re
+
+
+
+ults View (again, Favorites are the supported way to lock this down).
+
+Do category branches return aggregated values?
+
+LEAP’s documented results-reference behavior is:
+
+If no filters are specified, “LEAP will return the total value of the result at the specified branch.”
+
+So, for additive results (energy, emissions mass, many cost totals), a category branch reference implies an aggregation across its descendants consistent with the selected result variable. (For non-additive constructs like shares or intensities, “aggregation” may be a weighted calculation and is inherently variable-specific; LEAP does not document a universal rule in the public Help24 text.)
+
+3) Exact string format for ResultValue’s BranchVarName (path + “:VariableName”)
+Documented format
+
+The TypeLib explicitly states:
+
+LEAPVariable.BranchVariableName returns: “the full combined branch/variable name in the format BranchName:VariableName.” 
+
+
+
+Separately:
+
+ResultValue(BranchVarName, Year, UnitName) takes a BranchVarName string argument. 
+
+
+
+Therefore, the documented canonical string format for BranchVarName is:
+
+FullBranchPath:VariableName (with the same exact colon delimiter shown above). 
+
+
+
+Branch path conventions
+
+Help24’s Branches API examples use hierarchical backslash paths such as:
+
+`Demand\Households
+
+
+
+So a typical BranchVarName looks like:
+
+Demand\Households\Urban:Activity Level
+
+`Demand\Transport\Road:En
+
+
+
+s must match LEAP’s variable display names for that branch.)
+
+Case rules
+
+Neither the Help24 API index nor the TypeLib text provides a formal case-sensitivity r
+
+
+
+ard assumption for LEAP automation is to pass names exactly as displayed in LEAP (branch names, variable names, scenario names, region names).
+
+Quoting “if necessary”
+
+The TypeLib includes Quote(InStr) which “returns the string wrapped in Quote marks (if necessary).” 
+
+
+
+
+This exists specifically to help construct syntactically safe references when names contain characters that require quoting in LEAP’s expression parser.
+
+4) Allowed syntax for the Filter argument (Variable.Value / ValueR / ValueRS) and how it relates to ResultValue
+Where Filter exists (v2.3 TypeLib)
+
+LEAPVariable.ValueRS(..., UnitName, Filter) includes a Filter string parameter. 
+
+
+
+LEAPVariable.ValueR(..., UnitName, Filter) includes Filter similarly. 
+
+
+
+
+
+esultValue` does not have a separate Filter parameter** in the v2.3 signature shown in the TypeLib. 
+
+
+
+Implication: if you need filtering with the “ResultValue-style” access pattern, the documented route in v2.3 is to use Variable.ValueR/ValueRS (with its explicit Filter argument). 
+
+
+
+Documented filter grammar (a
+
+
+
+ Results in Expressions” defines results filter syntax as:
+
+Branch:Variabl:contentReference[oaicite:88]{index=88}ilterDim2=FilterElement2]
+
+Filters can be dimension=element or dimension<>element
+
+You can specify *
+
+
+
+wable dimensions: fuel, cost, time slice, effect, balance category, module cost category, tag
+
+Applying that to the API Filter parameter
+
+The TypeLib does not separ
+
+
+
+ ValueRS(Filter), but the intent is the same “results filter” string described above (minus the scale/unit portion because units are a separate API argument). 
+
+
+
+Examples of valid Filter strings (dimension=element / dimension<>element):
+
+Fuel=Gasoline
+
+Effect=CO2
+
+Time Slice=Peak
+
+Cost=Capital
+
+Balance Category=Electricity
+
+Module Cost Category=Fixed O&M
+
+Tag=Policy (or an enabled tag-group dimension; see next note)
+
+Tags / tag groups: Tag groups can be used as an extra results dimension.
+The public filter grammar only names the dimension as tag.
+If you enable multiple tag groups as separate Results View dimensions, the dimension name used in
+
+
+
+up name in Results View (this behavior is not fully spelled out in the publicly accessible Help24 text).
+
+5) UnitName when blank, and ExportResultsCSV vs ExportResultsXLS differences
+UnitName blank (default units)
+
+ResultValue and ValueRS/ValueR both take an optional UnitName string. 
+
+
+
+
+
+Help24 documents that if the bracketed unit specification is omitted in a results reference, LEAP uses the variable’s default scaling factor and units.
+
+Therefore (documented intent): leaving UnitName blank means “return results in the default units for that variable/result,” analogous to omitting the unit portion in expression references.
+
+ExportResultsCSV vs ExportResultsXLS (what is documented vs not)
+
+Documented:
+
+CSV export writes a named file in “comma separated value format (CSV).” 
+
+
+
+XLS export exports to Microsoft Excel, with an optional sheet tab name. 
+
+
+
+LEAP’s export dialog supports saving tables as XLS/CSV/TXT among other formats. 
+
+
+
+
+
+es above:**
+
+CSV character encoding (ANSI vs UTF-8), delimiter localization (comma vs semicolon), decimal separators
+
+Whether “hidden”/collapsed rows in the UI are exported, or whether export forces expansion
+
+If you need “authoritative” behavior for these specifics, the only official source is LEAP’s own installed Help/Script Editor documentation for the API export routines, since the public Help24 page we can access does not enumerate those file-format details.
+
+6) Calculate / ForceCalculation / caching gotchas (stale results)
+What is explicitly documented
+
+Calculate() “Starts a LEAP calculation and after success switches to the Results View.” 
+
+
+
+
+
+()` “Forces LEAP to calculate the next time results are requested, regardless o
+
+
+
+
+
+Scenarios expose:
+
+LastChanged (when edited) 
+
+
+
+LastCalculated (when calculated) 
+
+
+
+NeedsCalculation (whether scenario needs calculation) 
+
+
+
+IsCalculating indicates LEAP is currently calculating and “not available to accept inputs.” 
+
+
+
+Practical “stale results” patterns implied by the above
+
+LEAP can serve previously-calculated results unless it believes recalculation is needed; NeedsCalculation and the LastChanged/LastCalculated timestamps are the explicit indicators. 
+
+
+
+ForceCalculation is the explicit override when you want to guarantee the next results request triggers recalculation (even if LEAP did not detect changes). 
+
+
+
+Two additional settings that can surprise automati
+
+
+
+ves only results selected in “General: Results to Save” (so some results may be unavailable/blank even after calculation). 
+
+
+
+
+
+sEvery`: results are only saved for years divisible b
+
+
+
+ appears in Results View exports). 
+
+
+
+
+
+File used
+

@@ -1,0 +1,82 @@
+How This AI Data Project Was Done (Guide)
+
+Audience:
+- Colleagues/friends who want to see a real AI-assisted data workflow in a code repo.
+
+Project goal:
+- Build an aggregated APERC "reference" prototype by combining 7th, 8th, and 9th outlooks.
+- Handle messy workbook structures, missing years, inconsistent labels/units.
+- Produce usable outputs and dashboard-style visuals.
+
+1) Start with a concrete ask
+- Input workbook: data/Data for comparison  - APERC outlooks .xlsx
+- Needed sheets: APEC 7th (in PJ), APEC 8th, APEC 9th.
+- Main metric: Final Energy Demand (FED).
+
+2) Let AI inspect real structures first
+- AI opened workbook and codebase.
+- Verified exact header layouts and section labels before writing logic.
+- Found that 7th, 8th, and 9th are structurally different.
+
+3) Make explicit decisions early
+- Average rule: available-value average by year.
+- Fuel rule: comparable buckets only; document exclusions.
+- Scenario interpretation: 7th BAU as reference-equivalent.
+- Keep workflow notebook-friendly.
+
+4) Implement robust extraction logic
+- 7th: alternating Mtoe/PJ handled with validation + fallback conversion.
+- 8th: row/column year header variants supported.
+- 9th: TFC/TFEC logic for total FED; optional fuel source sheet for fuel-level work.
+
+5) Build harmonized outputs
+- Unified fuel buckets:
+  Coal, Oil, Gas, Electricity, Heat, Hydrogen, Other, Renewables_total.
+- Added diagnostics and assumptions output files.
+
+6) Add practical usability features
+- Interpolate 7th annual values before aggregation.
+- Extend 7th/8th to 2060 with recent weighted trend (configurable lookback).
+- Add dotted base-year markers (2016/2018/2022).
+- Add dashboard dropdown views (FED and TPES, total and by fuel).
+
+7) Solve real-world issues interactively
+- Workbook save altered cached values -> parser fallback added.
+- TPES fuel lines missing -> extraction anchors fixed and harmonization extended.
+- Added TPES fuel output table for transparency.
+
+8) Reproducibility artifacts
+Main workflow:
+- codebase/aperc_reference_aggregation_workflow.py
+
+One-off template filler:
+- codebase/scrapbook/fill_apec_9th_fuels_template.py
+
+Template sheet used:
+- Workbook sheet: APEC 9th fuels
+- Includes sector column: FED and TPES
+
+Main outputs:
+- outputs/aperc_reference_aggregation_prototype/
+  - source_series_long.csv
+  - aggregated_total_final_energy_demand.csv
+  - aggregated_total_primary_energy_supply.csv
+  - aggregated_fuel_partial.csv
+  - aggregated_tpes_fuel_partial.csv
+  - data_quality_notes.csv
+  - README_assumptions.md
+  - dashboards/index.html
+
+9) What this demonstrates about using AI well
+- Ask for explicit assumptions and how edge cases are handled.
+- Request implementation + verification, not just explanation.
+- Iterate quickly on output quality (interpolation, trend extension, dashboard UX).
+- Keep changes in files so others can audit/re-run.
+
+10) Suggested demo flow for colleagues
+1. Show original messy workbook structure.
+2. Show extracted outputs and assumptions file.
+3. Show one bug/issue found and how AI fixed it.
+4. Show final dashboard and explain toggles.
+5. Emphasize that AI + human decisions together produced the result.
+

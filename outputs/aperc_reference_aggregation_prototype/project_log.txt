@@ -1,0 +1,12 @@
+[2026-02-26T06:09:54+00:00] Starting APERC aggregation workflow.
+Workbook: /mnt/c/Users/Work/github/leap_utilities/data/Data for comparison  - APERC outlooks .xlsx
+Use optional 9th fuel source: True
+Anchors 7th: {'bau_block_start_col': 3, 'bau_block_end_col': 25, 'header_row_7th': 4, 'years_7th': [2000, 2005, 2010, 2015, 2016, 2020, 2025, 2030, 2035, 2040, 2045, 2050], 'total_row_7th': 94, 'mtoe_to_pj_median_ratio': 'unavailable_cached_values'}
+Anchors 8th: {'total_row_8th': 12, 'demand_reference_row_8th': 92, 'fuel_header_row_8th': 101, 'year_source_8th': 'row_4'}
+Anchors 9th: {'tfec_note_row_9th': 37, 'reference_row_9th': 38, 'tfc_total_row_9th': 46}
+Anchors optional 9th: {'optional_source_path': '/mnt/c/Users/Work/github/leap_utilities/data/Data for comparison  - APERC outlooks .xlsx', 'scenario_filter': 'scenario', 'unit_column': 'units'}
+Rows source_long=1238, total_agg=61, fuel_agg=488
+Chart files written: 0
+Aggregation method: per-year/per-fuel available-value mean; no table interpolation.
+Output dir: /mnt/c/Users/Work/github/leap_utilities/outputs/aperc_reference_aggregation_prototype
+Exclusions include non-comparable fuels (e.g., 7th Cooling) and unmapped optional 9th fuel labels.

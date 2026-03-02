@@ -12,6 +12,7 @@ requires-python = ">=3.10"
 dependencies = [
     "pandas",
     "openpyxl",
+    "matplotlib",
     "pywin32 ; platform_system == 'Windows'",
 ]
 
@@ -20,4 +21,4 @@ Homepage = "https://example.com/leap-utilities"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["leap_utils*"]
+include = ["codebase*"]

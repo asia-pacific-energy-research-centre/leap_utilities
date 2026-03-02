@@ -1,0 +1,12 @@
+Session metadata
+Generated UTC: 2026-02-26T06:09:56+00:00
+Purpose: Full chat transcript placeholder for manual paste.
+
+Instructions
+1. Copy full chat text from the UI/export.
+2. Paste under the section below.
+3. Keep this file in version control only if appropriate for your team.
+
+Full chat transcript (paste here)
+=================================
+

@@ -5,6 +5,7 @@ dependencies:
   - python=3.11
   - pandas
   - openpyxl
+  - matplotlib
   - pywin32  # required for LEAP COM on Windows
   - pip
   - pip:

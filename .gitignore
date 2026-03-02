@@ -12,6 +12,8 @@
 *.zip
 *.xlsx
 *.csv
+!config/leap_transport_branch_to_ninth_sector_map.csv
+!config/leap_transport_fuel_aliases.csv
 *.html
 *.pkl
 *.dll

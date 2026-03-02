@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 
 #the dict below was generated in config\LEAP_API_utilities.py
-#it has been copied to leap_utils\config.py
+#it has been copied to code\config.py
 #%%
 
 LEAP_UNITS_BY_ID = {
