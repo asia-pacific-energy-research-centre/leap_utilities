@@ -127,6 +127,26 @@ HIDE_LEAP_ONLY_CHARTS = False
 ENABLE_WORKFLOW_TIMING = True
 WRITE_WORKFLOW_TIMING_CSV = True
 WORKFLOW_TIMING_FILENAME = "workflow_stage_timings.csv"
+
+# ---------------------------------------------------------------------------
+# Stage control — set False to skip a stage and reload cached outputs instead.
+# Run the full workflow at least once before skipping any stage.
+#   STAGE_EXTRACT           reads LEAP Excel workbooks (typically the slowest step)
+#   STAGE_COMPARE           builds the ESTO-axis comparison (reads large projection CSVs)
+#   STAGE_WRITE_OUTPUTS     writes comparison tables, simple balance tables, diagnostics
+#   STAGE_RENDER_DASHBOARDS renders HTML dashboards (slow for large chart sets)
+#   STAGE_WRITE_COVERAGE    writes coverage, runtime issues, and mapping checks
+# Common skip patterns:
+
+# Re-render dashboards only (e.g. after changing VISIBLE_COMPARISON_SERIES): set STAGE_EXTRACT=False, STAGE_COMPARE=False, STAGE_WRITE_OUTPUTS=False, STAGE_WRITE_COVERAGE=False
+# Skip just the slow Excel reading: set STAGE_EXTRACT=False
+# Skip everything except re-rendering: set only STAGE_RENDER_DASHBOARDS=True, all others False
+# ---------------------------------------------------------------------------
+STAGE_EXTRACT: bool = True
+STAGE_COMPARE: bool = True
+STAGE_WRITE_OUTPUTS: bool = True
+STAGE_RENDER_DASHBOARDS: bool = True
+STAGE_WRITE_COVERAGE: bool = True
 # Controls which source/scenario series are written and rendered.
 # Source labels are the normalized comparison source values:
 # - "base" is ESTO base-year data
@@ -159,6 +179,91 @@ def _load_json(path: Path) -> dict[str, object]:
 
 def _mapping_workbook(mapping_ref: tuple[Path, str]) -> Path:
     return mapping_ref[0]
+
+
+def _load_cached_ingestion(
+    structure_config: dict,
+    balance_to_esto_long_output_dir: Path,
+) -> tuple[dict, dict, dict]:
+    """Load ingestion sub-tables written by a previous extraction run.
+
+    Returns (conversion, ingestion, resolved_structure) matching the shapes
+    produced by convert_leap_balances_to_esto_long_table().  Fields not written
+    to the shared cache (e.g. matching_diagnostics) are returned as empty
+    DataFrames.
+    """
+    shared_dir = _resolve(balance_to_esto_long_output_dir)
+    support_dir = shared_dir / "supporting_files"
+
+    def _rcsv(path: Path) -> pd.DataFrame:
+        return pd.read_csv(path, dtype=str, low_memory=False).fillna("") if path.exists() else pd.DataFrame()
+
+    def _rjson(path: Path) -> dict:
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+    ingestion: dict = {
+        "leap_long": _rcsv(support_dir / "leap_balance_mapped_detail_long.csv"),
+        "mapping_status": _rcsv(support_dir / "leap_balance_mapping_status.csv"),
+        "issues": _rcsv(support_dir / "leap_balance_runtime_issues.csv"),
+        "override_report": _rcsv(support_dir / "leap_balance_override_application_report.csv"),
+        "auto_sheet_rows": _rcsv(support_dir / "auto_sheet_rows.csv"),
+        "coverage": _rcsv(support_dir / "leap_balance_coverage.csv"),
+        "unit_diagnostics": _rcsv(support_dir / "leap_balance_unit_diagnostics.csv"),
+        "matching_diagnostics": pd.DataFrame(),
+        "extraction_summary": _rjson(support_dir / "leap_balance_extraction_summary.json"),
+        "resolved_structure": _rjson(support_dir / "resolved_structure_config.json"),
+    }
+    resolved_structure = ingestion["resolved_structure"] or structure_config
+    conversion: dict = {
+        "esto_long": _rcsv(shared_dir / "leap_balance_esto_long.csv"),
+        "ingestion": ingestion,
+        "pre_group_leap_mapped": pd.DataFrame(),
+        "pre_group_incomplete_rows": pd.DataFrame(),
+        "issues": ingestion["issues"],
+        "override_report": ingestion["override_report"],
+        "auto_sheet_rows": ingestion["auto_sheet_rows"],
+        "coverage": ingestion["coverage"],
+        "unit_diagnostics": ingestion["unit_diagnostics"],
+        "extraction_summary": ingestion["extraction_summary"],
+        "resolved_structure": resolved_structure,
+    }
+    return conversion, ingestion, resolved_structure
+
+
+def _load_cached_comparison(
+    layout,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict]:
+    """Load comparison_long, mapping_status, and leap_long from a previous run.
+
+    Returns (comparison_long, mapping_status, leap_long, comparison_stub).
+    The comparison_stub contains empty DataFrames for fields not cached
+    separately (base_df, ninth_df, mapping_inputs).
+    """
+    comparison_long_path = layout.root / "comparison_long.csv"
+    mapping_status_path = layout.root / "mapping_status.xlsx"
+    leap_long_path = layout.root / "leap_long.csv"
+
+    comparison_long = (
+        pd.read_csv(comparison_long_path, dtype=str, low_memory=False).fillna("")
+        if comparison_long_path.exists()
+        else pd.DataFrame()
+    )
+    mapping_status = (
+        pd.read_excel(mapping_status_path, dtype=str, sheet_name="mapping_status").fillna("")
+        if mapping_status_path.exists()
+        else pd.DataFrame()
+    )
+    leap_long = (
+        pd.read_csv(leap_long_path, dtype=str, low_memory=False).fillna("")
+        if leap_long_path.exists()
+        else pd.DataFrame()
+    )
+    comparison_stub: dict = {
+        "base_df": pd.DataFrame(),
+        "ninth_df": pd.DataFrame(),
+        "mapping_inputs": {},
+    }
+    return comparison_long, mapping_status, leap_long, comparison_stub
 
 
 def _normalize_base_scenario(comparison_long: pd.DataFrame) -> pd.DataFrame:
@@ -326,90 +431,75 @@ def run_workflow() -> dict[str, object]:
     known_issues = _load_json(KNOWN_ISSUES_CONFIG_PATH)
     timer.lap("setup")
 
-    conversion = convert_leap_balances_to_esto_long_table(
-        ref_workbook_path=REF_WORKBOOK_PATH,
-        tgt_workbook_path=TGT_WORKBOOK_PATH,
-        template_sheet="EBal|2060",
-        mapping_pairs_path=_mapping_workbook(LEAP_TO_ESTO_MAPPING),
-        codebook_path=CODEBOOK_PATH,
-        structure_config=structure_config,
-        known_issues=known_issues,
-        projection_economy=PROJECTION_ECONOMY,
-        max_output_year=MAX_OUTPUT_YEAR,
-        explicit_pair_mappings_only=True,
-    )
-    ingestion = conversion["ingestion"]
-    resolved_structure = ingestion.get("resolved_structure", structure_config)
+    # -------------------------------------------------------------------------
+    # Stage: extract and map LEAP balance workbooks
+    # -------------------------------------------------------------------------
+    if STAGE_EXTRACT:
+        conversion = convert_leap_balances_to_esto_long_table(
+            ref_workbook_path=REF_WORKBOOK_PATH,
+            tgt_workbook_path=TGT_WORKBOOK_PATH,
+            template_sheet="EBal|2060",
+            mapping_pairs_path=_mapping_workbook(LEAP_TO_ESTO_MAPPING),
+            codebook_path=CODEBOOK_PATH,
+            structure_config=structure_config,
+            known_issues=known_issues,
+            projection_economy=PROJECTION_ECONOMY,
+            max_output_year=MAX_OUTPUT_YEAR,
+            explicit_pair_mappings_only=True,
+        )
+        ingestion = conversion["ingestion"]
+        resolved_structure = ingestion.get("resolved_structure", structure_config)
+    else:
+        print("[SKIP] Stage: extract and map LEAP balance workbooks — loading cached outputs")
+        conversion, ingestion, resolved_structure = _load_cached_ingestion(
+            structure_config=structure_config,
+            balance_to_esto_long_output_dir=BALANCE_TO_ESTO_LONG_OUTPUT_DIR,
+        )
     timer.lap("extract and map LEAP balance workbooks")
 
-    comparison = build_balance_comparison_esto_axis(
-        leap_long=ingestion["leap_long"],
-        mapping_status=ingestion["mapping_status"],
-        base_year=BASE_YEAR,
-        projection_years=tuple(PROJECTION_YEARS),
-        base_economy=BASE_ECONOMY,
-        projection_economy=PROJECTION_ECONOMY,
-        scenario_map=SCENARIO_MAP,
-        sheet_map_path=SHEET_MAP_PATH,
-        backup_mappings_path=BACKUP_MAPPINGS_PATH,
-        codebook_path=CODEBOOK_PATH,
-        canonical_pairs_path=NINTH_TO_ESTO_MAPPING,
-        explicit_mappings_path=EXPLICIT_MAPPINGS_PATH,
-        explicit_reassignments_path=EXPLICIT_REASSIGNMENTS_PATH,
-        synthetic_reference_rows_path=SYNTHETIC_REFERENCE_ROWS_PATH,
-        esto_table_path=BASE_TABLE_PATH,
-        projection_table_path=PROJECTION_TABLE_PATH,
-        chart_navigation_guide_path=CHART_NAVIGATION_GUIDE_PATH,
-        known_issues=known_issues,
-    )
+    # -------------------------------------------------------------------------
+    # Stage: build ESTO-axis comparison
+    # -------------------------------------------------------------------------
+    if STAGE_COMPARE:
+        comparison = build_balance_comparison_esto_axis(
+            leap_long=ingestion["leap_long"],
+            mapping_status=ingestion["mapping_status"],
+            base_year=BASE_YEAR,
+            projection_years=tuple(PROJECTION_YEARS),
+            base_economy=BASE_ECONOMY,
+            projection_economy=PROJECTION_ECONOMY,
+            scenario_map=SCENARIO_MAP,
+            sheet_map_path=SHEET_MAP_PATH,
+            backup_mappings_path=BACKUP_MAPPINGS_PATH,
+            codebook_path=CODEBOOK_PATH,
+            canonical_pairs_path=NINTH_TO_ESTO_MAPPING,
+            explicit_mappings_path=EXPLICIT_MAPPINGS_PATH,
+            explicit_reassignments_path=EXPLICIT_REASSIGNMENTS_PATH,
+            synthetic_reference_rows_path=SYNTHETIC_REFERENCE_ROWS_PATH,
+            esto_table_path=BASE_TABLE_PATH,
+            projection_table_path=PROJECTION_TABLE_PATH,
+            chart_navigation_guide_path=CHART_NAVIGATION_GUIDE_PATH,
+            known_issues=known_issues,
+        )
+        comparison_long = comparison["comparison_long"].copy()
+        mapping_status = comparison["mapping_status"].copy()
+        leap_long = ingestion["leap_long"].copy()
+        comparison_long = comparison_long[pd.to_numeric(comparison_long["year"], errors="coerce").le(MAX_OUTPUT_YEAR)].copy()
+        comparison_long_for_audit = _normalize_base_scenario(comparison_long.copy())
+        comparison_long = _normalize_base_scenario(comparison_long)
+        comparison_long = _apply_bunker_abs_values(comparison_long)
+        comparison_long = _filter_visible_comparison_series(comparison_long, VISIBLE_COMPARISON_SERIES)
+        comparison_wide = _comparison_wide_from_long(comparison_long)
+        leap_long = leap_long[pd.to_numeric(leap_long["year"], errors="coerce").le(MAX_OUTPUT_YEAR)].copy()
+    else:
+        print("[SKIP] Stage: build ESTO-axis comparison — loading cached outputs")
+        comparison_long, mapping_status, leap_long, comparison = _load_cached_comparison(layout)
+        comparison_long_for_audit = comparison_long.copy()
+        comparison_wide = _comparison_wide_from_long(comparison_long)
     timer.lap("build ESTO-axis comparison")
 
-    comparison_long = comparison["comparison_long"].copy()
-    mapping_status = comparison["mapping_status"].copy()
-    leap_long = ingestion["leap_long"].copy()
-
-    comparison_long = comparison_long[pd.to_numeric(comparison_long["year"], errors="coerce").le(MAX_OUTPUT_YEAR)].copy()
-    comparison_long_for_audit = _normalize_base_scenario(comparison_long.copy())
-    comparison_long = _normalize_base_scenario(comparison_long)
-    comparison_long = _apply_bunker_abs_values(comparison_long)
-    comparison_long = _filter_visible_comparison_series(comparison_long, VISIBLE_COMPARISON_SERIES)
-    comparison_wide = _comparison_wide_from_long(comparison_long)
-    leap_long = leap_long[pd.to_numeric(leap_long["year"], errors="coerce").le(MAX_OUTPUT_YEAR)].copy()
-
-    core_paths = write_core_outputs(
-        out_dir=layout.root,
-        supporting_dir=layout.supporting,
-        comparison_long=comparison_long,
-        comparison_wide=comparison_wide,
-        mapping_status=mapping_status,
-        leap_long=leap_long,
-    )
-    simple_leap_balance = conversion["esto_long"].copy()
-    simple_ninth_balance = build_simple_ninth_balance_table(
-        comparison_long=comparison_long,
-        mapping_status=mapping_status,
-    )
-    shared_conversion_paths = _write_shared_balance_to_esto_outputs(
-        conversion=conversion,
-        mapping_status=mapping_status,
-        comparison_long=comparison_long,
-        simple_ninth_balance=simple_ninth_balance,
-        output_dir=BALANCE_TO_ESTO_LONG_OUTPUT_DIR,
-    )
-    mapped_ninth_to_esto = build_mapped_ninth_to_esto_balance_rows(
-        comparison_long=comparison_long,
-        mapping_status=mapping_status,
-    )
-    merged_esto_axis_balance = build_merged_esto_axis_balance_table(
-        simple_leap_balance=simple_leap_balance,
-        simple_ninth_balance=simple_ninth_balance,
-        comparison_long=comparison_long,
-        mapping_status=mapping_status,
-    )
-    duplicate_summary, duplicate_details = build_simple_balance_duplicate_diagnostics(
-        simple_leap_balance=simple_leap_balance,
-        simple_ninth_balance=simple_ninth_balance,
-    )
+    # Pre-declare path variables used in all downstream stages and the result dict
+    # so they are always defined regardless of which stages run.
     simple_leap_balance_path = layout.root / "simple_leap_balance_mapped.csv"
     simple_ninth_balance_path = layout.root / "simple_ninth_balance_mapped.csv"
     merged_esto_axis_balance_path = layout.root / "merged_leap_ninth_esto_balance.csv"
@@ -418,133 +508,196 @@ def run_workflow() -> dict[str, object]:
     mapped_leap_to_esto_path = layout.mapping / "mapped_leap_to_esto_balance_rows.csv"
     mapped_ninth_to_esto_path = layout.mapping / "mapped_ninth_to_esto_balance_rows.csv"
     esto_axis_comparison_long_path = layout.root / "esto_axis_comparison_long.csv"
-    simple_leap_balance.to_csv(simple_leap_balance_path, index=False)
-    simple_ninth_balance.to_csv(simple_ninth_balance_path, index=False)
-    merged_esto_axis_balance.to_csv(merged_esto_axis_balance_path, index=False)
-    duplicate_summary.to_csv(duplicate_summary_path, index=False)
-    duplicate_details.to_csv(duplicate_details_path, index=False)
-    simple_leap_balance.to_csv(mapped_leap_to_esto_path, index=False)
-    mapped_ninth_to_esto.to_csv(mapped_ninth_to_esto_path, index=False)
-    comparison_long.to_csv(esto_axis_comparison_long_path, index=False)
-
-    mapping_lineage_audit = build_mapping_lineage_audit_table(
-        pre_group_leap_mapped=conversion.get("pre_group_leap_mapped", pd.DataFrame()),
-        pre_group_incomplete_rows=conversion.get("pre_group_incomplete_rows", pd.DataFrame()),
-        comparison_long_full=comparison_long_for_audit,
-        mapping_status=mapping_status,
-        target_years=(BASE_YEAR, BASE_YEAR + 1, MAX_OUTPUT_YEAR),
-    )
     mapping_lineage_audit_path = layout.mapping / "mapping_lineage_audit.csv"
-    mapping_lineage_audit.to_csv(mapping_lineage_audit_path, index=False)
-    timer.lap("write core and simple ESTO-axis outputs")
-
-    diagnostics_paths = write_diagnostics(
-        comparison_long=comparison_long,
-        mapping_status=mapping_status,
-        out_dir=layout.root,
-        base_year=BASE_YEAR,
-        diagnostic_probe_year=min(2030, MAX_OUTPUT_YEAR),
-        top_diagnostic_rows=40,
-    )
-    timer.lap("write diagnostics")
-
-    chart_input = _prepare_render_long(comparison_long)
-    chart_line_mapping_ledger = build_chart_line_mapping_ledger(chart_input, mapping_status)
-    chart_total_component_ledger = build_total_component_ledger(chart_input, mapping_status)
-
     chart_line_mapping_path = layout.ledgers / "chart_line_mapping_ledger.csv"
     chart_total_component_path = layout.ledgers / "chart_total_component_ledger.csv"
-
-    dashboard_paths = render_balance_dashboards(
-        comparison_long=comparison_long,
-        mapping_status=mapping_status,
-        structure_config=resolved_structure,
-        output_dir=layout.root,
-        chart_backend=CHART_BACKEND,
-        hide_leap_only_charts=HIDE_LEAP_ONLY_CHARTS,
-        chart_navigation_guide_path=CHART_NAVIGATION_GUIDE_PATH,
-    )
-    timer.lap("render dashboards")
-    chart_line_mapping_ledger = attach_chart_groups_to_dashboard_exposure(
-        chart_line_mapping_ledger,
-        dashboard_paths.get("chart_group_exposure"),
-        dashboard_paths.get("all_chart_groups"),
-    )
-    chart_group_exposure_df = (
-        pd.read_csv(dashboard_paths["chart_group_exposure"], dtype=str).fillna("")
-        if dashboard_paths.get("chart_group_exposure")
-        else pd.DataFrame()
-    )
-    all_chart_groups_df = (
-        pd.read_csv(dashboard_paths["all_chart_groups"], dtype=str).fillna("")
-        if dashboard_paths.get("all_chart_groups")
-        else pd.DataFrame()
-    )
-    chart_line_mapping_ledger.to_csv(chart_line_mapping_path, index=False)
-    chart_total_component_ledger.to_csv(chart_total_component_path, index=False)
-    timer.lap("write chart ledgers")
-
     runtime_issues_path = layout.runtime / "balance_runtime_issues.csv"
-    ingestion["issues"].to_csv(runtime_issues_path, index=False)
     runtime_missing_pair_summary_path = layout.runtime / "balance_runtime_missing_pair_summary.xlsx"
-    write_runtime_missing_pair_summary(
-        runtime_issues=ingestion["issues"],
-        output_path=runtime_missing_pair_summary_path,
-    )
-    comparator_pair_coverage_xlsx = write_dashboard_comparator_pair_coverage(
-        mapping_status=mapping_status,
-        dashboard_exposure=chart_line_mapping_ledger,
-        chart_group_exposure=chart_group_exposure_df,
-        all_chart_groups=all_chart_groups_df,
-        base_df=comparison.get("base_df", pd.DataFrame()),
-        ninth_df=comparison.get("ninth_df", pd.DataFrame()),
-        output_path=layout.coverage / "dashboard_comparator_pair_coverage.xlsx",
-        base_economy=BASE_ECONOMY,
-        projection_economy=PROJECTION_ECONOMY,
-        base_year=BASE_YEAR,
-        projection_years=tuple(PROJECTION_YEARS),
-        scenarios=tuple(SCENARIO_MAP.values()),
-        runtime_issues=ingestion["issues"],
-        chart_navigation_guide_path=CHART_NAVIGATION_GUIDE_PATH,
-        mapping_workbook_path=_mapping_workbook(LEAP_TO_ESTO_MAPPING),
-        mapping_sheet_name=LEAP_TO_ESTO_MAPPING[1],
-    )
-    missing_mapping_candidates_path = write_balance_missing_mapping_candidates(
-        runtime_issues=ingestion["issues"],
-        output_path=layout.mapping / "balance_missing_mapping_candidates.xlsx",
-        mapping_workbook_path=_mapping_workbook(LEAP_TO_ESTO_MAPPING),
-    )
-    mapping_inputs = comparison.get("mapping_inputs") or {}
-    leap_combined_ninth_mapping = pd.read_excel(
-        _mapping_workbook(LEAP_TO_ESTO_MAPPING),
-        sheet_name="leap_combined_ninth",
-        dtype=str,
-    ).fillna("")
-    ninth_mapping_data_coverage_path = write_ninth_mapping_data_coverage(
-        ninth_df=comparison.get("ninth_df", pd.DataFrame()),
-        ninth_mapping_pairs=leap_combined_ninth_mapping,
-        output_path=layout.coverage / "ninth_mapping_data_coverage.xlsx",
-        projection_economy=PROJECTION_ECONOMY,
-        scenarios=tuple(SCENARIO_MAP.values()),
-        years=tuple(PROJECTION_YEARS),
-    )
     override_report_path = layout.runtime / "balance_override_application_report.csv"
-    ingestion["override_report"].to_csv(override_report_path, index=False)
     auto_sheet_path = layout.mapping / "auto_sheet_rows.csv"
-    ingestion.get("auto_sheet_rows", pd.DataFrame()).to_csv(auto_sheet_path, index=False)
-
     resolved_structure_path = layout.mapping / "resolved_structure_config.json"
-    resolved_structure_path.write_text(json.dumps(resolved_structure, ensure_ascii=True, indent=2), encoding="utf-8")
-
     coverage_path = layout.coverage / "balance_coverage.csv"
     unit_diag_path = layout.coverage / "balance_unit_diagnostics.csv"
     matching_diag_path = layout.coverage / "balance_matching_diagnostics.csv"
     extraction_summary_path = layout.coverage / "balance_extraction_summary.json"
-    ingestion["coverage"].to_csv(coverage_path, index=False)
-    ingestion["unit_diagnostics"].to_csv(unit_diag_path, index=False)
-    ingestion.get("matching_diagnostics", pd.DataFrame()).to_csv(matching_diag_path, index=False)
-    extraction_summary_path.write_text(json.dumps(ingestion["extraction_summary"], ensure_ascii=True, indent=2), encoding="utf-8")
-    timer.lap("write runtime, mapping, and coverage checks")
+
+    core_paths: dict[str, str] = {}
+    shared_conversion_paths: dict[str, str] = {}
+    diagnostics_paths: dict[str, object] = {}
+    comparator_pair_coverage_xlsx: object = None
+    missing_mapping_candidates_path: object = None
+    ninth_mapping_data_coverage_path: object = None
+
+    # -------------------------------------------------------------------------
+    # Stage: write core outputs, simple balance tables, diagnostics
+    # -------------------------------------------------------------------------
+    if STAGE_WRITE_OUTPUTS:
+        core_paths = write_core_outputs(
+            out_dir=layout.root,
+            supporting_dir=layout.supporting,
+            comparison_long=comparison_long,
+            comparison_wide=comparison_wide,
+            mapping_status=mapping_status,
+            leap_long=leap_long,
+        )
+        simple_leap_balance = conversion["esto_long"].copy()
+        simple_ninth_balance = build_simple_ninth_balance_table(
+            comparison_long=comparison_long,
+            mapping_status=mapping_status,
+        )
+        shared_conversion_paths = _write_shared_balance_to_esto_outputs(
+            conversion=conversion,
+            mapping_status=mapping_status,
+            comparison_long=comparison_long,
+            simple_ninth_balance=simple_ninth_balance,
+            output_dir=BALANCE_TO_ESTO_LONG_OUTPUT_DIR,
+        )
+        mapped_ninth_to_esto = build_mapped_ninth_to_esto_balance_rows(
+            comparison_long=comparison_long,
+            mapping_status=mapping_status,
+        )
+        merged_esto_axis_balance = build_merged_esto_axis_balance_table(
+            simple_leap_balance=simple_leap_balance,
+            simple_ninth_balance=simple_ninth_balance,
+            comparison_long=comparison_long,
+            mapping_status=mapping_status,
+        )
+        duplicate_summary, duplicate_details = build_simple_balance_duplicate_diagnostics(
+            simple_leap_balance=simple_leap_balance,
+            simple_ninth_balance=simple_ninth_balance,
+        )
+        simple_leap_balance.to_csv(simple_leap_balance_path, index=False)
+        simple_ninth_balance.to_csv(simple_ninth_balance_path, index=False)
+        merged_esto_axis_balance.to_csv(merged_esto_axis_balance_path, index=False)
+        duplicate_summary.to_csv(duplicate_summary_path, index=False)
+        duplicate_details.to_csv(duplicate_details_path, index=False)
+        simple_leap_balance.to_csv(mapped_leap_to_esto_path, index=False)
+        mapped_ninth_to_esto.to_csv(mapped_ninth_to_esto_path, index=False)
+        comparison_long.to_csv(esto_axis_comparison_long_path, index=False)
+        mapping_lineage_audit = build_mapping_lineage_audit_table(
+            pre_group_leap_mapped=conversion.get("pre_group_leap_mapped", pd.DataFrame()),
+            pre_group_incomplete_rows=conversion.get("pre_group_incomplete_rows", pd.DataFrame()),
+            comparison_long_full=comparison_long_for_audit,
+            mapping_status=mapping_status,
+            target_years=(BASE_YEAR, BASE_YEAR + 1, MAX_OUTPUT_YEAR),
+        )
+        mapping_lineage_audit.to_csv(mapping_lineage_audit_path, index=False)
+        timer.lap("write core and simple ESTO-axis outputs")
+        diagnostics_paths = write_diagnostics(
+            comparison_long=comparison_long,
+            mapping_status=mapping_status,
+            out_dir=layout.root,
+            base_year=BASE_YEAR,
+            diagnostic_probe_year=min(2030, MAX_OUTPUT_YEAR),
+            top_diagnostic_rows=40,
+        )
+        timer.lap("write diagnostics")
+    else:
+        print("[SKIP] Stage: write outputs")
+
+    # -------------------------------------------------------------------------
+    # Stage: render dashboards and write chart ledgers
+    # -------------------------------------------------------------------------
+    chart_line_mapping_ledger = pd.DataFrame()
+    chart_total_component_ledger = pd.DataFrame()
+    dashboard_paths: dict[str, object] = {}
+    chart_group_exposure_df = pd.DataFrame()
+    all_chart_groups_df = pd.DataFrame()
+
+    if STAGE_RENDER_DASHBOARDS:
+        chart_input = _prepare_render_long(comparison_long)
+        chart_line_mapping_ledger = build_chart_line_mapping_ledger(chart_input, mapping_status)
+        chart_total_component_ledger = build_total_component_ledger(chart_input, mapping_status)
+        dashboard_paths = render_balance_dashboards(
+            comparison_long=comparison_long,
+            mapping_status=mapping_status,
+            structure_config=resolved_structure,
+            output_dir=layout.root,
+            chart_backend=CHART_BACKEND,
+            hide_leap_only_charts=HIDE_LEAP_ONLY_CHARTS,
+            chart_navigation_guide_path=CHART_NAVIGATION_GUIDE_PATH,
+        )
+        timer.lap("render dashboards")
+        chart_line_mapping_ledger = attach_chart_groups_to_dashboard_exposure(
+            chart_line_mapping_ledger,
+            dashboard_paths.get("chart_group_exposure"),
+            dashboard_paths.get("all_chart_groups"),
+        )
+        chart_group_exposure_df = (
+            pd.read_csv(dashboard_paths["chart_group_exposure"], dtype=str).fillna("")
+            if dashboard_paths.get("chart_group_exposure")
+            else pd.DataFrame()
+        )
+        all_chart_groups_df = (
+            pd.read_csv(dashboard_paths["all_chart_groups"], dtype=str).fillna("")
+            if dashboard_paths.get("all_chart_groups")
+            else pd.DataFrame()
+        )
+        chart_line_mapping_ledger.to_csv(chart_line_mapping_path, index=False)
+        chart_total_component_ledger.to_csv(chart_total_component_path, index=False)
+        timer.lap("write chart ledgers")
+    else:
+        print("[SKIP] Stage: render dashboards")
+        if chart_line_mapping_path.exists():
+            chart_line_mapping_ledger = pd.read_csv(chart_line_mapping_path, dtype=str, low_memory=False).fillna("")
+        if chart_total_component_path.exists():
+            chart_total_component_ledger = pd.read_csv(chart_total_component_path, dtype=str, low_memory=False).fillna("")
+
+    # -------------------------------------------------------------------------
+    # Stage: write runtime issues, mapping candidates, and coverage checks
+    # -------------------------------------------------------------------------
+    if STAGE_WRITE_COVERAGE:
+        ingestion["issues"].to_csv(runtime_issues_path, index=False)
+        write_runtime_missing_pair_summary(
+            runtime_issues=ingestion["issues"],
+            output_path=runtime_missing_pair_summary_path,
+        )
+        comparator_pair_coverage_xlsx = write_dashboard_comparator_pair_coverage(
+            mapping_status=mapping_status,
+            dashboard_exposure=chart_line_mapping_ledger,
+            chart_group_exposure=chart_group_exposure_df,
+            all_chart_groups=all_chart_groups_df,
+            base_df=comparison.get("base_df", pd.DataFrame()),
+            ninth_df=comparison.get("ninth_df", pd.DataFrame()),
+            output_path=layout.coverage / "dashboard_comparator_pair_coverage.xlsx",
+            base_economy=BASE_ECONOMY,
+            projection_economy=PROJECTION_ECONOMY,
+            base_year=BASE_YEAR,
+            projection_years=tuple(PROJECTION_YEARS),
+            scenarios=tuple(SCENARIO_MAP.values()),
+            runtime_issues=ingestion["issues"],
+            chart_navigation_guide_path=CHART_NAVIGATION_GUIDE_PATH,
+            mapping_workbook_path=_mapping_workbook(LEAP_TO_ESTO_MAPPING),
+            mapping_sheet_name=LEAP_TO_ESTO_MAPPING[1],
+        )
+        missing_mapping_candidates_path = write_balance_missing_mapping_candidates(
+            runtime_issues=ingestion["issues"],
+            output_path=layout.mapping / "balance_missing_mapping_candidates.xlsx",
+            mapping_workbook_path=_mapping_workbook(LEAP_TO_ESTO_MAPPING),
+        )
+        leap_combined_ninth_mapping = pd.read_excel(
+            _mapping_workbook(LEAP_TO_ESTO_MAPPING),
+            sheet_name="leap_combined_ninth",
+            dtype=str,
+        ).fillna("")
+        ninth_mapping_data_coverage_path = write_ninth_mapping_data_coverage(
+            ninth_df=comparison.get("ninth_df", pd.DataFrame()),
+            ninth_mapping_pairs=leap_combined_ninth_mapping,
+            output_path=layout.coverage / "ninth_mapping_data_coverage.xlsx",
+            projection_economy=PROJECTION_ECONOMY,
+            scenarios=tuple(SCENARIO_MAP.values()),
+            years=tuple(PROJECTION_YEARS),
+        )
+        ingestion["override_report"].to_csv(override_report_path, index=False)
+        ingestion.get("auto_sheet_rows", pd.DataFrame()).to_csv(auto_sheet_path, index=False)
+        resolved_structure_path.write_text(json.dumps(resolved_structure, ensure_ascii=True, indent=2), encoding="utf-8")
+        ingestion["coverage"].to_csv(coverage_path, index=False)
+        ingestion["unit_diagnostics"].to_csv(unit_diag_path, index=False)
+        ingestion.get("matching_diagnostics", pd.DataFrame()).to_csv(matching_diag_path, index=False)
+        extraction_summary_path.write_text(json.dumps(ingestion["extraction_summary"], ensure_ascii=True, indent=2), encoding="utf-8")
+        timer.lap("write runtime, mapping, and coverage checks")
+    else:
+        print("[SKIP] Stage: write coverage")
 
     manifest = write_output_manifest(
         out_dir=layout.root,
@@ -681,7 +834,6 @@ def run_workflow() -> dict[str, object]:
     if WRITE_WORKFLOW_TIMING_CSV:
         timer.write_csv(timing_path)
     return result
-
 
 #%%
 RUN_WORKFLOW = True

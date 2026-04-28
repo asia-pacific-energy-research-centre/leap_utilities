@@ -1144,26 +1144,24 @@ def _filter_ninth_by_sector_fuel(
     working = working[sector_mask]
     if working.empty:
         return working
-    # Prefer rows that the 9th data marks as subtotals so that an aggregate code
-    # (e.g. sub2-level 14_03_02_chemical_incl_petrochemical) returns only its
-    # rolled-up row and not the child detail rows underneath it. This also means
-    # a child code (e.g. 14_03_02_01_fs) returns nothing when its parent aggregate
-    # is already being counted — avoiding double-counting across canonical pairs.
-    # Fall back to unfiltered rows only when no subtotal rows exist (leaf-only data).
+    # Prefer detailed rows when a sector contains a mix of detailed and subtotal
+    # fuel rows. Keeping subtotals first can drop valid detailed fuel matches
+    # before the fuel filter is applied.
     if prepared and "__subtotal_results" in working.columns:
-        subtotal_rows = working[working["__subtotal_results"]]
-        if not subtotal_rows.empty:
-            working = subtotal_rows
+        detail_rows = working[~working["__subtotal_results"]]
+        if not detail_rows.empty:
+            working = detail_rows
         elif "__subtotal_layout" in working.columns:
-            layout_rows = working[working["__subtotal_layout"]]
-            if not layout_rows.empty:
-                working = layout_rows
+            detail_layout_rows = working[~working["__subtotal_layout"]]
+            if not detail_layout_rows.empty:
+                working = detail_layout_rows
     else:
         for flag_col in ("subtotal_results", "subtotal_layout"):
             if flag_col in working.columns:
-                subtotal_rows = working[working[flag_col].fillna(False).astype(bool)]
-                if not subtotal_rows.empty:
-                    working = subtotal_rows
+                flag_values = working[flag_col].fillna(False).astype(bool)
+                detail_rows = working[~flag_values]
+                if not detail_rows.empty:
+                    working = detail_rows
                     break
     if working.empty:
         return working

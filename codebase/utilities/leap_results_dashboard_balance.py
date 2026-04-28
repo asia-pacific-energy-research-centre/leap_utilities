@@ -7094,21 +7094,66 @@ def build_balance_comparison_esto_axis(
         if _clean_token(k) and _clean_token(v)
     }
 
-    canonical_pairs = mapping_inputs["canonical_pairs"].copy()
-    for col in ["9th_sector", "9th_fuel", "esto_flow", "esto_product"]:
-        canonical_pairs[col] = canonical_pairs.get(col, "").fillna("").astype(str).str.strip()
-    canonical_pairs = canonical_pairs[
-        canonical_pairs["9th_sector"].ne("")
-        & canonical_pairs["9th_fuel"].ne("")
-        & canonical_pairs["esto_flow"].ne("")
-        & canonical_pairs["esto_product"].ne("")
-    ].copy()
+    esto_to_ninth: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    if not mapping_status.empty:
+        _ms = mapping_status.copy()
+        for _col in ("esto_flow", "esto_product", "sector_code_9th", "ninth_fuel_code"):
+            if _col not in _ms.columns:
+                _ms[_col] = ""
+            _ms[_col] = _ms[_col].fillna("").astype(str).str.strip()
+        _ms = _ms[_ms["esto_flow"].ne("") & _ms["esto_product"].ne("")].copy()
+        for _, _row in _ms[["esto_flow", "esto_product", "sector_code_9th", "ninth_fuel_code"]].drop_duplicates().iterrows():
+            _key = (_row["esto_flow"], _row["esto_product"])
+            _pairs = esto_to_ninth.setdefault(_key, [])
+            for _s in [s for s in _row["sector_code_9th"].split("|") if s.strip()]:
+                for _f in [f for f in _row["ninth_fuel_code"].split("|") if f.strip()]:
+                    _pair = (_s.strip(), _f.strip())
+                    if _pair not in _pairs:
+                        _pairs.append(_pair)
+        for _key in esto_to_ninth:
+            esto_to_ninth[_key] = sorted(esto_to_ninth[_key])
 
-    esto_to_ninth = (
-        canonical_pairs.groupby(["esto_flow", "esto_product"], dropna=False)[["9th_sector", "9th_fuel"]]
-        .apply(lambda g: sorted(set(zip(g["9th_sector"], g["9th_fuel"]))))
-        .to_dict()
-    )
+    # When an ESTO pair maps to a mix of always-subtotal and non-subtotal ninth pairs,
+    # drop the always-subtotal ones. Otherwise a subtotal row and its component rows are
+    # both included in the sum, producing double-counted projection values.
+    if ninth_df is not None and not ninth_df.empty:
+        _ninth_sector_cols = [c for c in ["sectors", "sub1sectors", "sub2sectors", "sub3sectors", "sub4sectors"] if c in ninth_df.columns]
+        _ninth_fuel_cols = [c for c in ["fuels", "subfuels"] if c in ninth_df.columns]
+        if _ninth_sector_cols and _ninth_fuel_cols:
+            _sub_layout = ninth_df["subtotal_layout"].fillna(False).astype(bool) if "subtotal_layout" in ninth_df.columns else pd.Series(False, index=ninth_df.index)
+            _sub_results = ninth_df["subtotal_results"].fillna(False).astype(bool) if "subtotal_results" in ninth_df.columns else pd.Series(False, index=ninth_df.index)
+            _is_sub_arr = (_sub_layout | _sub_results).values
+            _sf_records: list[pd.DataFrame] = []
+            for _sc in _ninth_sector_cols:
+                for _fc in _ninth_fuel_cols:
+                    _tmp = pd.DataFrame({
+                        "_sector": ninth_df[_sc].fillna("").astype(str).str.strip().str.lower().values,
+                        "_fuel": ninth_df[_fc].fillna("").astype(str).str.strip().str.lower().values,
+                        "_is_sub": _is_sub_arr,
+                    })
+                    _sf_records.append(_tmp[_tmp["_sector"].ne("") & _tmp["_fuel"].ne("")])
+            if _sf_records:
+                _sf_long = pd.concat(_sf_records, ignore_index=True)
+                _pair_subtotal_agg = (
+                    _sf_long.groupby(["_sector", "_fuel"])["_is_sub"]
+                    .agg(all_sub="all")
+                    .reset_index()
+                )
+                _ninth_always_subtotal: set[tuple[str, str]] = set(
+                    zip(
+                        _pair_subtotal_agg.loc[_pair_subtotal_agg["all_sub"], "_sector"],
+                        _pair_subtotal_agg.loc[_pair_subtotal_agg["all_sub"], "_fuel"],
+                    )
+                )
+                if _ninth_always_subtotal:
+                    for _esto_key in list(esto_to_ninth.keys()):
+                        _all_ninth = esto_to_ninth[_esto_key]
+                        _non_sub_ninth = [
+                            (s, f) for s, f in _all_ninth
+                            if (s.lower(), f.lower()) not in _ninth_always_subtotal
+                        ]
+                        if _non_sub_ninth and len(_non_sub_ninth) < len(_all_ninth):
+                            esto_to_ninth[_esto_key] = _non_sub_ninth
 
     leap_working = leap_long.copy()
     leap_working["scenario"] = leap_working["scenario"].map(_normalize_scenario)
@@ -7206,6 +7251,10 @@ def build_balance_comparison_esto_axis(
             .drop_duplicates(subset=["scenario", "sheet", "measure", "fuel_label", "esto_flow", "esto_product"])
             .reset_index(drop=True)
         )
+    for _col in ("esto_is_subtotal", "ninth_is_subtotal"):
+        if _col not in groups.columns:
+            groups[_col] = False
+        groups[_col] = groups[_col].fillna(False).astype(bool)
     groups = _backfill_dashboard_hierarchy(groups, sheet_catalog=hierarchy_sheet_catalog)
 
     # Precompute which (sheet, measure, ninth_sector, ninth_fuel) are claimed by more than one

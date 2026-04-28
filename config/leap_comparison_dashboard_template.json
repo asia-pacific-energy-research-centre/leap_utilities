@@ -567,6 +567,12 @@
         ]
       },
       "Chemical (incl. petrochemical)": {
+        "aggregate": {
+          "fuel": "Total",
+          "source_esto_flows": [
+            "14.03.02 Chemical (incl. petrochemical)"
+          ]
+        },
         "graphs": {
           "Anthracite": {
             "esto_flow": "14.03.02 Chemical (incl. petrochemical)",
@@ -817,6 +823,12 @@
         }
       },
       "Food, beverages and tobacco": {
+        "aggregate": {
+          "fuel": "Total",
+          "source_esto_flows": [
+            "14.03.07 Food, beverages and tobacco"
+          ]
+        },
         "graphs": {
           "Anthracite": {
             "esto_flow": "14.03.07 Food, beverages and tobacco",
@@ -983,6 +995,12 @@
         }
       },
       "Iron and steel": {
+        "aggregate": {
+          "fuel": "Total",
+          "source_esto_flows": [
+            "14.03.01 Iron and steel"
+          ]
+        },
         "graphs": {
           "Anthracite": {
             "esto_flow": "14.03.01 Iron and steel",
@@ -1197,6 +1215,12 @@
         }
       },
       "Machinery": {
+        "aggregate": {
+          "fuel": "Total",
+          "source_esto_flows": [
+            "14.03.06 Machinery"
+          ]
+        },
         "graphs": {
           "Anthracite": {
             "esto_flow": "14.03.06 Machinery",
@@ -1435,6 +1459,12 @@
         }
       },
       "Non ferrous metals": {
+        "aggregate": {
+          "fuel": "Total",
+          "source_esto_flows": [
+            "14.03.03 Non ferrous metals"
+          ]
+        },
         "graphs": {
           "Aviation gasoline": {
             "esto_flow": "14.03.03 Non ferrous metals",
@@ -1649,6 +1679,12 @@
         }
       },
       "Non-metallic mineral products": {
+        "aggregate": {
+          "fuel": "Total",
+          "source_esto_flows": [
+            "14.03.04 Non-metallic mineral products"
+          ]
+        },
         "graphs": {
           "Anthracite": {
             "esto_flow": "14.03.04 Non-metallic mineral products",
@@ -1893,6 +1929,12 @@
         }
       },
       "Non-specified industry": {
+        "aggregate": {
+          "fuel": "Total",
+          "source_esto_flows": [
+            "14.03.11 Non-specified industry"
+          ]
+        },
         "graphs": {
           "Anthracite": {
             "esto_flow": "14.03.11 Non-specified industry",
@@ -2179,6 +2221,12 @@
         }
       },
       "Pulp, paper and printing": {
+        "aggregate": {
+          "fuel": "Total",
+          "source_esto_flows": [
+            "14.03.08 Pulp, paper and printing"
+          ]
+        },
         "graphs": {
           "Anthracite": {
             "esto_flow": "14.03.08 Pulp, paper and printing",
@@ -2429,6 +2477,12 @@
         }
       },
       "Textiles and leather": {
+        "aggregate": {
+          "fuel": "Total",
+          "source_esto_flows": [
+            "14.03.10 Textiles and leather"
+          ]
+        },
         "graphs": {
           "Anthracite": {
             "esto_flow": "14.03.10 Textiles and leather",
@@ -2475,6 +2529,12 @@
         }
       },
       "Transportation equipment": {
+        "aggregate": {
+          "fuel": "Total",
+          "source_esto_flows": [
+            "14.03.05 Transportation equipment"
+          ]
+        },
         "graphs": {
           "Bagasse": {
             "esto_flow": "14.03.05 Transportation equipment",
@@ -2611,6 +2671,12 @@
         }
       },
       "Wood and wood products": {
+        "aggregate": {
+          "fuel": "Total",
+          "source_esto_flows": [
+            "14.03.09 Wood and wood products"
+          ]
+        },
         "graphs": {
           "Bagasse": {
             "esto_flow": "14.03.09 Wood and wood products",
