@@ -177,6 +177,24 @@ def finalise_export_df(log_df, scenario, region, base_year, final_year
     level_cols = [f"Level {i}" for i in range(1, max_levels + 1)]
     export_df = pivot_df[base_cols + year_cols + level_cols].copy()
 
+    # --- Scenario/year masking policy ---
+    # Current Accounts should only keep base-year values.
+    # Non-Current-Accounts scenarios should keep projections and leave base year blank.
+    if "Scenario" in export_df.columns and year_cols:
+        current_accounts_labels = {"current accounts", "current account"}
+        scenario_tokens = (
+            export_df["Scenario"].fillna("").astype(str).str.strip().str.lower()
+        )
+        current_accounts_mask = scenario_tokens.isin(current_accounts_labels)
+        non_current_mask = ~current_accounts_mask
+        base_year_int = int(base_year)
+        for year in year_cols:
+            year_int = int(year)
+            if year_int > base_year_int:
+                export_df.loc[current_accounts_mask, year_int] = pd.NA
+            elif year_int == base_year_int:
+                export_df.loc[non_current_mask, year_int] = pd.NA
+
     # --- Add trailing placeholder column for #N/A ---
     # export_df.loc[:, "#N/A"] = pd.NA
     

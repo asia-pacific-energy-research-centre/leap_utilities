@@ -2,6 +2,11 @@
 """
 Draft transfer analysis scaffolding.
 
+This script converts ESTO transfer flows into LEAP transformation-style process
+records and export workbooks.
+It handles economy-specific transfer mappings, optional unallocated-process
+fallback behavior, and import dispatch for the generated transfer workbook.
+
 Purpose:
 - Treat ESTO 08.* Transfers flows as Transformation-style processes for LEAP.
 - Build process_records compatible with transformation exports.
@@ -35,6 +40,9 @@ if str(CURRENT_DIR) not in sys.path:
 from codebase.functions import transformation_analysis_utils as core
 from codebase.configuration import workflow_config as workflow_cfg
 from codebase.functions import leap_api, leap_exports
+from codebase.functions.analysis_input_write_dispatcher import (
+    get_analysis_input_write_mode,
+)
 from codebase.configuration.config import (
     BRANCH_DEMAND_CATEGORY,
     BRANCH_DEMAND_TECHNOLOGY,
@@ -122,7 +130,7 @@ TRANSFER_CATEGORY_TEMPLATES = [
         ],
     },
     {
-        "category": "Others",
+        "category": "Transfers unallocated",
         "inputs": [],
         "outputs": [],
         "mode": "others",
@@ -461,7 +469,15 @@ TRANSFER_PROCESS_CONFIG: dict[str, dict[str, list[dict]]] = {
                     "07.17 Other products"
                 ]
             }
-        ]
+        ],
+        "unallocated_policy": {
+            "enabled": True,
+            "process_name": "Transfers unallocated",
+            # Trigger merge when any configured transfer process exceeds this ratio.
+            "max_efficiency_ratio": 50.0,
+            # When triggered, merge all included transfer categories (not only bad rows).
+            "merge_all_when_triggered": True,
+        },
     },
     "21_VN": {
         "transfer_flows_combined": [
@@ -562,7 +578,7 @@ def _normalize_transfer_process_name(process_config: dict, flow_code: str) -> st
     text = str(raw).strip()
     lowered = text.lower()
     if "upstream" in lowered and ("refinery" in lowered or "blending" in lowered):
-        return TRANSFER_PROCESS_NAMES["upstream_and_refinery"]
+        return TRANSFER_PROCESS_NAMES["unallocated"]
     if "upstream" in lowered:
         return TRANSFER_PROCESS_NAMES["upstream_liquids"]
     if "refinery" in lowered or "blending" in lowered:
@@ -843,6 +859,160 @@ def _build_process_records_for_mapping(
     return [record]
 
 
+def _sum_label_series_dict(label_map: dict[str, dict]) -> pd.Series:
+    """Return total year series across label->year maps."""
+    total = pd.Series(dtype=float)
+    for values in (label_map or {}).values():
+        if not values:
+            continue
+        total = total.add(pd.Series(values, dtype=float), fill_value=0.0)
+    return total
+
+
+def _max_efficiency_ratio(record: dict) -> float:
+    """Return the maximum efficiency ratio found in a process record."""
+    efficiency_map = record.get("efficiency")
+    if not isinstance(efficiency_map, dict) or not efficiency_map:
+        return 0.0
+    ratios = [float(value) for value in efficiency_map.values() if value is not None]
+    if not ratios:
+        return 0.0
+    return float(max(ratios))
+
+
+def _normalized_name_set(values: Iterable[object] | None) -> set[str]:
+    """Return normalized lowercase process-name tokens."""
+    if not values:
+        return set()
+    out: set[str] = set()
+    for value in values:
+        token = str(value or "").strip().lower()
+        if token:
+            out.add(token)
+    return out
+
+
+def _apply_unallocated_policy(
+    records: list[dict],
+    policy: dict | None,
+) -> list[dict]:
+    """Collapse selected transfer rows into one unallocated process when triggered."""
+    if not records:
+        return records
+    if not isinstance(policy, dict) or not policy:
+        return records
+    if not bool(policy.get("enabled", False)):
+        return records
+
+    include_names = _normalized_name_set(policy.get("include_processes"))
+    exclude_names = _normalized_name_set(policy.get("exclude_processes"))
+
+    def _is_included(record: dict) -> bool:
+        name = str(record.get("process_name") or "").strip().lower()
+        if not name:
+            return False
+        if include_names and name not in include_names:
+            return False
+        if exclude_names and name in exclude_names:
+            return False
+        return True
+
+    candidate_records = [record for record in records if _is_included(record)]
+    if not candidate_records:
+        return records
+
+    max_efficiency_ratio = policy.get("max_efficiency_ratio")
+    max_efficiency_limit = (
+        float(max_efficiency_ratio) if max_efficiency_ratio is not None else None
+    )
+    min_input_total = policy.get("min_input_total")
+    min_input_limit = float(min_input_total) if min_input_total is not None else None
+
+    bad_records: list[dict] = []
+    for record in candidate_records:
+        record_is_bad = False
+        if max_efficiency_limit is not None and _max_efficiency_ratio(record) > max_efficiency_limit:
+            record_is_bad = True
+        if min_input_limit is not None:
+            input_total = float(record.get("input_total") or 0.0)
+            if input_total < min_input_limit:
+                record_is_bad = True
+        if record_is_bad:
+            bad_records.append(record)
+    if not bad_records:
+        return records
+
+    merge_all = bool(policy.get("merge_all_when_triggered", True))
+    merge_targets = candidate_records if merge_all else bad_records
+    if not merge_targets:
+        return records
+
+    output_values_by_label: dict[str, list[dict]] = {}
+    feedstock_values_by_label: dict[str, list[dict]] = {}
+    import_targets_by_label: dict[str, list[dict]] = {}
+    export_targets_by_label: dict[str, list[dict]] = {}
+    for record in merge_targets:
+        for label, values in (record.get("output_values") or {}).items():
+            output_values_by_label.setdefault(label, []).append(values)
+        for label, values in (record.get("feedstock_values") or {}).items():
+            feedstock_values_by_label.setdefault(label, []).append(values)
+        for label, values in (record.get("output_import_targets") or {}).items():
+            import_targets_by_label.setdefault(label, []).append(values)
+        for label, values in (record.get("output_export_targets") or {}).items():
+            export_targets_by_label.setdefault(label, []).append(values)
+
+    aggregated_outputs = {
+        label: _sum_year_dicts(values)
+        for label, values in output_values_by_label.items()
+        if values
+    }
+    aggregated_feedstocks = {
+        label: _sum_year_dicts(values)
+        for label, values in feedstock_values_by_label.items()
+        if values
+    }
+    aggregated_imports = {
+        label: _sum_year_dicts(values)
+        for label, values in import_targets_by_label.items()
+        if values
+    }
+    aggregated_exports = {
+        label: _sum_year_dicts(values)
+        for label, values in export_targets_by_label.items()
+        if values
+    }
+
+    total_output_series = _sum_label_series_dict(aggregated_outputs)
+    total_input_series = _sum_label_series_dict(aggregated_feedstocks)
+    efficiency_series = core.safe_divide_series(total_output_series, total_input_series)
+    feedstock_shares = {
+        label: core.safe_divide_series(pd.Series(series, dtype=float), total_input_series).to_dict()
+        for label, series in aggregated_feedstocks.items()
+    }
+
+    carrier = dict(merge_targets[0])
+    carrier["process_name"] = str(policy.get("process_name") or "Transfers unallocated")
+    carrier["sector_title"] = carrier["process_name"]
+    carrier["output_values"] = aggregated_outputs
+    carrier["feedstock_values"] = aggregated_feedstocks
+    carrier["feedstock_shares"] = feedstock_shares
+    carrier["efficiency"] = core.series_to_year_dict(
+        efficiency_series,
+        core.EXPORT_BASE_YEAR,
+        core.EXPORT_FINAL_YEAR,
+    )
+    carrier["input_total"] = (
+        float(total_input_series.sum()) if not total_input_series.empty else 0.0
+    )
+    carrier["output_import_targets"] = aggregated_imports
+    carrier["output_export_targets"] = aggregated_exports
+
+    merged_target_ids = {id(record) for record in merge_targets}
+    output_rows: list[dict] = [record for record in records if id(record) not in merged_target_ids]
+    output_rows.append(carrier)
+    return output_rows
+
+
 def build_transfer_rows(
     economy: str,
     sector_title: str = "Transfers",
@@ -872,6 +1042,12 @@ def build_transfer_rows(
             economy_config = config_source.get(alias, {})
     if economy_config is None:
         economy_config = {}
+    unallocated_policy = economy_config.get("unallocated_policy", DEFAULT_TRANSFER_UNALLOCATED_POLICY)
+
+    def _sector_title_for_process(process_cfg: dict, fallback_flow_code: str) -> str:
+        if not SPLIT_TRANSFER_SECTORS:
+            return str(sector_title)
+        return _normalize_transfer_process_name(process_cfg, fallback_flow_code)
     handled_flows: set[str] = set()
     combined_processes = economy_config.get(TRANSFER_COMBINED_FLOW_KEY)
     if combined_processes:
@@ -886,7 +1062,7 @@ def build_transfer_rows(
                         economy,
                         TRANSFER_COMBINED_FLOW_KEY,
                         process_cfg,
-                        sector_title,
+                        _sector_title_for_process(process_cfg, TRANSFER_COMBINED_FLOW_KEY),
                         use_output_targets=use_output_targets,
                         feedstock_method=feedstock_method,
                     )
@@ -911,7 +1087,7 @@ def build_transfer_rows(
             positives = [label for label, value in totals.items() if value > 0]
             flow_processes = [
                 {
-                    "process": flow_code,
+                    "process": TRANSFER_PROCESS_NAMES["unallocated"],
                     "inputs": negatives,
                     "outputs": positives,
                 }
@@ -925,12 +1101,12 @@ def build_transfer_rows(
                         economy,
                         flow_code,
                         process_cfg,
-                        sector_title,
+                        _sector_title_for_process(process_cfg, flow_code),
                         use_output_targets=use_output_targets,
                         feedstock_method=feedstock_method,
                     )
                 )
-    return records
+    return _apply_unallocated_policy(records, unallocated_policy)
 
 
 def save_transfer_export(
@@ -1293,12 +1469,20 @@ def import_transfer_workbook_to_leap(
     filename: str | None = None,
     scenario_to_run: str | None = None,
     region: str | None = None,
-    include_current_accounts: bool = True,
+    include_current_accounts: bool = False,
     create_branches: bool = True,
     fill_branches: bool = True,
     raise_on_missing_branch: bool = False,
 ) -> Path:
     """Connect to LEAP, create branches, and fill data from the transfer export."""
+    if (
+        str(scenario_to_run or "").strip().lower() in {"current accounts", "current account"}
+        and not include_current_accounts
+    ):
+        raise ValueError(
+            "Direct transfer LEAP import for 'Current Accounts' is disabled "
+            "unless include_current_accounts=True is passed explicitly."
+        )
     export_path = find_transfer_workbook(export_directory, filename)
     target_region = region or core.EXPORT_REGION
     return leap_api.import_workbook(
@@ -1332,6 +1516,7 @@ def run_transfer_export_and_import(
     **export_kwargs,
 ) -> list[Path]:
     """Run exports and optionally push the workbook into LEAP."""
+    _print_reset_reminder_for_import(include_leap_import)
     exports = assemble_transfer_workbook(
         economies=economies,
         scenarios=scenarios,
@@ -1355,7 +1540,7 @@ def run_transfer_export_and_import(
         scenario_list,
         import_scenario,
     )
-    if not LEAP_API_AVAILABLE:
+    if get_analysis_input_write_mode() == "api" and not LEAP_API_AVAILABLE:
         print("[INFO] LEAP API unavailable in this environment; skipping branch creation/fill.")
         return exports
     for index, scenario_choice in enumerate(scenario_choices):
@@ -1465,7 +1650,7 @@ def run_transfer_leap_import(
     filename: str | None = None,
     scenario_to_run: str | None = None,
     region: str | None = None,
-    include_current_accounts: bool = True,
+    include_current_accounts: bool = False,
     create_branches: bool = True,
     fill_branches: bool = True,
     raise_on_missing_branch: bool = False,
@@ -1507,6 +1692,13 @@ TRANSFER_PROCESS_NAMES = {
     "upstream_and_refinery": "Upstream & refinery transfers",
     "upstream_liquids": "Upstream liquids transfers",
     "refinery_blending": "Refinery & blending transfers",
+    "unallocated": "Transfers unallocated",
+}
+DEFAULT_TRANSFER_UNALLOCATED_POLICY = {
+    "enabled": True,
+    "process_name": TRANSFER_PROCESS_NAMES["unallocated"],
+    "max_efficiency_ratio": 50.0,
+    "merge_all_when_triggered": True,
 }
 LEAP_API_AVAILABLE = leap_api.is_available()
 
@@ -1525,17 +1717,32 @@ SCENARIOS = (
 INCLUDE_LEAP_IMPORT = (
     workflow_cfg.TRANSFERS_NOTEBOOK_INCLUDE_LEAP_IMPORT
     if workflow_cfg.TRANSFERS_NOTEBOOK_INCLUDE_LEAP_IMPORT is not None
-    else LEAP_API_AVAILABLE
+    else (LEAP_API_AVAILABLE if get_analysis_input_write_mode() == "api" else True)
 )
 IMPORT_SCENARIOS = [
     scenario.lower()
     for scenario in SCENARIOS
     if scenario.lower() not in {"current accounts", "current account"}
 ]
+
+
+def _print_reset_reminder_for_import(include_leap_import: bool) -> None:
+    """Remind users that standalone transfer import does not clear stale trade targets."""
+    if not include_leap_import:
+        return
+    print(
+        "[WARN] Reset reminder: standalone transfers workflow import does not perform a global "
+        "supply/transformation trade reset. If you need a clean rerun, run "
+        "codebase/results_supply_link_workflow.py with "
+        "MAIN_RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT=True."
+    )
+
+
 CURRENT_ACCOUNTS = workflow_cfg.TRANSFERS_NOTEBOOK_CURRENT_ACCOUNTS
 INCLUDE_OUTPUT_SERIES = False
 USE_OUTPUT_TARGETS = True
 AGGREGATE_ECONOMY_LABEL = workflow_cfg.TRANSFERS_AGGREGATE_ECONOMY_LABEL
+SPLIT_TRANSFER_SECTORS = True
 
 #%%
 if __name__ == "__main__":
@@ -1552,3 +1759,14 @@ if __name__ == "__main__":
     if exports:
         print(f"Transfer export saved to: {exports[0]}")
 #%%
+
+
+try:
+    from codebase.utilities.workflow_common import emit_completion_beep as _emit_completion_beep
+except Exception:  # pragma: no cover
+    def _emit_completion_beep(*, success: bool = True) -> None:  # noqa: ARG001
+        return
+
+
+if __name__ == "__main__":  # pragma: no cover
+    _emit_completion_beep(success=True, style="chime")

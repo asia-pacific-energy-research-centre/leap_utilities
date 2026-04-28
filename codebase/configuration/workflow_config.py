@@ -3,6 +3,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from codebase.utilities.output_paths import (
+    COMBINED_LEAP_EXPORTS_ROOT,
+    LEAP_EXPORTS_ROOT,
+    STANDALONE_LEAP_EXPORTS_ROOT,
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 ###############################
@@ -35,8 +41,19 @@ GLOBAL_BASE_YEAR = 2022
 # None means: fall back to the workflow/module default final year.
 GLOBAL_FINAL_YEAR = None
 GLOBAL_REGION = "United States of America"
-GLOBAL_EXPORT_OUTPUT_DIR = REPO_ROOT / "outputs" / "leap_exports"
+GLOBAL_EXPORT_OUTPUT_DIR = STANDALONE_LEAP_EXPORTS_ROOT
 GLOBAL_AGGREGATE_ECONOMY_LABEL = _resolve_global_aggregate(GLOBAL_ECONOMIES)
+
+# Global Analysis-view input write mode:
+# - "api" keeps current behavior (write directly via LEAP API)
+# - "workbook" disables Analysis-view API writes and keeps workbook/manual import only
+ANALYSIS_INPUT_WRITE_MODE = "workbook"
+ANALYSIS_INPUT_FIELD_MAPPING_PATH = REPO_ROOT / "config" / "leap_export_workbook_mappings.xlsx"
+ANALYSIS_INPUT_FIELD_MAPPING_SHEET = "field_mappings"
+ANALYSIS_INPUT_CANONICAL_TEMPLATE_PATHS = [
+    REPO_ROOT / "data" / "full model export.xlsx",
+    LEAP_EXPORTS_ROOT,
+]
 
 #########################
 # HELPER FUNCTIONS (RARE)
@@ -70,6 +87,7 @@ def _default_supply_export_filename(
 TRANSFORMATION_RUN_LNG_ANALYSIS = True
 TRANSFORMATION_RUN_GAS_PROCESSING_ANALYSIS = True
 TRANSFORMATION_RUN_COAL_TRANSFORMATION_ANALYSIS = True
+TRANSFORMATION_RUN_OTHER_TRANSFORMATION_ANALYSIS = True
 TRANSFORMATION_RUN_CHARCOAL_PROCESSING_ANALYSIS = True
 TRANSFORMATION_RUN_NONSPECIFIED_TRANSFORMATION_ANALYSIS = True
 TRANSFORMATION_RUN_HYDROGEN_TRANSFORMATION_ANALYSIS = True
@@ -94,13 +112,15 @@ TRANSFORMATION_SCENARIOS_TO_EXPORT = list(GLOBAL_SCENARIOS)
 TRANSFORMATION_EXPORT_BASE_YEAR = GLOBAL_BASE_YEAR
 # None means: fall back to PROJECTION_END_YEAR in transformation_analysis_utils.
 TRANSFORMATION_EXPORT_FINAL_YEAR = GLOBAL_FINAL_YEAR
-TRANSFORMATION_SUMMARY_OUTPUT_DIR = TRANSFORMATION_EXPORT_OUTPUT_DIR
+TRANSFORMATION_SUMMARY_OUTPUT_DIR = (
+    Path(TRANSFORMATION_EXPORT_OUTPUT_DIR) / "supporting_files" / "transformation"
+)
 TRANSFORMATION_PROCESS_SUMMARY_FILENAME = "transformation_process_summary.csv"
 TRANSFORMATION_DETAIL_SUMMARY_FILENAME = "transformation_detail_summary.csv"
 TRANSFORMATION_INCLUDE_OUTPUT_SERIES_IN_LEAP_EXPORT = False
 TRANSFORMATION_SAVE_PROJECTION_DIAGNOSTICS = False
 TRANSFORMATION_PROJECTION_DIAGNOSTICS_PATH = (
-    Path(TRANSFORMATION_EXPORT_OUTPUT_DIR) / "ninth_projection_allocation_fallbacks.csv"
+    Path(TRANSFORMATION_SUMMARY_OUTPUT_DIR) / "ninth_projection_allocation_fallbacks.csv"
 )
 TRANSFORMATION_SCENARIO_EXPORT_OVERRIDES = {
     "Current Accounts": {
@@ -140,7 +160,7 @@ SUPPLY_ALL_ECONOMY_LABEL = GLOBAL_AGGREGATE_ECONOMY_LABEL
 SUPPLY_ECONOMIES_TO_ANALYZE = list(GLOBAL_ECONOMIES)
 SUPPLY_SAVE_ESTO_SUBTOTAL_LABELED = False
 SUPPLY_ESTO_SUBTOTAL_LABELED_OUTPUT_PATH = "data/00APEC_2024_low_with_subtotals.csv"
-SUPPLY_EXPORT_DATASET_KEY = "esto"
+SUPPLY_EXPORT_DATASET_KEY = "ninth"
 SUPPLY_EXPORT_DIR = GLOBAL_EXPORT_OUTPUT_DIR
 SUPPLY_EXPORT_FILE_NAME = _default_supply_export_filename(
     GLOBAL_ECONOMIES,
@@ -154,6 +174,13 @@ SUPPLY_SHEET_NAME = "LEAP"
 # When False, the supply export will not write the "Unmet Requirements" measure,
 # leaving it for manual setup in LEAP.
 SUPPLY_INCLUDE_UNMET_REQUIREMENTS = False
+# Workbook-driven supply root classification (Resources\Primary vs Resources\Secondary).
+# Source of truth for export branch-root selection when generating supply workbooks.
+SUPPLY_ROOT_CLASSIFICATION_SOURCE_PATH = REPO_ROOT / "data" / "full model export.xlsx"
+SUPPLY_ROOT_CLASSIFICATION_SOURCE_SHEET = "Export"
+# When True, raise if a fuel is not found in the source workbook lookup.
+# When False, warn and fall back to legacy ESTO-based classification.
+SUPPLY_ROOT_CLASSIFICATION_STRICT = False
 
 ###############################
 # SUPPLY WORKFLOW (WRAPPER)
@@ -183,7 +210,7 @@ TRANSFERS_NOTEBOOK_CURRENT_ACCOUNTS = True
 # MINOR DEMAND WORKFLOW
 ###############################
 MINOR_DEMAND_EXPORT_FILENAME_TEMPLATE = (
-    "outputs/leap_exports/minor_demand_export_{economy}_{scenario}.xlsx"
+    str(STANDALONE_LEAP_EXPORTS_ROOT / "minor_demand_export_{economy}_{scenario}.xlsx")
 )
 MINOR_DEMAND_EXPORT_MODEL_NAME = "Minor demand import"
 MINOR_DEMAND_EXPORT_REGION = GLOBAL_REGION
@@ -252,7 +279,7 @@ FULL_MODEL_HYDROGEN_TRANSFORMATION_FILENAME_TEMPLATE = None
 FULL_MODEL_SUPPLY_ECONOMIES = list(GLOBAL_ECONOMIES)
 FULL_MODEL_SUPPLY_SCENARIOS = list(GLOBAL_SCENARIOS)
 FULL_MODEL_SUPPLY_INCLUDE_LEAP_IMPORT = None
-FULL_MODEL_SUPPLY_EXPORT_DATASET_KEY = "esto"
+FULL_MODEL_SUPPLY_EXPORT_DATASET_KEY = "ninth"
 
 # Transfers workflow config
 FULL_MODEL_TRANSFERS_ECONOMIES = list(GLOBAL_ECONOMIES)
@@ -278,3 +305,10 @@ FULL_MODEL_INDUSTRY_ECONOMY = "20_USA"
 FULL_MODEL_INDUSTRY_BASE_YEAR = GLOBAL_BASE_YEAR
 FULL_MODEL_INDUSTRY_SCENARIO = "Target"
 FULL_MODEL_INDUSTRY_REGION = GLOBAL_REGION
+# Industry base-year handling:
+# - ensure_base_year_from_current_accounts=True tries to copy base-year points
+#   from Current Accounts into projected scenarios when missing.
+# - enforce_base_year_presence=False means warn-only when projected series still
+#   lack base-year points after anchoring (no hard failure).
+FULL_MODEL_INDUSTRY_ENSURE_BASE_YEAR_FROM_CURRENT_ACCOUNTS = True
+FULL_MODEL_INDUSTRY_ENFORCE_BASE_YEAR_PRESENCE = False

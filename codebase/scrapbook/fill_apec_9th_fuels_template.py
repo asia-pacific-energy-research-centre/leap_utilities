@@ -7,6 +7,8 @@ from pathlib import Path
 import pandas as pd
 from openpyxl import load_workbook
 
+from codebase.utilities.master_config import read_config_table
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CSV_PATH = REPO_ROOT / "data" / "merged_file_energy_00_APEC_20251106.csv"
@@ -21,7 +23,7 @@ SECTOR_MAP = {
     "TPES": "07_total_primary_energy_supply",
 }
 
-TARGET_YEARS = list(range(2000, 2061))
+TARGET_YEARS = list(range(2000, 2060 + 1))
 TARGET_BUCKETS = [
     "Coal",
     "Oil",
@@ -94,7 +96,7 @@ def _bucket_from_codes_and_name(fuel_code: str, subfuel_code: str, name: str) ->
 
 def main() -> None:
     df = pd.read_csv(CSV_PATH)
-    code_map = pd.read_excel(MAP_PATH, sheet_name="code_to_name")[["9th_label", "9th_column", "name"]]
+    code_map = read_config_table(MAP_PATH, sheet_name="code_to_name")[["9th_label", "9th_column", "name"]]
     code_map = code_map.dropna(subset=["9th_label", "9th_column"]).copy()
     code_map["9th_label"] = code_map["9th_label"].astype(str)
     code_map["9th_column"] = code_map["9th_column"].astype(str)

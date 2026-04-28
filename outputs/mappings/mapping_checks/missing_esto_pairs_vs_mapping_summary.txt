@@ -1,0 +1,10 @@
+base_year=2022
+esto_rows=175266
+esto_non_subtotal_rows=129444
+esto_non_subtotal_nonzero_rows=7729
+unique_esto_non_subtotal_nonzero_pairs=1528
+unique_mapping_esto_pairs=2002
+missing_esto_pairs_in_mapping=1
+mapped_pairs_not_in_esto_nonzero=475
+missing_csv=/mnt/c/Users/Work/github/leap_utilities/outputs/mappings/mapping_checks/missing_esto_pairs_vs_mapping_non_subtotal_2022_nonzero.csv
+reverse_csv=/mnt/c/Users/Work/github/leap_utilities/outputs/mappings/mapping_checks/mapped_esto_pairs_not_in_non_subtotal_2022_nonzero.csv

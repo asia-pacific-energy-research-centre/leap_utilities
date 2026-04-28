@@ -1,0 +1,6 @@
+mapping_rows=4425
+faulty_mapping_true_rows=2
+unique_mapping_pairs=1062
+unique_pairs_csv_pairs=9871
+missing_pairs=8809
+missing_csv=outputs/mappings/mapping_checks/missing_9th_sector_fuel_pairs_vs_mapping.csv

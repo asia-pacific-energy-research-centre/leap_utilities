@@ -1,3 +1,12 @@
+"""
+Expose the main LEAP utility helpers used by workflows and notebooks.
+
+This package initializer re-exports common branch, Excel import/export, API,
+and comparison functions so callers can import them from `codebase`. Keep this
+file limited to stable public helpers; workflow-specific logic should stay in
+the workflow modules.
+"""
+
 from .functions.leap_core import (
     connect_to_leap,
     safe_branch_call,
@@ -51,18 +60,8 @@ from .functions.energy_use_reconciliation import (
 )
 from .functions.leap_series_comparison import (
     ComparisonRunConfig,
-    TransportResultsComparisonConfig,
     ComparisonArtifacts,
     run_leap_series_comparison,
-    run_transport_results_table_comparison,
-)
-from .transport_results_comparison_workflow import (
-    build_config as build_transport_results_comparison_config,
-    run_with_config as run_transport_results_comparison_workflow,
-)
-from .leap_series_analysis_workflow import (
-    build_config as build_leap_series_analysis_config,
-    run_with_config as run_leap_series_analysis_workflow,
 )
 
 from .configuration.config import region_id_name_dict, scenario_dict
@@ -112,14 +111,8 @@ __all__ = [
     "reconcile_energy_use",
     # series comparison
     "ComparisonRunConfig",
-    "TransportResultsComparisonConfig",
     "ComparisonArtifacts",
     "run_leap_series_comparison",
-    "run_transport_results_table_comparison",
-    "build_transport_results_comparison_config",
-    "run_transport_results_comparison_workflow",
-    "build_leap_series_analysis_config",
-    "run_leap_series_analysis_workflow",
     # economy config
     "region_id_name_dict",
     "scenario_dict",

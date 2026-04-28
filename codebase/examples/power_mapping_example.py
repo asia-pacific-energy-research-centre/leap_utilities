@@ -37,6 +37,21 @@ def run_power_mapping_example():
         create_branches_from_export_file,
         connect_to_leap,
     )
+    from codebase.functions.analysis_input_write_dispatcher import (
+        dispatch_analysis_input_write,
+        get_analysis_input_write_mode,
+    )
+
+    write_mode = get_analysis_input_write_mode()
+    if write_mode == "workbook":
+        dispatch_analysis_input_write(
+            export_path=Path(LEAP_EXPORT_FILENAME),
+            sheet_name=SHEET_NAME,
+            scenario=SCENARIO,
+            region=REGION,
+            context_label="examples.power_mapping_example",
+        )
+        return
 
     L = connect_to_leap()
 

@@ -5,7 +5,7 @@
 - **Data sources**: `transformation_analysis_utils.py` (analytics) and the `transformation_entry.py` entrypoint (via `transformation_workflow.py`) read the cleansed 9th/ESTO tables in `data/merged_file_energy_ALL_20250814_pre_trump.csv` and `data/00APEC_2024_low.csv` (updated to 2025 when that data becomes available), plus the subtotal mapping workbook `config/ESTO_subtotal_mapping.xlsx`. For exact 9th edition projection matching, switch to `data/merged_file_energy_ALL_20251106.csv` and `data/merged_file_energy_00_APEC_20251106`.
 - **Code/label mappings**: Optional name lookups and subtotal helpers live under `config/`, including `config/sector_fuel_codes_to_names*.xlsx` and the subtotal mapping workbook.
 - **Purpose**: The workflows derive LEAP parameters (outputs, feedstocks, auxiliaries, losses, efficiencies, imports/exports) under `Transformation` and `Resources/Primary`, then map the Excel exports back into LEAP to update branch trees.
-- **Execution order**: Run the transformation extractor before (or alongside) the supply extractor. Each script writes its own XLSX under `outputs/leap_exports/`. Use the matching mapping script afterwards to push the data into LEAP (scenario/economy chunks are embedded in file names and sheet metadata).
+- **Execution order**: Run the transformation extractor before (or alongside) the supply extractor. Standalone LEAP-import workbooks now land under `outputs/leap_exports/standalone/`, while integrated supply-link exports land under `outputs/leap_exports/results_supply_link/`. Use the matching mapping script afterwards to push the data into LEAP (scenario/economy chunks are embedded in file names and sheet metadata).
 
 
 ## Typical workflow & modeling connotations
@@ -78,7 +78,7 @@ The other modules in this repo mostly support these workflow files (shared const
 ## power_workflow.py
 
 - Standalone import workflow for power-sector LEAP export files, currently configured for `data/power export.xlsx` (`Export` sheet).
-- Copies the source workbook into `outputs/leap_exports/power_export_prepared_{economy}_{scenario}.xlsx` before any edits, so the source export is unchanged.
+- Copies the source workbook into `outputs/leap_exports/standalone/power_export_prepared_{economy}_{scenario}.xlsx` before any edits, so the source export is unchanged.
 - Aligns scenarios by duplicating `Optimization` rows into `Reference` and `Target` while preserving `Current Accounts`.
 - Validates fuel labels under `Output Fuels` / `Feedstock Fuels` / `Auxiliary Fuels` against cleaned ESTO products (`data/00APEC_2024_low.csv`) and writes `intermediate_data/power_fuel_validation_report.csv`.
 - Supports explicit `SKIP_VARIABLES` for control/optimization variables and writes a consolidated fill audit report to `intermediate_data/power_fill_audit_report.csv`.
@@ -100,7 +100,7 @@ The other modules in this repo mostly support these workflow files (shared const
 1. Loads the 9th/ESTO tables, applies the subtotal mapping, optionally saves the subtotal-labeled ESTO file, and filters to the Reference scenario.
 2. Adds the `ALL` economy rows if `INCLUDE_ALL_ECONOMIES` is `True`.
 3. `build_supply_log_rows` loops through every configured fuel, uses `get_flow_total_for_fuel` to sum base-year import/export values, and coerces each scalar into a per-year dict via `coerce_value_by_year` so the log matches LEAP’s yearly format. Export totals are normalized with `normalize_supply_flow_total` so LEAP always sees positive exports even if the source balance records a negative value.
-4. Logs are finalised with `finalise_export_df`, then persisted via `save_export_files` to `outputs/leap_exports/supply_leap_imports_{economy}_{scenarios}.xlsx`. Scenario list defaults to `["Current Accounts", "Reference", "Target"]`. You can override the export folder during testing or reruns with `SUPPLY_LEAP_EXPORT_DIR=/tmp/custom_dir`.
+4. Logs are finalised with `finalise_export_df`, then persisted via `save_export_files` to `outputs/leap_exports/standalone/supply_leap_imports_{economy}_{scenarios}.xlsx`. Scenario list defaults to `["Current Accounts", "Reference", "Target"]`. You can override the export folder during testing or reruns with `SUPPLY_LEAP_EXPORT_DIR=/tmp/custom_dir`.
 
 ### Modeling implications
 
@@ -122,7 +122,7 @@ The other modules in this repo mostly support these workflow files (shared const
 
 1. Pulls the ESTO reference data from `transformation_analysis_utils.py`, filters transfer flow rows, and applies the per-economy process configuration.
 2. Builds process records (inputs/outputs, optional output targets) using the same sign conventions as the transformation pipeline (negative = input, positive = output).
-3. Merges duplicate process rows, optionally consolidates output series/targets, and saves the workbook as `outputs/leap_exports/transfer_leap_imports_{economy}_{scenario}.xlsx`.
+3. Merges duplicate process rows, optionally consolidates output series/targets, and saves the workbook as `outputs/leap_exports/standalone/transfer_leap_imports_{economy}_{scenario}.xlsx`.
 4. Optionally imports into LEAP via `run_transfer_export_and_import` / `import_transfer_workbook_to_leap`, which uses the standard branch-creation helpers.
 
 ### Modeling implications
@@ -143,7 +143,7 @@ The other modules in this repo mostly support these workflow files (shared const
 1. Loads ESTO and 9th datasets, drops subtotals, and filters 9th to the projection scenario.
 2. Filters the 9th↔ESTO mapping to the minor-demand flows in `MINOR_DEMAND_FLOW_CONFIG`.
 3. Allocates 9th projections to ESTO pairs (`build_esto_projection_table`) and builds per-fuel Activity Level rows plus Final Energy Intensity rows.
-4. Writes `outputs/leap_exports/minor_demand_export_{economy}_{scenario}.xlsx` and (optionally) creates/fills LEAP branches via `create_branches_from_export_file` and `fill_branches_from_export_file`.
+4. Writes `outputs/leap_exports/standalone/minor_demand_export_{economy}_{scenario}.xlsx` and (optionally) creates/fills LEAP branches via `create_branches_from_export_file` and `fill_branches_from_export_file`.
 
 ### Modeling implications
 

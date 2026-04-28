@@ -1,4 +1,13 @@
 #%%
+"""
+Build transformation export workbooks and optionally fill LEAP branches.
+
+This workflow runs the configured transformation analyses, assembles process
+records into LEAP import workbooks, and can push those workbooks into LEAP. It
+covers the main transformation processes and should be the default entry point
+for non-hydrogen transformation exports.
+"""
+
 # Transformation export pipeline helpers that build workbooks and optionally fill LEAP branches.
 # Most user-editable settings live in `codebase/workflow_config.py`.
 from __future__ import annotations
@@ -20,6 +29,9 @@ if str(CURRENT_DIR) not in sys.path:
 from codebase.functions import transformation_analysis_utils as core
 from codebase.configuration import workflow_config as workflow_cfg
 from codebase.functions import leap_api, leap_exports
+from codebase.functions.analysis_input_write_dispatcher import (
+    get_analysis_input_write_mode,
+)
 from codebase.configuration.config import (
     BRANCH_DEMAND_CATEGORY,
     BRANCH_DEMAND_TECHNOLOGY,
@@ -42,8 +54,10 @@ DEFAULT_SCENARIOS = list(workflow_cfg.TRANSFORMATION_WORKFLOW_DEFAULT_SCENARIOS)
 RUN_LNG_ANALYSIS = core.RUN_LNG_ANALYSIS
 RUN_GAS_PROCESSING_ANALYSIS = core.RUN_GAS_PROCESSING_ANALYSIS
 RUN_COAL_TRANSFORMATION_ANALYSIS = core.RUN_COAL_TRANSFORMATION_ANALYSIS
+RUN_OTHER_TRANSFORMATION_ANALYSIS = core.RUN_OTHER_TRANSFORMATION_ANALYSIS
 RUN_CHARCOAL_PROCESSING_ANALYSIS = core.RUN_CHARCOAL_PROCESSING_ANALYSIS
 RUN_NONSPECIFIED_TRANSFORMATION_ANALYSIS = core.RUN_NONSPECIFIED_TRANSFORMATION_ANALYSIS
+RUN_HYDROGEN_TRANSFORMATION_ANALYSIS = core.RUN_HYDROGEN_TRANSFORMATION_ANALYSIS
 
 ANALYSIS_REGISTRY = [
     ("lng", core.run_lng_analysis, RUN_LNG_ANALYSIS),
@@ -54,9 +68,26 @@ ANALYSIS_REGISTRY = [
     ("coal_bkb_pb_plants", core.run_flow_sector_analysis, RUN_COAL_TRANSFORMATION_ANALYSIS),
     ("coal_liquefaction", core.run_flow_sector_analysis, RUN_COAL_TRANSFORMATION_ANALYSIS),
     ("coal_mines", core.run_flow_sector_analysis, RUN_COAL_TRANSFORMATION_ANALYSIS),
+    ("electric_boilers", core.run_flow_sector_analysis, RUN_OTHER_TRANSFORMATION_ANALYSIS),
+    ("chemical_heat_for_electricity_production", core.run_flow_sector_analysis, RUN_OTHER_TRANSFORMATION_ANALYSIS),
+    ("petrochemical_industry", core.run_flow_sector_analysis, RUN_OTHER_TRANSFORMATION_ANALYSIS),
+    ("biofuels_processing", core.run_flow_sector_analysis, RUN_OTHER_TRANSFORMATION_ANALYSIS),
     ("charcoal_processing", core.run_flow_sector_analysis, RUN_CHARCOAL_PROCESSING_ANALYSIS),
     ("nonspecified_transformation", core.run_flow_sector_analysis, RUN_NONSPECIFIED_TRANSFORMATION_ANALYSIS),
+    ("hydrogen_transformation", core.run_hydrogen_transformation_analysis, RUN_HYDROGEN_TRANSFORMATION_ANALYSIS),
 ]
+
+
+def _print_reset_reminder_for_import(include_leap_import: bool) -> None:
+    """Remind users that standalone transformation import does not clear stale trade targets."""
+    if not include_leap_import:
+        return
+    print(
+        "[WARN] Reset reminder: standalone transformation workflow import does not perform a global "
+        "supply/transformation trade reset. If you need a clean rerun, run "
+        "codebase/results_supply_link_workflow.py with "
+        "MAIN_RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT=True."
+    )
 
 
 def format_export_filename(
@@ -104,6 +135,7 @@ def build_transformation_rows(economies: Iterable[str] | None = None) -> list[di
 def collect_transformation_rows(
     economies: Iterable[str] | None = None,
     aggregate_economy_label: str | None = None,
+    projection_scenario: str | None = None,
 ) -> list[dict]:
     """Collect process rows with optional synthetic all-economies aggregation."""
     economy_list = workflow_common.normalize_economies(economies or core.ECONOMIES_TO_ANALYZE)
@@ -115,7 +147,91 @@ def collect_transformation_rows(
     data_map_override = None
     import_export_data_override = None
     import_export_year_cols_override = None
-    if should_aggregate:
+    normalized_projection_scenario = str(projection_scenario or "").strip().lower()
+    if normalized_projection_scenario:
+        scenario_ninth = core.clean_esto_subtotals(core.ninth_data_raw, core.ninth_year_cols)
+        if "scenarios" in scenario_ninth.columns:
+            scenario_filtered = scenario_ninth[
+                scenario_ninth["scenarios"].astype(str).str.strip().str.lower() == normalized_projection_scenario
+            ].copy()
+            if scenario_filtered.empty:
+                raise ValueError(
+                    f"No 9th rows found for projection_scenario={projection_scenario!r}"
+                )
+            scenario_ninth = scenario_filtered
+        if "subtotal_results" in scenario_ninth.columns:
+            scenario_ninth = scenario_ninth[scenario_ninth["subtotal_results"] == False].copy()
+        scenario_ninth = core.filter_total_energy_rows(scenario_ninth)
+
+        scenario_esto = core.normalize_esto_economy_codes(core.esto_data_raw.copy())
+        scenario_esto = core.filter_total_energy_rows(scenario_esto)
+        scenario_esto_with_subtotals = core.apply_matt_subtotal_mapping(
+            scenario_esto,
+            core.SUBTOTAL_MAPPING_PATH,
+        )
+        scenario_esto = core.filter_matt_subtotals(scenario_esto_with_subtotals)
+        scenario_esto_year_cols = sorted([col for col in scenario_esto.columns if str(col).isdigit()])
+
+        if should_aggregate:
+            scenario_ninth = core.add_all_economy_total(
+                scenario_ninth,
+                core.ninth_year_cols,
+                aggregate_label,
+            )
+            scenario_esto = core.add_all_economy_total(
+                scenario_esto,
+                scenario_esto_year_cols,
+                aggregate_label,
+            )
+            run_economies = [aggregate_label]
+
+        projection_sign_stable_flows = core.resolve_projection_sign_stable_flows(
+            core.PROJECTION_SIGN_STABLE_MODE,
+            core.SIGN_STABLE_PROJECTION_FLOWS,
+        )
+        try:
+            projection_df, _ = core.build_esto_projection_table(
+                ninth_data=scenario_ninth,
+                esto_data=scenario_esto,
+                mapping_path=core.NINTH_TO_ESTO_MAPPING_PATH,
+                base_year=core.BASE_YEAR,
+                projection_years=core.PROJECTION_YEAR_RANGE,
+                scenario=normalized_projection_scenario,
+                sign_stable_flows=projection_sign_stable_flows,
+                strict_conservation=core.PROJECTION_STRICT_CONSERVATION,
+            )
+        except ValueError as exc:
+            print(
+                "[WARN] Projection strict-conservation check failed for "
+                f"projection_scenario={projection_scenario!r}; retrying non-strict: {exc}"
+            )
+            projection_df, _ = core.build_esto_projection_table(
+                ninth_data=scenario_ninth,
+                esto_data=scenario_esto,
+                mapping_path=core.NINTH_TO_ESTO_MAPPING_PATH,
+                base_year=core.BASE_YEAR,
+                projection_years=core.PROJECTION_YEAR_RANGE,
+                scenario=normalized_projection_scenario,
+                sign_stable_flows=projection_sign_stable_flows,
+                strict_conservation=False,
+            )
+        scenario_esto = core.merge_projection_into_esto(
+            scenario_esto,
+            projection_df,
+            core.PROJECTION_YEAR_RANGE,
+        )
+        scenario_esto_year_cols = sorted([col for col in scenario_esto.columns if str(col).isdigit()])
+        data_map_override = core.build_dataset_map(
+            scenario_esto,
+            scenario_esto_year_cols,
+            scenario_ninth,
+            core.ninth_year_cols,
+            core.esto_data_raw,
+            core.esto_year_cols_raw,
+        )
+        import_export_data_override = scenario_esto
+        import_export_year_cols_override = scenario_esto_year_cols
+    elif should_aggregate:
         aggregated_ninth = core.add_all_economy_total(
             core.ninth_data,
             core.ninth_year_cols,
@@ -380,6 +496,7 @@ def run_transformation_export_and_import(
     **export_kwargs,
 ) -> list[Path]:
     """Run exports and optionally push the workbook into LEAP."""
+    _print_reset_reminder_for_import(include_leap_import)
     exports = assemble_transformation_workbook(
         economies=economies,
         scenarios=scenarios,
@@ -399,7 +516,7 @@ def run_transformation_export_and_import(
         scenario_list,
         import_scenario,
     )
-    if not LEAP_API_AVAILABLE:
+    if get_analysis_input_write_mode() == "api" and not LEAP_API_AVAILABLE:
         print(
             "[INFO] LEAP API unavailable in this environment; skipping branch creation/fill."
         )
@@ -444,12 +561,20 @@ def import_transformation_workbook_to_leap(
     filename: str | None = None,
     scenario_to_run: str | None = None,
     region: str | None = None,
-    include_current_accounts: bool = True,
+    include_current_accounts: bool = False,
     create_branches: bool = True,
     fill_branches: bool = True,
     raise_on_missing_branch: bool = False,
 ) -> Path:
     """Connect to LEAP, create the branches, and fill the data from the export file."""
+    if (
+        str(scenario_to_run or "").strip().lower() in {"current accounts", "current account"}
+        and not include_current_accounts
+    ):
+        raise ValueError(
+            "Direct transformation LEAP import for 'Current Accounts' is disabled "
+            "unless include_current_accounts=True is passed explicitly."
+        )
     export_path = find_transformation_workbook(export_directory, filename)
     target_region = region or core.EXPORT_REGION
     return leap_api.import_workbook(
@@ -537,7 +662,7 @@ def run_transformation_leap_import(
     filename: str | None = None,
     scenario_to_run: str | None = None,
     region: str | None = None,
-    include_current_accounts: bool = True,
+    include_current_accounts: bool = False,
     create_branches: bool = True,
     fill_branches: bool = True,
     raise_on_missing_branch: bool = False,
@@ -558,7 +683,9 @@ def run_transformation_leap_import(
 
 # Simple notebook-focused configuration block.
 NOTEBOOK_SCENARIOS = ["Reference", "Target", "Current Accounts"]
-NOTEBOOK_INCLUDE_LEAP_IMPORT = LEAP_API_AVAILABLE
+NOTEBOOK_INCLUDE_LEAP_IMPORT = (
+    LEAP_API_AVAILABLE if get_analysis_input_write_mode() == "api" else True
+)
 NOTEBOOK_IMPORT_SCENARIOS = [
     scenario.lower()
     for scenario in NOTEBOOK_SCENARIOS
@@ -582,3 +709,14 @@ def run_with_notebook_config() -> list[Path]:
 if __name__ == "__main__":
     run_with_notebook_config()
 #%%
+
+
+try:
+    from codebase.utilities.workflow_common import emit_completion_beep as _emit_completion_beep
+except Exception:  # pragma: no cover
+    def _emit_completion_beep(*, success: bool = True) -> None:  # noqa: ARG001
+        return
+
+
+if __name__ == "__main__":  # pragma: no cover
+    _emit_completion_beep(success=True, style="chime")

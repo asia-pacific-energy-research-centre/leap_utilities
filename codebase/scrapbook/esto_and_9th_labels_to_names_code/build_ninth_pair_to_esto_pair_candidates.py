@@ -6,7 +6,7 @@
 #final m,oved to config\ninth_pairs_to_esto_pairs.csv
 #%%
 
-"""
+r"""
 
 This mapping connects 9th sector/fuel pairs to ESTO flow/product pairs.
 It is built from the most detailed non‑x 9th sector and fuel labels and includes some one‑to‑many and many‑to‑one relationships (but no many‑to‑many).
@@ -45,6 +45,7 @@ import re
 import os
 
 import pandas as pd
+from codebase.utilities.master_config import config_table_exists, read_config_table
 REPO_ROOT = Path(__file__).resolve().parents[3]
 NINTH_PAIR_PATH = REPO_ROOT / "outputs" / "ninth_pairs_base_year_nonzero.csv"
 NINTH_FLATTENED_PATH = REPO_ROOT / "outputs" / "ninth_flattened_rows.csv"
@@ -86,6 +87,13 @@ def _extract_esto_code(label: str) -> str:
     return match.group(0) if match else ""
 
 
+def _build_code_match_method(levels_up: int) -> str:
+    levels_up = max(int(levels_up), 0)
+    if levels_up == 0:
+        return "direct_code_match"
+    return f"parent_code_match_{levels_up}_levels_up"
+
+
 def _build_code_index(labels: list[str]) -> dict[str, list[str]]:
     index: dict[str, list[str]] = {}
     for label in labels:
@@ -103,7 +111,7 @@ def _match_code_to_label(
 ) -> tuple[str, str]:
     lowered = (ninth_label or "").lower()
     if any(token in lowered for token in SKIP_LABEL_TOKENS):
-        return "", "skip_unallocated_or_x"
+        return "", "skipped_x_or_unallocated"
     code = _extract_ninth_code(ninth_label)
     if not code:
         return "", ""
@@ -112,7 +120,7 @@ def _match_code_to_label(
     for i in range(len(parts), 0, -1):
         candidate = ".".join(parts[:i])
         if candidate in index:
-            method = "code_exact" if i == len(parts) else f"code_ancestor_{len(parts) - i}"
+            method = _build_code_match_method(len(parts) - i)
             return index[candidate][0], method
     return "", ""
 
@@ -222,9 +230,9 @@ def main() -> None:
 
     product_map = {}
     flow_map = {}
-    if INDEPENDENT_MAPPING_PATH.exists():
-        prod_df = pd.read_excel(INDEPENDENT_MAPPING_PATH, sheet_name="product", dtype=str).fillna("")
-        flow_df = pd.read_excel(INDEPENDENT_MAPPING_PATH, sheet_name="flow", dtype=str).fillna("")
+    if config_table_exists(INDEPENDENT_MAPPING_PATH, sheet_name="product"):
+        prod_df = read_config_table(INDEPENDENT_MAPPING_PATH, sheet_name="product", dtype=str).fillna("")
+        flow_df = read_config_table(INDEPENDENT_MAPPING_PATH, sheet_name="flow", dtype=str).fillna("")
         product_map = _build_independent_map(
             prod_df,
             ["9th_fuel", "9th_label", "9th_product"],
@@ -340,8 +348,16 @@ def main() -> None:
                                 "9th_fuel": fuel,
                                 "esto_flow": flow,
                                 "esto_product": product,
-                                "sector_match_method": "independent_exact_x" if is_x else "independent_exact",
-                                "fuel_match_method": "independent_exact_x" if is_x else "independent_exact",
+                                "sector_match_method": (
+                                    "independent_table_direct_match_x_category"
+                                    if is_x
+                                    else "independent_table_direct_match"
+                                ),
+                                "fuel_match_method": (
+                                    "independent_table_direct_match_x_category"
+                                    if is_x
+                                    else "independent_table_direct_match"
+                                ),
                             }
                         )
                         mapped_pairs.add((flow, product))
@@ -376,8 +392,8 @@ def main() -> None:
                         "9th_fuel": fuel,
                         "esto_flow": flow,
                         "esto_product": product,
-                        "sector_match_method": "nonspecified_fallback",
-                        "fuel_match_method": "nonspecified_fallback",
+                        "sector_match_method": "nonspecified_category_fallback",
+                        "fuel_match_method": "nonspecified_category_fallback",
                     }
                 )
                 mapped_pairs.add((flow, product))
@@ -413,8 +429,8 @@ def main() -> None:
                             "9th_fuel": ninth_fuel,
                             "esto_flow": flow,
                             "esto_product": product,
-                            "sector_match_method": "independent_reverse",
-                            "fuel_match_method": "independent_reverse",
+                            "sector_match_method": "independent_table_reverse_lookup",
+                            "fuel_match_method": "independent_table_reverse_lookup",
                         }
                     )
         else:
@@ -424,8 +440,8 @@ def main() -> None:
                     "9th_fuel": "",
                     "esto_flow": flow,
                     "esto_product": product,
-                    "sector_match_method": "unmatched_esto_pair_nonzero",
-                    "fuel_match_method": "unmatched_esto_pair_nonzero",
+                    "sector_match_method": "unmapped_nonzero_esto_pair",
+                    "fuel_match_method": "unmapped_nonzero_esto_pair",
                 }
             )
     if extra_rows:

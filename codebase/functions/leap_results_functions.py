@@ -28,6 +28,11 @@ except ImportError:
 
 # Stable constants
 REPO_ROOT = Path(__file__).resolve().parents[2]
+from codebase.functions.leap_api_guard import ensure_leap_api_allowed
+from codebase.functions.leap_session import (
+    get_live_pinned_leap_app,
+    pin_leap_app,
+)
 
 
 def ensure_repo_on_path() -> None:
@@ -38,8 +43,14 @@ def ensure_repo_on_path() -> None:
 
 def connect_leap(*, visible: bool = False, reuse_running: bool = True):
     """Return a LEAPApplication COM object, reusing a running instance when possible."""
+    ensure_leap_api_allowed("leap_results_functions.connect_leap")
     if win32com is None:
         raise ImportError("pywin32 is required for LEAP COM access (Windows only)")
+    pinned = get_live_pinned_leap_app()
+    if pinned is not None:
+        if visible:
+            pinned.Visible = True
+        return pinned
     app = None
     if reuse_running:
         try:
@@ -48,6 +59,7 @@ def connect_leap(*, visible: bool = False, reuse_running: bool = True):
             app = None
     if app is None:
         app = win32com.client.Dispatch("Leap.LEAPApplication")
+    pin_leap_app(app)
     # Only change visibility when the caller explicitly asks; avoid hiding an existing UI.
     if visible:
         app.Visible = True

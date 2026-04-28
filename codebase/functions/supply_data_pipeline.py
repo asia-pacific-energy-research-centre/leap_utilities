@@ -15,6 +15,8 @@ from typing import Iterable
 
 import pandas as pd
 
+from codebase.utilities.master_config import config_table_exists, read_config_table
+
 # Ensure the repository root is importable for scripts executed from any location.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 try:
@@ -25,7 +27,11 @@ except Exception as exc:
 
 from codebase.configuration.config import scenario_dict
 from codebase.utilities import workflow_common
+from codebase.utilities import fuel_catalog_preflight
 from codebase.configuration import workflow_config as workflow_cfg
+from codebase.functions.analysis_input_write_dispatcher import (
+    dispatch_analysis_input_write,
+)
 from codebase.functions.leap_core import (
     connect_to_leap,
     ensure_fuel_exists,
@@ -35,6 +41,7 @@ from codebase.functions.leap_core import (
 from codebase.scrapbook.utilities import (
     apply_matt_subtotal_mapping,
     filter_matt_subtotals,
+    load_augmented_reference_tables,
     save_subtotal_labeled_data,
 )
 from codebase.functions.leap_excel_io import finalise_export_df, save_export_files
@@ -62,8 +69,9 @@ CODE_TO_NAME_PATHS = [
 
 BASE_YEAR = 2022
 PROJECTION_START_YEAR = 2023
-PROJECTION_END_YEAR = 2061
+PROJECTION_END_YEAR = 2060
 PROJECTION_YEAR_RANGE = list(range(PROJECTION_START_YEAR, PROJECTION_END_YEAR + 1))
+REFERENCE_CACHE_DIR = DATA_DIR / ".cache" / "supply_reference_tables"
 ENABLE_DEBUG_BREAKPOINTS = True
 PRINT_FUEL_ROWS = True
 PRINT_ONLY_NONZERO_ROWS = True
@@ -113,7 +121,6 @@ def normalize_supply_flow_total(flow_key, total_value):
         raise
 
 EXCLUDED_ESTO_PREFIXES = ["19", "20", "21"]
-SUPPLY_BRANCH_ROOT = ["Resources", "Primary"]
 SUPPLY_MEASURES = [
     {"name": "Imports", "flow_key": "imports", "units": "Petajoule", "per": ""},
     {"name": "Exports", "flow_key": "exports", "units": "Petajoule", "per": ""},
@@ -147,12 +154,36 @@ EXPORT_ECONOMY_REGION_OVERRIDES = {"20USA": EXPORT_REGION}
 SAVE_PROJECTION_DIAGNOSTICS = False
 PROJECTION_DIAGNOSTICS_PATH = REPO_ROOT / "outputs" / "ninth_supply_projection_fallbacks.csv"
 SUPPLY_PROJECTION_LOOKUP = None
-
-SECONDARY_ESTO_PRODUCT_PREFIXES = (
-    "02 ",  # Coal products
-    "04 ",  # Peat products
-    "07 ",  # Petroleum/refined products
+SUPPLY_ROOT_CLASSIFICATION_SOURCE_PATH = Path(
+    getattr(
+        workflow_cfg,
+        "SUPPLY_ROOT_CLASSIFICATION_SOURCE_PATH",
+        REPO_ROOT / "data" / "full model export.xlsx",
+    )
 )
+SUPPLY_ROOT_CLASSIFICATION_SOURCE_SHEET = str(
+    getattr(
+        workflow_cfg,
+        "SUPPLY_ROOT_CLASSIFICATION_SOURCE_SHEET",
+        "Export",
+    )
+)
+SUPPLY_ROOT_CLASSIFICATION_STRICT = bool(
+    getattr(
+        workflow_cfg,
+        "SUPPLY_ROOT_CLASSIFICATION_STRICT",
+        False,
+    )
+)
+
+_SUPPLY_ROOT_LOOKUP_CACHE: dict[str, str] | None = None
+_SUPPLY_ROOT_LOOKUP_SOURCE_INFO: dict[str, object] | None = None
+_SUPPLY_ROOT_LOOKUP_MISS_WARNED: set[str] = set()
+_SUPPLY_BRANCH_PATH_LOOKUP_CACHE: set[str] | None = None
+_SUPPLY_BRANCH_PATH_LOOKUP_SOURCE_INFO: dict[str, object] | None = None
+_SUPPLY_BRANCH_PATH_MISS_WARNED: set[str] = set()
+
+SECONDARY_ESTO_PRODUCT_MAJOR_CODES = {"02", "04", "07"}
 SECONDARY_ESTO_PRODUCT_EXACT = {
     "06.03 Refinery feedstocks",
     "06.04 Additives/  oxygenates",
@@ -170,20 +201,311 @@ SECONDARY_ESTO_PRODUCT_EXACT = {
 }
 
 
+def _esto_product_major_code(product):
+    """Return the two-digit ESTO major product code when present."""
+    text = str(product or "").strip()
+    match = re.match(r"^(\d{2})(?:[.\s]|$)", text)
+    if match:
+        return match.group(1)
+    return ""
+
+
 def _is_secondary_esto_product(product):
     """Return True for ESTO products that originate from transformation/refinement."""
-    if product.startswith(("19 ", "20 ", "21 ")):
+    major_code = _esto_product_major_code(product)
+    if major_code in {"19", "20", "21"}:
         return False
     if product in SECONDARY_ESTO_PRODUCT_EXACT:
         return True
-    return any(product.startswith(prefix) for prefix in SECONDARY_ESTO_PRODUCT_PREFIXES)
+    return major_code in SECONDARY_ESTO_PRODUCT_MAJOR_CODES
 
 
 ESTO_PRODUCT_CLASSIFICATION = {
     product: ("secondary" if _is_secondary_esto_product(product) else "primary")
     for product in ESTO_PRODUCT_LIST
-    if not product.startswith(("19 ", "20 ", "21 "))
+    if _esto_product_major_code(product) not in {"19", "20", "21"}
 }
+
+
+def _normalize_supply_lookup_fuel_name(value):
+    """Normalize a fuel label into a stable lookup key for branch-root resolution."""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    sanitized = sanitize_leap_name(text)
+    normalized = " ".join(str(sanitized or "").strip().lower().split())
+    return normalized
+
+
+def _read_branch_variable_rows_from_workbook(
+    source_path,
+    sheet_name="Export",
+):
+    """Read workbook rows by auto-detecting the header row containing Branch Path + Variable."""
+    path = Path(str(source_path).replace("\\", "/"))
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    if not path.exists():
+        return pd.DataFrame()
+    raw = read_config_table(path, sheet_name=sheet_name, header=None)
+    header_row = None
+    for idx in range(len(raw.index)):
+        values = {
+            str(item).strip().lower()
+            for item in raw.iloc[idx].tolist()
+            if str(item).strip() and str(item).lower() != "nan"
+        }
+        if "branch path" in values and "variable" in values:
+            header_row = int(idx)
+            break
+    if header_row is None:
+        return pd.DataFrame()
+    data = raw.iloc[header_row + 1 :].copy()
+    data.columns = raw.iloc[header_row].tolist()
+    if "Branch Path" not in data.columns:
+        return pd.DataFrame()
+    data = data[data["Branch Path"].notna()].copy()
+    return data
+
+
+def _load_supply_root_lookup_from_export():
+    """Load and cache supply root (Primary/Secondary) lookup from the canonical LEAP export."""
+    global _SUPPLY_ROOT_LOOKUP_CACHE
+    global _SUPPLY_ROOT_LOOKUP_SOURCE_INFO
+    if _SUPPLY_ROOT_LOOKUP_CACHE is not None:
+        return _SUPPLY_ROOT_LOOKUP_CACHE
+
+    path = Path(str(SUPPLY_ROOT_CLASSIFICATION_SOURCE_PATH).replace("\\", "/"))
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    sheet = str(SUPPLY_ROOT_CLASSIFICATION_SOURCE_SHEET).strip() or "Export"
+
+    if not path.exists():
+        print(
+            "[WARN] Supply root classification source workbook not found: "
+            f"{path}. Falling back to legacy ESTO-based classification."
+        )
+        _SUPPLY_ROOT_LOOKUP_SOURCE_INFO = {
+            "path": str(path),
+            "sheet": sheet,
+            "status": "missing",
+            "lookup_size": 0,
+        }
+        _SUPPLY_ROOT_LOOKUP_CACHE = {}
+        return _SUPPLY_ROOT_LOOKUP_CACHE
+
+    try:
+        rows = _read_branch_variable_rows_from_workbook(path, sheet_name=sheet)
+    except Exception as exc:
+        print(
+            "[WARN] Failed reading supply root classification source workbook "
+            f"{path} (sheet={sheet}): {exc}. Falling back to legacy ESTO-based classification."
+        )
+        _SUPPLY_ROOT_LOOKUP_SOURCE_INFO = {
+            "path": str(path),
+            "sheet": sheet,
+            "status": "read_failed",
+            "lookup_size": 0,
+        }
+        _SUPPLY_ROOT_LOOKUP_CACHE = {}
+        return _SUPPLY_ROOT_LOOKUP_CACHE
+
+    root_counts_by_fuel: dict[str, dict[str, int]] = {}
+    for branch_path in rows.get("Branch Path", pd.Series(dtype=str)).astype(str):
+        parts = [part.strip() for part in str(branch_path or "").split("\\") if part.strip()]
+        if len(parts) < 3:
+            continue
+        if parts[0].lower() != "resources":
+            continue
+        root = parts[1].strip().title()
+        if root not in {"Primary", "Secondary"}:
+            continue
+        fuel_key = _normalize_supply_lookup_fuel_name(parts[2])
+        if not fuel_key:
+            continue
+        bucket = root_counts_by_fuel.setdefault(fuel_key, {"Primary": 0, "Secondary": 0})
+        bucket[root] = int(bucket.get(root, 0)) + 1
+
+    lookup: dict[str, str] = {}
+    conflicts: list[tuple[str, dict[str, int]]] = []
+    for fuel_key, counts in root_counts_by_fuel.items():
+        primary_count = int(counts.get("Primary", 0))
+        secondary_count = int(counts.get("Secondary", 0))
+        if primary_count and secondary_count:
+            conflicts.append((fuel_key, counts))
+            chosen = "Primary" if primary_count >= secondary_count else "Secondary"
+            lookup[fuel_key] = chosen
+            continue
+        lookup[fuel_key] = "Secondary" if secondary_count > 0 else "Primary"
+
+    if conflicts:
+        preview = ", ".join(
+            [
+                f"{fuel} (Primary={counts.get('Primary', 0)}, Secondary={counts.get('Secondary', 0)})"
+                for fuel, counts in conflicts[:20]
+            ]
+        )
+        print(
+            "[WARN] Supply root source has fuel(s) mapped to both Primary and Secondary; "
+            f"using majority root for {len(conflicts)} fuel(s). Sample: {preview}"
+        )
+
+    print(
+        "[INFO] Loaded supply root classification lookup from LEAP export source: "
+        f"{path} (sheet={sheet}, fuels={len(lookup)})."
+    )
+    _SUPPLY_ROOT_LOOKUP_SOURCE_INFO = {
+        "path": str(path),
+        "sheet": sheet,
+        "status": "loaded",
+        "lookup_size": int(len(lookup)),
+        "conflicts": int(len(conflicts)),
+    }
+    _SUPPLY_ROOT_LOOKUP_CACHE = lookup
+    return _SUPPLY_ROOT_LOOKUP_CACHE
+
+
+def _resolve_supply_root_from_export_lookup(*candidates):
+    """Resolve Primary/Secondary from workbook lookup using candidate labels."""
+    lookup = _load_supply_root_lookup_from_export()
+    if not lookup:
+        return None
+    for candidate in candidates:
+        key = _normalize_supply_lookup_fuel_name(candidate)
+        if not key:
+            continue
+        root = lookup.get(key)
+        if root in {"Primary", "Secondary"}:
+            return root
+    return None
+
+
+def _normalize_supply_branch_path_for_lookup(branch_path):
+    """Normalize Resources branch paths for existence checks against export source."""
+    parts = [part.strip() for part in str(branch_path or "").split("\\") if part.strip()]
+    if len(parts) < 3:
+        return ""
+    if parts[0].lower() != "resources":
+        return ""
+    root = parts[1].strip().lower()
+    if root not in {"primary", "secondary"}:
+        return ""
+    fuel = _normalize_supply_lookup_fuel_name(parts[2])
+    if not fuel:
+        return ""
+    return f"resources\\{root}\\{fuel}"
+
+
+def _load_supply_branch_path_lookup_from_export():
+    """Load existing Resources branch paths from canonical LEAP export source."""
+    global _SUPPLY_BRANCH_PATH_LOOKUP_CACHE
+    global _SUPPLY_BRANCH_PATH_LOOKUP_SOURCE_INFO
+    if _SUPPLY_BRANCH_PATH_LOOKUP_CACHE is not None:
+        return _SUPPLY_BRANCH_PATH_LOOKUP_CACHE
+
+    path = Path(str(SUPPLY_ROOT_CLASSIFICATION_SOURCE_PATH).replace("\\", "/"))
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    sheet = str(SUPPLY_ROOT_CLASSIFICATION_SOURCE_SHEET).strip() or "Export"
+    if not path.exists():
+        _SUPPLY_BRANCH_PATH_LOOKUP_SOURCE_INFO = {
+            "path": str(path),
+            "sheet": sheet,
+            "status": "missing",
+            "lookup_size": 0,
+        }
+        _SUPPLY_BRANCH_PATH_LOOKUP_CACHE = set()
+        return _SUPPLY_BRANCH_PATH_LOOKUP_CACHE
+    try:
+        rows = _read_branch_variable_rows_from_workbook(path, sheet_name=sheet)
+    except Exception as exc:
+        print(
+            "[WARN] Failed reading supply branch-path lookup from LEAP export source "
+            f"{path} (sheet={sheet}): {exc}. Branch existence checks disabled."
+        )
+        _SUPPLY_BRANCH_PATH_LOOKUP_SOURCE_INFO = {
+            "path": str(path),
+            "sheet": sheet,
+            "status": "read_failed",
+            "lookup_size": 0,
+        }
+        _SUPPLY_BRANCH_PATH_LOOKUP_CACHE = set()
+        return _SUPPLY_BRANCH_PATH_LOOKUP_CACHE
+    lookup: set[str] = set()
+    for branch_path in rows.get("Branch Path", pd.Series(dtype=str)).astype(str):
+        token = _normalize_supply_branch_path_for_lookup(branch_path)
+        if token:
+            lookup.add(token)
+    _SUPPLY_BRANCH_PATH_LOOKUP_SOURCE_INFO = {
+        "path": str(path),
+        "sheet": sheet,
+        "status": "loaded",
+        "lookup_size": int(len(lookup)),
+    }
+    _SUPPLY_BRANCH_PATH_LOOKUP_CACHE = lookup
+    return _SUPPLY_BRANCH_PATH_LOOKUP_CACHE
+
+
+def _supply_branch_exists_in_export_source(branch_path):
+    """Return True when branch path exists in canonical export source (or source unavailable)."""
+    lookup = _load_supply_branch_path_lookup_from_export()
+    info = _SUPPLY_BRANCH_PATH_LOOKUP_SOURCE_INFO or {}
+    if str(info.get("status") or "").lower() != "loaded":
+        # Do not block exports when source is unavailable.
+        return True
+    token = _normalize_supply_branch_path_for_lookup(branch_path)
+    if not token:
+        return False
+    return token in lookup
+
+
+def _classify_supply_root_for_product(product_label):
+    """Return the supply root classification ('primary' or 'secondary') for an ESTO product."""
+    label = str(product_label or "").strip()
+    if not label:
+        return "primary"
+    mapped = ESTO_PRODUCT_CLASSIFICATION.get(label)
+    if mapped in {"primary", "secondary"}:
+        return mapped
+    # Fallback to prefix-based rule for products not present in ESTO_PRODUCT_LIST.
+    return "secondary" if _is_secondary_esto_product(label) else "primary"
+
+
+def _get_supply_branch_roots_for_entry(fuel_key, fuel_entry):
+    """Resolve the LEAP supply branch root(s) for one export fuel entry."""
+    entry = fuel_entry or {}
+    fuel_name = str(entry.get("fuel_name") or "").strip()
+    esto_label = str(entry.get("fuel_label_esto") or "").strip()
+    key_label = str(fuel_key or "").strip()
+
+    root_from_export = _resolve_supply_root_from_export_lookup(
+        fuel_name,
+        esto_label,
+        key_label,
+    )
+    if root_from_export in {"Primary", "Secondary"}:
+        return [["Resources", root_from_export]]
+
+    missing_key = _normalize_supply_lookup_fuel_name(fuel_name or esto_label or key_label)
+    if missing_key and missing_key not in _SUPPLY_ROOT_LOOKUP_MISS_WARNED:
+        _SUPPLY_ROOT_LOOKUP_MISS_WARNED.add(missing_key)
+        if SUPPLY_ROOT_CLASSIFICATION_STRICT:
+            raise ValueError(
+                "Supply root classification missing from LEAP export source for fuel "
+                f"'{fuel_name or esto_label or key_label}'. "
+                f"Source={SUPPLY_ROOT_CLASSIFICATION_SOURCE_PATH} "
+                f"(sheet={SUPPLY_ROOT_CLASSIFICATION_SOURCE_SHEET})."
+            )
+        print(
+            "[WARN] Supply root classification not found in LEAP export source for fuel "
+            f"'{fuel_name or esto_label or key_label}'. "
+            "Falling back to legacy ESTO-based classification."
+        )
+
+    classification = _classify_supply_root_for_product(esto_label or fuel_name or key_label)
+    if classification == "secondary":
+        return [["Resources", "Secondary"]]
+    return [["Resources", "Primary"]]
 
 # MAJOR_SECTOR_CONFIG uses ESTO labels for filtering, but display names can be
 # filled from sector_fuel_codes_to_names.xlsx (code_to_name) via mapping below.
@@ -215,7 +537,7 @@ def ensure_repo_root():
 def load_csv_data(path, label):
     """Load a CSV file and return a pandas DataFrame."""
     try:
-        df = pd.read_csv(path)
+        df = read_config_table(path)
         print(f"Loaded {label}: {df.shape[0]} rows, {df.shape[1]} columns")
         return df
     except Exception as exc:
@@ -353,7 +675,20 @@ def select_fuel_rows(
                     return matched
             return df[df["products"].apply(lambda value: _match_code_prefix(value, fuel_label_esto))]
         if "subfuels" in df.columns:
-            return df[df["subfuels"].apply(lambda value: _match_code_prefix(value, fuel_code_ninth))]
+            matched_subfuels = df[
+                df["subfuels"].apply(lambda value: _match_code_prefix(value, fuel_code_ninth))
+            ]
+            if not matched_subfuels.empty:
+                return matched_subfuels
+            # Some 9th rows carry the canonical fuel code in `fuels` with `subfuels=x`
+            # (for example electricity exports). Fall back to fuels in that case.
+            if "fuels" in df.columns:
+                matched_fuels = df[
+                    df["fuels"].apply(lambda value: _match_code_prefix(value, fuel_code_ninth))
+                ]
+                if not matched_fuels.empty:
+                    return matched_fuels
+            return matched_subfuels
         if "fuels" in df.columns:
             return df[df["fuels"].apply(lambda value: _match_code_prefix(value, fuel_code_ninth))]
         return df.iloc[0:0]
@@ -447,9 +782,9 @@ def load_code_to_name_mapping(path_candidates):
     """
     try:
         for path in path_candidates:
-            if not os.path.exists(path):
+            if not config_table_exists(path, sheet_name="code_to_name"):
                 continue
-            mapping_df = pd.read_excel(path, sheet_name="code_to_name", dtype=str).fillna("")
+            mapping_df = read_config_table(path, sheet_name="code_to_name", dtype=str).fillna("")
             mapping = {}
 
             if "code" in mapping_df.columns and "name" in mapping_df.columns:
@@ -679,7 +1014,7 @@ def find_first_existing_file(path_candidates):
     """Return the first path that exists from the provided candidates."""
     try:
         for path in path_candidates:
-            if os.path.exists(path):
+            if config_table_exists(path):
                 return path
         print(f"No code-to-name workbook found in {path_candidates}")
         return None
@@ -695,20 +1030,24 @@ def build_supply_sector_config(
     dataset_key="esto",
 ):
     """Build sector config entries for every ESTO fuel product."""
-    workbook_path = find_first_existing_file(code_to_name_paths)
+    workbook_path = None
+    for path in code_to_name_paths:
+        if config_table_exists(path, sheet_name="ESTO"):
+            workbook_path = path
+            break
     if not workbook_path:
         print(
             "Warning: code-to-name workbook is missing; supply export will run with an empty sector config."
         )
         return {}
     try:
-        df = pd.read_excel(workbook_path, sheet_name="ESTO", dtype=str)
+        df = read_config_table(workbook_path, sheet_name="ESTO", dtype=str)
         df = df[df["products"].notna()].copy()
         df["products"] = df["products"].astype(str).str.strip()
         if exclude_prefixes:
             mask = ~df["products"].str.startswith(tuple(exclude_prefixes), na=False)
             df = df[mask]
-        mapping_df = pd.read_excel(workbook_path, sheet_name="code_to_name", dtype=str).fillna("")
+        mapping_df = read_config_table(workbook_path, sheet_name="code_to_name", dtype=str).fillna("")
         lookup = {
             str(row.get("esto_label") or "").strip(): row.to_dict()
             for _, row in mapping_df.iterrows()
@@ -807,6 +1146,73 @@ def build_year_rows(
         raise
 
 
+def _normalize_override_year_map(
+    value_by_year,
+    base_year,
+    final_year,
+):
+    """Return a clipped year->float mapping from an override payload."""
+    if value_by_year is None:
+        return None
+    normalized = coerce_value_by_year(value_by_year, base_year, final_year)
+    return {
+        int(year): float(normalized.get(year, 0.0))
+        for year in range(base_year, final_year + 1)
+    }
+
+
+def _resolve_supply_override(
+    flow_value_overrides,
+    scenario,
+    fuel_key,
+    fuel_entry,
+    flow_key,
+    base_year,
+    final_year,
+):
+    """Return an override year map for a scenario/fuel/flow when present."""
+    if not isinstance(flow_value_overrides, dict):
+        return None
+    scenario_payload = flow_value_overrides.get(scenario)
+    if not isinstance(scenario_payload, dict):
+        scenario_payload = flow_value_overrides.get(str(scenario))
+    scenario_key = str(scenario or "").strip().lower()
+    lower_payloads = {
+        str(key).strip().lower(): value
+        for key, value in flow_value_overrides.items()
+        if isinstance(value, dict)
+    }
+    if not isinstance(scenario_payload, dict) and scenario_key:
+        scenario_payload = lower_payloads.get(scenario_key)
+    if (
+        not isinstance(scenario_payload, dict)
+        and scenario_key in {"current accounts", "current account"}
+    ):
+        # Keep Current Accounts aligned with reset behavior by falling back
+        # to Reference overrides when no explicit CA payload exists.
+        scenario_payload = lower_payloads.get("reference")
+    if not isinstance(scenario_payload, dict):
+        return None
+
+    candidate_keys = [
+        fuel_key,
+        fuel_entry.get("fuel_label_esto"),
+        fuel_entry.get("fuel_name"),
+    ]
+    fuel_payload = None
+    for candidate in candidate_keys:
+        if candidate in scenario_payload and isinstance(scenario_payload[candidate], dict):
+            fuel_payload = scenario_payload[candidate]
+            break
+    if not isinstance(fuel_payload, dict):
+        return None
+    return _normalize_override_year_map(
+        fuel_payload.get(flow_key),
+        base_year,
+        final_year,
+    )
+
+
 def get_flow_total_for_fuel(
     data,
     year_cols,
@@ -836,6 +1242,46 @@ def get_flow_total_for_fuel(
         return normalize_supply_flow_total(flow_key, total)
     except Exception as exc:
         print(f"Failed to sum flow {flow_key} for fuel {fuel_config}: {exc}")
+        try_debug_breakpoint()
+        raise
+
+
+def get_flow_series_for_fuel(
+    data,
+    year_cols,
+    economy,
+    fuel_config,
+    flow_key,
+    flow_value,
+    base_year,
+    final_year,
+    code_to_name_mapping=None,
+):
+    """Return year->value from source rows for one flow/fuel/economy."""
+    try:
+        if flow_value is None:
+            return {year: 0.0 for year in range(base_year, final_year + 1)}
+        fuel_rows = select_fuel_rows(
+            data,
+            fuel_config.get("fuel_code_ninth"),
+            fuel_config["fuel_label_esto"],
+            fuel_name=fuel_config.get("fuel_name"),
+            code_to_name_mapping=code_to_name_mapping,
+        )
+        flow_rows = select_flow_rows(fuel_rows, economy, flow_value)
+        out = {year: 0.0 for year in range(base_year, final_year + 1)}
+        if flow_rows.empty:
+            return out
+        for year in range(base_year, final_year + 1):
+            if year not in year_cols:
+                continue
+            value = pd.to_numeric(flow_rows[year], errors="coerce").fillna(0.0).sum()
+            out[year] = normalize_supply_flow_total(flow_key, float(value))
+        return out
+    except Exception as exc:
+        print(
+            f"Failed to build flow series for {economy}, {fuel_config}, {flow_key}: {exc}"
+        )
         try_debug_breakpoint()
         raise
 
@@ -873,7 +1319,25 @@ def build_supply_value_by_year(
     projection_years=None,
     code_to_name_mapping=None,
 ):
-    """Return a full year mapping using ESTO base year + 9th projections."""
+    """Return a full year mapping for one economy/fuel/flow.
+
+    - For 9th-style datasets (sector-coded), read all years directly from source rows.
+    - For ESTO-style datasets, use base-year source plus projected years from lookup.
+    """
+    dataset_is_ninth_style = "sectors" in data.columns and "flows" not in data.columns
+    if dataset_is_ninth_style:
+        return get_flow_series_for_fuel(
+            data,
+            year_cols,
+            economy,
+            fuel_config,
+            flow_key,
+            flow_value,
+            base_year,
+            final_year,
+            code_to_name_mapping=code_to_name_mapping,
+        )
+
     projection_years = [
         year for year in (projection_years or []) if year <= final_year
     ]
@@ -944,68 +1408,90 @@ def build_supply_log_rows(
     code_to_name_mapping=None,
     projection_lookup=None,
     projection_years=None,
+    flow_value_overrides=None,
+    supply_measures=None,
 ):
-    """Build log entries for supply imports/exports per fuel."""
+    """Build log entries for supply measures per fuel."""
     try:
         if not fuel_config:
             print("Warning: no supply fuels available for export.")
             return []
+        measures = supply_measures if isinstance(supply_measures, list) and supply_measures else SUPPLY_MEASURES
         rows = []
         for fuel_key in sorted(fuel_config):
             entry = fuel_config[fuel_key]
             display_name = entry.get("fuel_name") or entry["fuel_label_esto"]
             safe_name = sanitize_leap_label(display_name)
-            branch_path = build_branch_path(SUPPLY_BRANCH_ROOT + [safe_name])
-            flow_values_by_year = {
-                "imports": build_supply_value_by_year(
-                    data,
-                    year_cols,
-                    economy,
-                    entry,
-                    "imports",
-                    flow_codes.get("imports"),
-                    base_year,
-                    final_year,
-                    projection_lookup=projection_lookup,
-                    projection_years=projection_years,
-                    code_to_name_mapping=code_to_name_mapping,
-                ),
-                "exports": build_supply_value_by_year(
-                    data,
-                    year_cols,
-                    economy,
-                    entry,
-                    "exports",
-                    flow_codes.get("exports"),
-                    base_year,
-                    final_year,
-                    projection_lookup=projection_lookup,
-                    projection_years=projection_years,
-                    code_to_name_mapping=code_to_name_mapping,
-                ),
+            branch_roots = _get_supply_branch_roots_for_entry(fuel_key, entry)
+            required_flow_keys = {
+                str(measure.get("flow_key") or "").strip()
+                for measure in measures
+                if str(measure.get("flow_key") or "").strip()
             }
+            default_flow_values_by_year = {}
+            for flow_key in sorted(required_flow_keys):
+                source_flow_key = "production" if flow_key == "max_production" else flow_key
+                flow_value = flow_codes.get(source_flow_key)
+                default_flow_values_by_year[flow_key] = build_supply_value_by_year(
+                    data,
+                    year_cols,
+                    economy,
+                    entry,
+                    source_flow_key,
+                    flow_value,
+                    base_year,
+                    final_year,
+                    projection_lookup=projection_lookup,
+                    projection_years=projection_years,
+                    code_to_name_mapping=code_to_name_mapping,
+                )
             for scenario in scenario_names:
-                for measure in SUPPLY_MEASURES:
-                    flow_key = measure.get("flow_key")
-                    if flow_key:
-                        value_by_year = flow_values_by_year.get(
-                            flow_key, {year: 0.0 for year in range(base_year, final_year + 1)}
+                for branch_root in branch_roots:
+                    branch_path = build_branch_path(branch_root + [safe_name])
+                    if not _supply_branch_exists_in_export_source(branch_path):
+                        miss_key = f"{economy}|{scenario}|{branch_path}"
+                        if miss_key not in _SUPPLY_BRANCH_PATH_MISS_WARNED:
+                            _SUPPLY_BRANCH_PATH_MISS_WARNED.add(miss_key)
+                            print(
+                                "[WARN] Skipping supply export row for branch not present in "
+                                "canonical full-model export source: "
+                                f"{branch_path} (economy={economy}, scenario={scenario}, fuel={display_name})"
+                            )
+                        continue
+                    branch_type = str(branch_root[-1] if branch_root else "").strip().lower()
+                    for measure in measures:
+                        root_filter = str(measure.get("branch_root") or "").strip().lower()
+                        if root_filter and root_filter not in {"all", branch_type}:
+                            continue
+                        flow_key = measure.get("flow_key")
+                        if flow_key:
+                            override_value_by_year = _resolve_supply_override(
+                                flow_value_overrides,
+                                scenario,
+                                fuel_key,
+                                entry,
+                                flow_key,
+                                base_year,
+                                final_year,
+                            )
+                            value_by_year = override_value_by_year or default_flow_values_by_year.get(
+                                flow_key, {year: 0.0 for year in range(base_year, final_year + 1)}
+                            )
+                        else:
+                            value_by_year = coerce_value_by_year(
+                                measure.get("value", 0.0), base_year, final_year
+                            )
+                        rows.extend(
+                            build_year_rows(
+                                branch_path,
+                                measure["name"],
+                                scenario,
+                                value_by_year,
+                                measure["units"],
+                                "",
+                                measure["per"],
+                            )
                         )
-                    else:
-                        value_by_year = coerce_value_by_year(
-                            measure.get("value", 0.0), base_year, final_year
-                        )
-                    rows.extend(
-                        build_year_rows(
-                            branch_path,
-                            measure["name"],
-                            scenario,
-                            value_by_year,
-                            measure["units"],
-                            "",
-                            measure["per"],
-                        )
-                    )
         return rows
     except Exception as exc:
         print(f"Failed to build supply log rows for {economy}: {exc}")
@@ -1051,8 +1537,23 @@ def prepare_supply_assets(
             sector_config, code_to_name_mapping
         )
 
-    ninth_data_raw = load_csv_data(ESTO_DATA_PATH, "ESTO data (9th)")
-    esto_data_raw = load_csv_data(MATT_DATA_PATH, "Matt data")
+    workflow_common.archive_config_dir_once_per_day()
+    esto_data_raw, ninth_data_raw = load_augmented_reference_tables(
+        esto_path=MATT_DATA_PATH,
+        ninth_path=ESTO_DATA_PATH,
+        subtotal_mapping_path=SUBTOTAL_MAPPING_PATH,
+        synthetic_rules_path=CONFIG_DIR / "synthetic_reference_rows.csv",
+        cache_dir=REFERENCE_CACHE_DIR,
+        apply_esto_subtotal_map=True,
+        filter_esto_subtotals_flag=False,
+        filter_ninth_subtotals_flag=False,
+    )
+    print(
+        f"Loaded ESTO data (augmented): {esto_data_raw.shape[0]} rows, {esto_data_raw.shape[1]} columns"
+    )
+    print(
+        f"Loaded 9th data (augmented): {ninth_data_raw.shape[0]} rows, {ninth_data_raw.shape[1]} columns"
+    )
     ninth_data_raw, ninth_year_cols = normalize_year_columns(ninth_data_raw)
     esto_data_raw, esto_year_cols = normalize_year_columns(esto_data_raw)
 
@@ -1122,6 +1623,9 @@ def generate_supply_exports(
     final_year=EXPORT_FINAL_YEAR,
     export_output_dir: Path | str = EXPORT_OUTPUT_DIR,
     filename_template: str = EXPORT_FILENAME_TEMPLATE,
+    flow_value_overrides_by_economy: dict | None = None,
+    supply_measures: list[dict] | None = None,
+    keep_all_zero_rows: bool = False,
 ):
     """Generate LEAP-ready supply exports for the requested economies."""
     data, year_cols = resolve_dataset(dataset_map, dataset_key)
@@ -1136,6 +1640,9 @@ def generate_supply_exports(
     saved_exports: list[tuple[str, Path]] = []
 
     for economy in target_economies:
+        economy_flow_overrides = None
+        if isinstance(flow_value_overrides_by_economy, dict):
+            economy_flow_overrides = flow_value_overrides_by_economy.get(economy)
         log_rows = build_supply_log_rows(
             data,
             year_cols,
@@ -1148,6 +1655,8 @@ def generate_supply_exports(
             code_to_name_mapping=code_to_name_mapping,
             projection_lookup=projection_lookup,
             projection_years=projection_years,
+            flow_value_overrides=economy_flow_overrides,
+            supply_measures=supply_measures,
         )
         if not log_rows:
             print(f"No supply rows generated for {economy}")
@@ -1159,6 +1668,27 @@ def generate_supply_exports(
         )
         if export_df is None:
             print(f"Skipping export for {economy} because no data survived pivot.")
+            continue
+        year_columns = [
+            column for column in export_df.columns if isinstance(column, int)
+        ]
+        if year_columns and not keep_all_zero_rows:
+            numeric_years = (
+                export_df[year_columns]
+                .apply(pd.to_numeric, errors="coerce")
+                .fillna(0.0)
+            )
+            nonzero_mask = numeric_years.abs().sum(axis=1) > 0.0
+            dropped_count = int((~nonzero_mask).sum())
+            if dropped_count:
+                print(
+                    f"[INFO] Dropping {dropped_count} all-zero supply rows from export for {economy}."
+                )
+            export_df = export_df.loc[nonzero_mask].copy()
+        if export_df.empty:
+            print(
+                f"Skipping export for {economy} because all supply rows are zero after filtering."
+            )
             continue
         os.makedirs(export_output_dir, exist_ok=True)
         export_path = Path(export_output_dir) / filename_template.format(
@@ -1262,7 +1792,7 @@ def _read_unique_column(
 ) -> list[str]:
     """Read a single column from the export and preserve the order of unique values."""
     try:
-        df = pd.read_excel(export_path, sheet_name=sheet_name, header=2, usecols=[column])
+        df = read_config_table(export_path, sheet_name=sheet_name, header=2, usecols=[column])
     except Exception as exc:
         print(f"[ERROR] Failed to read column '{column}' from {export_path}: {exc}")
         try_debug_breakpoint()
@@ -1361,12 +1891,75 @@ def run_branch_fill(
             RAISE_ERROR_ON_FAILED_SET=raise_on_missing_branch,
             SET_UNITS=True,
             HANDLE_CURRENT_ACCOUNTS_TOO=handle_current_accounts,
+            RUN_FUEL_CATALOG_PREFLIGHT=False,
         )
         print(f"[INFO] Supply branch fill result: {outcome}")
+        _print_supply_missing_both_primary_secondary_summary(outcome)
     except Exception as exc:
         print(f"[ERROR] Supply branch fill failed: {exc}")
         try_debug_breakpoint()
         raise
+
+
+def _print_supply_missing_both_primary_secondary_summary(outcome: dict | None) -> None:
+    """Print fuels that failed in all attempted Resources roots during branch fill."""
+    if not isinstance(outcome, dict):
+        return
+
+    def _extract_root_and_fuel(branch_path: str | None) -> tuple[str | None, str | None]:
+        parts = [part.strip() for part in str(branch_path or "").split("\\") if part and str(part).strip()]
+        if len(parts) < 3:
+            return None, None
+        if parts[0].lower() != "resources":
+            return None, None
+        root = parts[1].strip()
+        if root.lower() not in {"primary", "secondary"}:
+            return None, None
+        fuel = parts[2].strip()
+        if not fuel:
+            return None, None
+        return root.title(), fuel
+
+    success_roots_by_fuel: dict[str, set[str]] = {}
+    failed_roots_by_fuel: dict[str, set[str]] = {}
+
+    for branch_path, variable in outcome.get("success", []) or []:
+        var_name = str(variable or "").strip().lower()
+        if var_name not in {"imports", "exports"}:
+            continue
+        root, fuel = _extract_root_and_fuel(branch_path)
+        if not root or not fuel:
+            continue
+        success_roots_by_fuel.setdefault(fuel, set()).add(root)
+
+    for branch_path, variable in outcome.get("failed", []) or []:
+        var_name = str(variable or "").strip().lower()
+        if var_name not in {"imports", "exports"}:
+            continue
+        root, fuel = _extract_root_and_fuel(branch_path)
+        if not root or not fuel:
+            continue
+        failed_roots_by_fuel.setdefault(fuel, set()).add(root)
+
+    fuels_missing_all_attempted: list[str] = []
+    for fuel, failed_roots in sorted(failed_roots_by_fuel.items()):
+        if success_roots_by_fuel.get(fuel):
+            continue
+        if failed_roots:
+            fuels_missing_all_attempted.append(
+                f"{fuel} (attempted: {', '.join(sorted(failed_roots))})"
+            )
+
+    if fuels_missing_all_attempted:
+        print(
+            "[WARN] Supply fuels not found in attempted Resources root(s) "
+            f"({len(fuels_missing_all_attempted)}): {', '.join(fuels_missing_all_attempted)}"
+        )
+    else:
+        print(
+            "[INFO] Supply branch lookup summary: no fuels were missing in their "
+            "attempted Resources root(s)."
+        )
 
 
 def run_supply_leap_import(
@@ -1390,9 +1983,27 @@ def run_supply_leap_import(
             f"Desired scenario '{scenario_to_run}' not present; available: {available_scenarios}"
         )
     ensure_region_in_export(export_path, region)
+
+    dispatch_result = dispatch_analysis_input_write(
+        export_path=export_path,
+        sheet_name=SHEET_NAME,
+        scenario=scenario_to_run,
+        region=region,
+        context_label="supply_data_pipeline.run_supply_leap_import",
+    )
+    if dispatch_result.get("mode") == "workbook":
+        return export_path
+
     L = connect_to_leap()
     if L is None:
         raise RuntimeError("Failed to connect to LEAP.")
+    fuel_catalog_preflight.run_fuel_catalog_preflight(
+        export_path=export_path,
+        sheet_name=SHEET_NAME,
+        scenario=scenario_to_run,
+        context="supply_data_pipeline.run_supply_leap_import",
+        leap_app=L,
+    )
 
     if fill_branches:
         print(

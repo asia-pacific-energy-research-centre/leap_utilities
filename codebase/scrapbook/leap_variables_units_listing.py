@@ -19,8 +19,10 @@ from pathlib import Path
 
 try:
     import win32com.client  # type: ignore
-except ImportError as exc:  # pragma: no cover
-    raise SystemExit("pywin32 is required to run this script (Windows only).") from exc
+except ImportError:  # pragma: no cover
+    win32com = None  # sentinel for environments without COM
+
+from codebase.functions.leap_api_guard import ensure_leap_api_allowed
 
 #%% user-editable toggles
 LEAP_VISIBLE = False
@@ -35,6 +37,9 @@ def ensure_repo_root() -> Path:
 
 
 def connect_leap(visible: bool = False):
+    ensure_leap_api_allowed("scrapbook.leap_variables_units_listing.connect_leap")
+    if win32com is None:
+        raise SystemExit("pywin32 is required to run this script (Windows only).")
     app = win32com.client.Dispatch("Leap.LEAPApplication")
     app.Visible = bool(visible)
     return app

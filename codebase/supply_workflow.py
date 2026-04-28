@@ -1,4 +1,13 @@
 #%%
+"""
+Build and optionally import LEAP supply branches from prepared supply data.
+
+This workflow delegates the detailed supply data preparation to
+`supply_data_pipeline.py` and provides notebook-friendly entry points around it.
+Use it for standalone supply exports/imports; use `results_supply_link_workflow`
+when supply should be balanced against demand and transformation outputs.
+"""
+
 # High-level supply workflow helpers that stay under 300 lines, delegating heavy logic to `supply_data_pipeline.py`.
 # Most user-editable settings live in `codebase/workflow_config.py`.
 #%%
@@ -24,6 +33,18 @@ from codebase.utilities import workflow_common
 #%%
 DEFAULT_ECONOMIES = list(workflow_cfg.SUPPLY_WORKFLOW_DEFAULT_ECONOMIES)
 DEFAULT_SCENARIOS = list(workflow_cfg.SUPPLY_WORKFLOW_DEFAULT_SCENARIOS)
+
+
+def _print_reset_reminder_for_import(include_leap_import: bool) -> None:
+    """Remind users that standalone supply import does not clear stale trade targets."""
+    if not include_leap_import:
+        return
+    print(
+        "[WARN] Reset reminder: standalone supply workflow import does not perform a global "
+        "supply/transformation trade reset. If you need a clean rerun, run "
+        "codebase/results_supply_link_workflow.py with "
+        "MAIN_RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT=True."
+    )
 
 
 def normalize_economies(economies: Iterable[str] | None = None) -> list[str]:
@@ -81,6 +102,7 @@ def run_supply_export_and_import(
     import_scenario: str | Sequence[str] | None = None,
 ) -> list[supply_data_pipeline.Path]:
     """Run the export preparation and optionally fill LEAP using the generated workbooks."""
+    _print_reset_reminder_for_import(include_leap_import)
     scenarios = workflow_common.normalize_workflow_scenarios(
         scenario_names,
         DEFAULT_SCENARIOS,
@@ -139,7 +161,7 @@ def run_supply_pipeline(
 #----------------------------------------------------------------------------
 # Simple configuration block for notebook/interactive usage.
 #----------------------------------------------------------------------------
-NOTEBOOK_WORKFLOW_ECONOMIES = list(workflow_cfg.SUPPLY_NOTEBOOK_ECONOMIES)
+NOTEBOOK_WORKFLOW_ECONOMIES = ['20_USA'] #list(workflow_cfg.SUPPLY_NOTEBOOK_ECONOMIES)
 NOTEBOOK_INCLUDE_LEAP_IMPORT = workflow_cfg.SUPPLY_NOTEBOOK_INCLUDE_LEAP_IMPORT
 NOTEBOOK_SCENARIOS = list(workflow_cfg.SUPPLY_NOTEBOOK_SCENARIOS)
 NOTEBOOK_IMPORT_SCENARIOS = [
@@ -162,3 +184,14 @@ def run_with_config() -> list[supply_data_pipeline.Path]:
 if __name__ == "__main__":
     run_with_config()
 #%%
+
+
+try:
+    from codebase.utilities.workflow_common import emit_completion_beep as _emit_completion_beep
+except Exception:  # pragma: no cover
+    def _emit_completion_beep(*, success: bool = True) -> None:  # noqa: ARG001
+        return
+
+
+if __name__ == "__main__":  # pragma: no cover
+    _emit_completion_beep(success=True, style="chime")

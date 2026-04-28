@@ -1,4 +1,14 @@
 #%%
+"""
+INACTIVE. WE GAVE UP ON THIS APPROACH FOR POWER.
+Build and optionally import LEAP power-sector branches from export data.
+
+This workflow prepares the power export workbook, validates/remaps fuel labels,
+and fills generation-related LEAP branches for the configured scenarios. It also
+handles hardcoded variable overrides and write-mode dispatch so power imports can
+run through either the LEAP API or workbook workflow.
+"""
+
 from __future__ import annotations
 
 import shutil
@@ -24,12 +34,19 @@ from codebase.functions.leap_core import (
     safe_branch_call,
     safe_set_variable,
 )
+from codebase.functions.analysis_input_write_dispatcher import (
+    dispatch_analysis_input_write,
+    get_analysis_input_write_mode,
+)
 from codebase.functions.leap_exports import list_scenarios as list_export_scenarios
 from codebase.functions.leap_excel_io import (
     read_export_sheet,
     write_export_sheet,
 )
 from codebase.functions.leap_labels import clean_fuel_label_for_leap
+from codebase.scrapbook.utilities import load_augmented_reference_tables
+from codebase.utilities.workflow_common import archive_config_dir_once_per_day
+from codebase.utilities.output_paths import STANDALONE_LEAP_EXPORTS_ROOT
 
 
 CREATE_BRANCHES_FROM_EXPORT_FILE = True
@@ -55,6 +72,9 @@ SOURCE_SCENARIO_FOR_MISSING = {
 }
 REGION = "United States of America"
 ESTO_DATA_PATH = "../data/00APEC_2024_low.csv"
+SUBTOTAL_MAPPING_PATH = "../config/ESTO_subtotal_mapping.xlsx"
+SYNTHETIC_RULES_PATH = "../config/synthetic_reference_rows.csv"
+REFERENCE_CACHE_DIR = REPO_ROOT / "data/.cache/power_reference_tables"
 
 SKIP_VARIABLES = {
     "Dispatchable",
@@ -360,7 +380,18 @@ def _build_cleaned_esto_products_set(esto_data_path: str | Path) -> set[str]:
     esto_path = _resolve_repo_path(esto_data_path)
     if not esto_path.exists():
         raise FileNotFoundError(f"ESTO data file not found: {esto_path}")
-    df = pd.read_csv(esto_path, usecols=["products"])
+    archive_config_dir_once_per_day()
+    df, _ = load_augmented_reference_tables(
+        esto_path=esto_path,
+        ninth_path=REPO_ROOT / "data/merged_file_energy_ALL_20251106.csv",
+        subtotal_mapping_path=_resolve_repo_path(SUBTOTAL_MAPPING_PATH),
+        synthetic_rules_path=_resolve_repo_path(SYNTHETIC_RULES_PATH),
+        cache_dir=REFERENCE_CACHE_DIR,
+        apply_esto_subtotal_map=True,
+        filter_esto_subtotals_flag=True,
+        filter_ninth_subtotals_flag=False,
+    )
+    df = df[["products"]].copy() if "products" in df.columns else pd.DataFrame(columns=["products"])
     cleaned = {
         clean_fuel_label_for_leap(_normalize_text(value)).strip().lower()
         for value in df["products"].dropna().tolist()
@@ -762,18 +793,14 @@ def _excluded_rows_to_audit_rows(excluded_rows: pd.DataFrame) -> list[dict[str, 
 def run_power_workflow() -> dict[str, object]:
     scenario_token = "all_scenarios" if FILL_ALL_SCENARIOS else SCENARIO
     prepared_export_path = (
-        REPO_ROOT
-        / "outputs"
-        / "leap_exports"
+        STANDALONE_LEAP_EXPORTS_ROOT
         / (
             f"power_export_prepared_{_safe_filename_segment(ECONOMY)}_"
             f"{_safe_filename_segment(scenario_token)}.xlsx"
         )
     )
     api_filtered_export_path = (
-        REPO_ROOT
-        / "outputs"
-        / "leap_exports"
+        STANDALONE_LEAP_EXPORTS_ROOT
         / (
             f"power_export_api_filtered_{_safe_filename_segment(ECONOMY)}_"
             f"{_safe_filename_segment(scenario_token)}.xlsx"
@@ -810,18 +837,32 @@ def run_power_workflow() -> dict[str, object]:
     )
 
     validated_overrides = _validate_hardcoded_overrides(HARDCODED_VARIABLE_OVERRIDES)
+    write_mode = get_analysis_input_write_mode()
     requires_leap = (
         CREATE_BRANCHES_FROM_EXPORT_FILE
         or FILL_BRANCHES_FROM_EXPORT_FILE
         or bool(validated_overrides)
     )
     L = None
-    if requires_leap:
+    if requires_leap and write_mode == "workbook":
+        dispatch_analysis_input_write(
+            export_path=api_export_path,
+            sheet_name=SHEET_NAME,
+            scenario=configured_fill_scenarios[0] if configured_fill_scenarios else None,
+            region=REGION,
+            context_label="power_workflow.run_power_workflow",
+        )
+        if validated_overrides:
+            print(
+                "[WARN] HARDCODED_VARIABLE_OVERRIDES are not applied in workbook mode. "
+                "Apply these values manually in LEAP after workbook import if needed."
+            )
+    elif requires_leap:
         L = connect_to_leap()
         if L is None:
             raise RuntimeError("Could not connect to LEAP.")
 
-    if CREATE_BRANCHES_FROM_EXPORT_FILE:
+    if CREATE_BRANCHES_FROM_EXPORT_FILE and write_mode == "api":
         create_scenarios = _discover_fill_scenarios(
             api_export_path,
             SHEET_NAME,
@@ -852,7 +893,7 @@ def run_power_workflow() -> dict[str, object]:
     audit_rows: list[dict[str, str]] = []
     hardcoded_rows: list[dict[str, str]] = []
 
-    if FILL_BRANCHES_FROM_EXPORT_FILE:
+    if FILL_BRANCHES_FROM_EXPORT_FILE and write_mode == "api":
         _, export_data, _ = read_export_sheet(api_export_path, SHEET_NAME)
         scenarios_to_fill = _discover_fill_scenarios(
             api_export_path,
@@ -963,3 +1004,14 @@ def run_power_workflow() -> dict[str, object]:
 if __name__ == "__main__":
     run_power_workflow()
 #%%
+
+
+try:
+    from codebase.utilities.workflow_common import emit_completion_beep as _emit_completion_beep
+except Exception:  # pragma: no cover
+    def _emit_completion_beep(*, success: bool = True) -> None:  # noqa: ARG001
+        return
+
+
+if __name__ == "__main__":  # pragma: no cover
+    _emit_completion_beep(success=True, style="chime")

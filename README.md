@@ -113,31 +113,6 @@ Outputs:
 - `unmatched_leap_rows.csv`: LEAP rows not matched by any active mapping row.
 - `charts/*.png`: per-series LEAP vs reference plots with delta subplot.
 
-# Transport results-table comparison workflow:
-
-Use `codebase/leap_series_analysis_workflow.py` for notebook-first usage (same style as other `_workflow.py` modules) where:
-
-- sheets are identified from metadata in `A1:A4` (not sheet names),
-- branch mappings are defined in `config/leap_transport_branch_to_ninth_sector_map.csv`,
-- fuel-name normalization/overrides are defined in `config/leap_transport_fuel_aliases.csv`,
-- references are `ESTO 2022 + 9th projections 2023+`.
-
-Notebook example:
-
-```python
-from codebase.leap_series_analysis_workflow import run_with_config
-
-# Edit constants at top of leap_series_analysis_workflow.py, then run:
-artifacts = run_with_config()
-```
-
-Additional outputs for this workflow:
-
-- `sheet_inventory.csv`: A1-A4 metadata scan and sheet-acceptance diagnostics.
-- `fuel_mapping_status.csv`: resolved fuel-code/product mappings and unresolved cases.
-
-CLI wrapper remains available at `codebase/other/compare_transport_results_tables.py` if needed.
-
 # Common issues:
 
 - Units need to be manually set within the LEAP GUI to ensure correct scale value if it is not already. This is because it seems that when we use the create_branches_from_export_file() funciton to create branches, they seem to default to some unknown value that seems to be making LEAP project incorrect values. See Industry example comments for more details.

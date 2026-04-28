@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from codebase.utilities.master_config import config_table_exists, read_config_table
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -55,12 +57,12 @@ def _read_override_table(path: Path) -> pd.DataFrame:
         "esto_product_override",
         "esto_flow_override",
     ]
-    if not path.exists():
+    if not config_table_exists(path):
         return pd.DataFrame(columns=cols + ["label_norm"])
     if path.suffix.lower() in {".xlsx", ".xlsm", ".xls"}:
-        df = pd.read_excel(path)
+        df = read_config_table(path)
     else:
-        df = pd.read_csv(path)
+        df = read_config_table(path)
     df.columns = [str(c).strip().lower() for c in df.columns]
     for col in cols:
         if col not in df.columns:
@@ -73,14 +75,14 @@ def _read_override_table(path: Path) -> pd.DataFrame:
 
 
 def _build_leap_label_map(codebook_path: Path) -> pd.DataFrame:
-    leap_df = pd.read_excel(codebook_path, sheet_name="ESTO_LEAP_names")
+    leap_df = read_config_table(codebook_path, sheet_name="ESTO_LEAP_names")
     leap_df = leap_df[leap_df["category"].astype(str).str.strip().str.lower() == "products"].copy()
     leap_df["leap_label"] = leap_df["leap_name"].fillna("").astype(str).str.strip()
     leap_df["leap_label_norm"] = leap_df["leap_label"].map(normalize_label)
     leap_df["esto_product"] = leap_df["original_label"].fillna("").astype(str).str.strip()
     leap_df["source"] = "esto_leap_names"
 
-    code_df = pd.read_excel(codebook_path, sheet_name="code_to_name")
+    code_df = read_config_table(codebook_path, sheet_name="code_to_name")
     code_df["name"] = code_df["name"].fillna("").astype(str).str.strip()
     code_df["name_norm"] = code_df["name"].map(normalize_label)
     code_df["esto_label"] = code_df["esto_label"].fillna("").astype(str).str.strip()
@@ -170,7 +172,7 @@ def build_views(
 
     sector_projection_fuels: dict[str, set[str]] = {}
     if projection_table_path and projection_table_path.exists():
-        proj = pd.read_csv(projection_table_path)
+        proj = read_config_table(projection_table_path)
         years = [str(y) for y in range(2023, 2071) if str(y) in proj.columns]
         if years:
             for y in years:
@@ -223,7 +225,7 @@ def build_views(
     synthetic_rows: list[dict[str, object]] = []
     leap_rows = pd.DataFrame(columns=["sheet_name", "fuel_label"])
     if leap_long_path and leap_long_path.exists():
-        leap_long = pd.read_csv(leap_long_path)
+        leap_long = read_config_table(leap_long_path)
         if {"sheet_name", "fuel_label"}.issubset(leap_long.columns):
             leap_rows = leap_long[["sheet_name", "fuel_label"]].drop_duplicates().copy()
 
@@ -447,7 +449,7 @@ def run_mapping_views_workflow(
     codebook_path: Path | str = Path("config/sector_fuel_codes_to_names.xlsx"),
     sheet_map_path: Path | str = Path("config/leap_results_sheet_map.csv"),
     override_path: Path | str = Path("config/backup_leap_mappings.xlsx"),
-    leap_long_path: Path | str = Path("outputs/leap_results_dashboard/USA/leap_long.csv"),
+    leap_long_path: Path | str = Path("outputs/dashboards/leap_results_dashboard/USA/leap_long.csv"),
     projection_table_path: Path | str = Path("data/merged_file_energy_ALL_20251106.csv"),
     output_dir: Path | str = Path("config/computer_generated_config/leap_mapping_views/USA"),
     fail_on_hard_conflicts: bool = False,

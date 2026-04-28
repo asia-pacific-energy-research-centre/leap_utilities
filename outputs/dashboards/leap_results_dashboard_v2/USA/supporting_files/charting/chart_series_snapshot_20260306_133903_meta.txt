@@ -1,0 +1,6 @@
+Chart series snapshot metadata
+timestamp: 20260306_133903
+source workflow: codebase/leap_results_dashboard_v2_workflow.py
+logic: collapse_sheets_by_sector_name_for_charts -> filter_full_comparator_chart_rows -> build_total_rows_for_charts -> filter_full_comparator_chart_rows -> drop_duplicates
+rows: 139744
+columns: economy, sheet, fuel_label, scenario, source, year, value

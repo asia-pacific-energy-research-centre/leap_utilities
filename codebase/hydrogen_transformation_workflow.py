@@ -1,4 +1,13 @@
 #%%
+"""
+Build and optionally import hydrogen-specific LEAP transformation branches.
+
+This workflow reuses the shared transformation analysis helpers but keeps
+hydrogen process configuration and export filenames separate from the main
+transformation workflow. Use it when hydrogen needs to be generated, reviewed,
+or imported independently from the broader transformation workbook.
+"""
+
 # Hydrogen-specific transformation workflow that reuses transformation core helpers.
 # Most user-editable settings live in `codebase/workflow_config.py`.
 from __future__ import annotations
@@ -20,6 +29,9 @@ if str(CURRENT_DIR) not in sys.path:
 from codebase.functions import transformation_analysis_utils as core
 from codebase.configuration import workflow_config as workflow_cfg
 from codebase.functions import leap_api, leap_exports
+from codebase.functions.analysis_input_write_dispatcher import (
+    get_analysis_input_write_mode,
+)
 from codebase.configuration.config import (
     BRANCH_DEMAND_CATEGORY,
     BRANCH_DEMAND_TECHNOLOGY,
@@ -502,7 +514,7 @@ def run_hydrogen_export_and_import(
         scenario_list,
         import_scenario,
     )
-    if not LEAP_API_AVAILABLE:
+    if get_analysis_input_write_mode() == "api" and not LEAP_API_AVAILABLE:
         print("[INFO] LEAP API unavailable in this environment; skipping branch creation/fill.")
         return exports
     for index, scenario_choice in enumerate(scenario_choices):
@@ -658,7 +670,9 @@ def run_hydrogen_leap_import(
 # Simple notebook-focused configuration block.
 ECONOMIES = list(core.ECONOMIES_TO_ANALYZE)
 SCENARIOS = list(DEFAULT_SCENARIOS)
-INCLUDE_LEAP_IMPORT = LEAP_API_AVAILABLE
+INCLUDE_LEAP_IMPORT = (
+    LEAP_API_AVAILABLE if get_analysis_input_write_mode() == "api" else True
+)
 IMPORT_SCENARIOS = [
     scenario.lower()
     for scenario in SCENARIOS
@@ -680,3 +694,14 @@ if __name__ == "__main__":
     if exports:
         print(f"Hydrogen transformation export saved to: {exports[0]}")
 #%%
+
+
+try:
+    from codebase.utilities.workflow_common import emit_completion_beep as _emit_completion_beep
+except Exception:  # pragma: no cover
+    def _emit_completion_beep(*, success: bool = True) -> None:  # noqa: ARG001
+        return
+
+
+if __name__ == "__main__":  # pragma: no cover
+    _emit_completion_beep(success=True, style="chime")

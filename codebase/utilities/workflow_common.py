@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+import argparse
 import re
+import sys
+import time
+import zipfile
+from datetime import date, datetime
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
@@ -11,8 +16,270 @@ from codebase.functions.leap_core import (
     create_branches_from_export_file,
     fill_branches_from_export_file,
 )
+from codebase.functions.analysis_input_write_dispatcher import (
+    dispatch_analysis_input_write,
+)
+from codebase.utilities import fuel_catalog_preflight
 
 AGGREGATE_ECONOMY_LABELS = {"00_APEC", "ALL_ECONOMIES", "ALL"}
+REPO_ROOT = Path(__file__).resolve().parents[2]
+
+
+def format_duration(seconds: float) -> str:
+    """Return a compact human-readable duration string."""
+    total_seconds = max(float(seconds), 0.0)
+    hours = int(total_seconds // 3600)
+    minutes = int((total_seconds % 3600) // 60)
+    secs = total_seconds - (hours * 3600) - (minutes * 60)
+    return f"{hours}h {minutes}m {secs:.1f}s"
+
+
+class WorkflowTimer:
+    """Small stage timer for notebook-safe workflow scripts."""
+
+    def __init__(
+        self,
+        workflow_name: str,
+        *,
+        enabled: bool = True,
+        print_each: bool = True,
+    ) -> None:
+        self.workflow_name = str(workflow_name).strip() or "workflow"
+        self.enabled = bool(enabled)
+        self.print_each = bool(print_each)
+        self.started_at = datetime.now()
+        self._last_at = self.started_at
+        self._start_perf = time.perf_counter()
+        self._last_perf = self._start_perf
+        self._records: list[dict[str, object]] = []
+
+    @property
+    def records(self) -> list[dict[str, object]]:
+        return list(self._records)
+
+    def lap(self, stage: str, *, status: str = "success") -> dict[str, object]:
+        """Record elapsed time since the previous lap."""
+        if not self.enabled:
+            return {}
+        now_perf = time.perf_counter()
+        now = datetime.now()
+        duration = now_perf - self._last_perf
+        stage_started_at = self._last_at
+        self._last_perf = now_perf
+        self._last_at = now
+        record = {
+            "workflow": self.workflow_name,
+            "stage_order": len(self._records) + 1,
+            "stage": str(stage).strip() or "stage",
+            "status": str(status).strip() or "success",
+            "started_at": stage_started_at.isoformat(timespec="seconds"),
+            "ended_at": now.isoformat(timespec="seconds"),
+            "duration_seconds": round(duration, 3),
+            "duration_formatted": format_duration(duration),
+        }
+        self._records.append(record)
+        if self.print_each:
+            print(
+                "[TIMING] "
+                f"{self.workflow_name} | {record['stage']} | "
+                f"{record['duration_formatted']}"
+            )
+        return record
+
+    def finish(self, *, status: str = "success") -> dict[str, object]:
+        """Record total workflow runtime."""
+        if not self.enabled:
+            return {}
+        now = datetime.now()
+        duration = time.perf_counter() - self._start_perf
+        record = {
+            "workflow": self.workflow_name,
+            "stage_order": len(self._records) + 1,
+            "stage": "total",
+            "status": str(status).strip() or "success",
+            "started_at": self.started_at.isoformat(timespec="seconds"),
+            "ended_at": now.isoformat(timespec="seconds"),
+            "duration_seconds": round(duration, 3),
+            "duration_formatted": format_duration(duration),
+        }
+        self._records.append(record)
+        if self.print_each:
+            print(
+                "[TIMING] "
+                f"{self.workflow_name} | total | {record['duration_formatted']}"
+            )
+        return record
+
+    def write_csv(self, path: Path | str) -> Path | None:
+        """Write timing records to CSV and return the path."""
+        if not self.enabled or not self._records:
+            return None
+        output_path = Path(path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(self._records).to_csv(output_path, index=False)
+        if self.print_each:
+            print(f"[TIMING] {self.workflow_name} timing written to {output_path}")
+        return output_path
+
+
+def emit_completion_beep(
+    *,
+    success: bool = True,
+    style: str = "simple",
+    enabled: bool = True,
+    count: int = 1,
+    frequency_hz: int = 880,
+    duration_ms: int = 180,
+    pause_seconds: float = 0.12,
+) -> None:
+    """Emit an audible completion signal (winsound, notebook audio, terminal bell)."""
+    if not bool(enabled):
+        return
+
+    count = max(int(count), 1)
+    frequency = max(int(frequency_hz), 37)
+    duration = max(int(duration_ms), 50)
+    pause_seconds = max(float(pause_seconds), 0.0)
+    if not success:
+        count = max(count, 2)
+        frequency = max(frequency - 180, 37)
+        if style == "chime":
+            style = "error"
+
+    if style == "chime":
+        tone_plan = [(659, 90), (784, 90), (988, 140)]  # E5, G5, B5
+        gap_ms = 40
+    elif style == "error":
+        tone_plan = [(440, 140), (330, 180)]  # A4 -> E4 (descending)
+        gap_ms = 60
+    else:
+        tone_plan = [(frequency, duration)] * count
+        gap_ms = int(pause_seconds * 1000)
+
+    try:
+        import winsound  # type: ignore
+
+        for index, (freq_hz, tone_duration_ms) in enumerate(tone_plan):
+            try:
+                winsound.Beep(max(int(freq_hz), 37), max(int(tone_duration_ms), 50))
+            except Exception:
+                winsound.MessageBeep()
+            if gap_ms > 0 and index < len(tone_plan) - 1:
+                time.sleep(gap_ms / 1000.0)
+        return
+    except Exception:
+        pass
+
+    try:
+        from IPython import get_ipython  # type: ignore
+        from IPython.display import Javascript, display  # type: ignore
+
+        ip = get_ipython()
+        shell_name = type(ip).__name__ if ip is not None else ""
+        if shell_name == "ZMQInteractiveShell":
+            tones_js = ", ".join(
+                f"{{freq: {max(int(freq_hz), 37)}, durMs: {max(int(tone_duration_ms), 50)}}}"
+                for freq_hz, tone_duration_ms in tone_plan
+            )
+            js = f"""
+            (() => {{
+              const AudioCtx = window.AudioContext || window.webkitAudioContext;
+              if (!AudioCtx) return;
+              const tones = [{tones_js}];
+              const gapMs = {int(gap_ms)};
+              const playOne = (delayMs, freq, durMs) => {{
+                setTimeout(() => {{
+                  const ctx = new AudioCtx();
+                  const osc = ctx.createOscillator();
+                  const gain = ctx.createGain();
+                  osc.type = "sine";
+                  osc.frequency.value = freq;
+                  gain.gain.value = 0.045;
+                  osc.connect(gain);
+                  gain.connect(ctx.destination);
+                  osc.start();
+                  osc.stop(ctx.currentTime + (durMs / 1000));
+                  osc.onended = () => ctx.close();
+                }}, delayMs);
+              }};
+              let cursor = 0;
+              for (const tone of tones) {{
+                playOne(cursor, tone.freq, tone.durMs);
+                cursor += tone.durMs + gapMs;
+              }}
+            }})();
+            """
+            display(Javascript(js))
+            return
+    except Exception:
+        pass
+
+    for index, _ in enumerate(tone_plan):
+        print("\a", end="", flush=True)
+        if gap_ms > 0 and index < len(tone_plan) - 1:
+            time.sleep(gap_ms / 1000.0)
+    print("", flush=True)
+
+
+def archive_config_dir_once_per_day(
+    config_dir: Path | None = None,
+    archive_root: Path | None = None,
+    *,
+    today: date | None = None,
+) -> Path | None:
+    """Archive the config folder once per day, skipping if already archived."""
+    config_dir = (config_dir or (REPO_ROOT / "config")).resolve()
+    archive_root = (archive_root or (config_dir / ".archive")).resolve()
+    date_token = (today or date.today()).strftime("%Y%m%d")
+    daily_dir = archive_root / date_token
+    daily_dir.mkdir(parents=True, exist_ok=True)
+
+    existing = sorted(daily_dir.glob("config_*.zip"))
+    if existing:
+        return existing[0]
+
+    archive_path = daily_dir / f"config_{date_token}.zip"
+    base_dir = config_dir
+    skip_dir = archive_root
+    with zipfile.ZipFile(archive_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for path in base_dir.rglob("*"):
+            if path.is_dir():
+                continue
+            if skip_dir in path.parents:
+                continue
+            # Excel lock files (for open workbooks) are temporary and frequently unreadable.
+            if path.name.startswith("~$"):
+                continue
+            rel_path = path.relative_to(base_dir)
+            try:
+                zf.write(path, arcname=str(rel_path))
+            except PermissionError:
+                print(f"[WARN] Skipping unreadable config file during archive: {path}")
+                continue
+    return archive_path
+
+
+def parse_notebook_safe_args(
+    parser: argparse.ArgumentParser,
+    argv: Sequence[str] | None = None,
+) -> argparse.Namespace:
+    """Parse CLI args while tolerating Jupyter kernel connection-file flags."""
+    if argv is None:
+        argv = sys.argv[1:]
+
+    filtered_args: list[str] = []
+    skip_next = False
+    for token in argv:
+        if skip_next:
+            skip_next = False
+            continue
+        if token == "-f":
+            skip_next = True
+            continue
+        if str(token).startswith("--f="):
+            continue
+        filtered_args.append(str(token))
+    return parser.parse_args(filtered_args)
 
 
 def normalize_economies(economies: str | Iterable[str] | None) -> list[str]:
@@ -255,38 +522,73 @@ def import_workbook_to_leap(
     """Connect to LEAP, validate the workbook, and fill branches."""
     available = list_export_scenarios(export_path, sheet_name)
     scenario_choice = scenario or (available[0] if available else None)
+    available_lower = {str(name).strip().lower() for name in available}
+    current_accounts_available = any(
+        label in available_lower for label in {"current accounts", "current account"}
+    )
     if scenario_choice and scenario_choice not in available:
         raise ValueError(
             f"Scenario '{scenario_choice}' not found in {export_path.name}; options {available}"
         )
     if region:
         validate_export_region(export_path, sheet_name, region)
-
-    leap_conn = connect_to_leap()
-    if leap_conn is None:
-        raise RuntimeError("Unable to connect to LEAP.")
-    if create_branches:
-        create_kwargs = {
-            "sheet_name": sheet_name,
-            "branch_root": branch_root,
-            "branch_type_mapping": branch_type_mapping,
-            "default_branch_type": default_branch_type,
-            "RAISE_ERROR_ON_FAILED_BRANCH_CREATION": raise_on_missing_branch,
-        }
-        if branch_path_col is not None:
-            create_kwargs["branch_path_col"] = branch_path_col
-        create_branches_from_export_file(
-            leap_conn,
-            export_path,
-            **create_kwargs,
+    if include_current_accounts and not current_accounts_available:
+        print(
+            "[INFO] Skipping Current Accounts import for "
+            f"{export_path.name}: workbook scenarios are {available}."
         )
-    if fill_branches:
-        fill_branches_from_export_file(
-            leap_conn,
-            export_path,
+        include_current_accounts = False
+
+    def _run_api_write() -> Path:
+        leap_conn = connect_to_leap()
+        if leap_conn is None:
+            raise RuntimeError("Unable to connect to LEAP.")
+
+        fuel_catalog_preflight.run_fuel_catalog_preflight(
+            export_path=export_path,
             sheet_name=sheet_name,
             scenario=scenario_choice,
-            region=region,
-            HANDLE_CURRENT_ACCOUNTS_TOO=include_current_accounts,
+            context="workflow_common.import_workbook_to_leap",
+            leap_app=leap_conn,
         )
+        if create_branches:
+            create_kwargs = {
+                "sheet_name": sheet_name,
+                "branch_root": branch_root,
+                "branch_type_mapping": branch_type_mapping,
+                "default_branch_type": default_branch_type,
+                "RAISE_ERROR_ON_FAILED_BRANCH_CREATION": raise_on_missing_branch,
+            }
+            if branch_path_col is not None:
+                create_kwargs["branch_path_col"] = branch_path_col
+            create_branches_from_export_file(
+                leap_conn,
+                export_path,
+                **create_kwargs,
+            )
+        if fill_branches:
+            fill_branches_from_export_file(
+                leap_conn,
+                export_path,
+                sheet_name=sheet_name,
+                scenario=scenario_choice,
+                region=region,
+                RAISE_ERROR_ON_FAILED_SET=raise_on_missing_branch,
+                HANDLE_CURRENT_ACCOUNTS_TOO=include_current_accounts,
+                RUN_FUEL_CATALOG_PREFLIGHT=False,
+            )
+        return export_path
+
+    dispatch_result = dispatch_analysis_input_write(
+        export_path=export_path,
+        sheet_name=sheet_name,
+        scenario=scenario_choice,
+        region=region,
+        context_label="workflow_common.import_workbook_to_leap",
+        run_api_write=_run_api_write,
+    )
+    if dispatch_result.get("mode") == "api":
+        result_path = dispatch_result.get("api_result")
+        if isinstance(result_path, Path):
+            return result_path
     return export_path

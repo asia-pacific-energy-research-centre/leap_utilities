@@ -7,12 +7,26 @@
 # ============================================================
 
 import contextlib
+import inspect
 import io
 import math
 import os
 import re
 
 import pandas as pd
+from codebase.utilities import fuel_catalog_preflight
+from codebase.functions.analysis_input_write_dispatcher import (
+    ensure_analysis_view_api_read_allowed,
+    ensure_api_write_allowed,
+)
+from codebase.functions.leap_api_guard import (
+    ensure_leap_api_allowed,
+    is_leap_api_allowed,
+)
+from codebase.functions.leap_session import (
+    get_live_pinned_leap_app,
+    pin_leap_app,
+)
 
 try:  # pragma: no cover - windows-only
     from win32com.client import Dispatch, GetActiveObject, gencache
@@ -82,11 +96,45 @@ ASK_ON_MISSING_BRANCH_CREATION = True
 # Debug toggle for AddAuxiliary failures.
 # Set to True here, or set env var LEAP_BREAK_ON_ADDAUXILIARY_ERROR=1.
 BREAK_ON_ADD_AUXILIARY_ERROR = True
+_LEAP_KNOWN_UNIT_NAMES = {
+    str(unit.get("name")).strip().lower()
+    for unit in LEAP_UNITS_BY_ID.values()
+    if unit.get("name")
+}
+_SKIP_UNIT_ASSIGNMENT_ALIASES = {"percent", "%", "percentage"}
+LEAP_IMPORT_LOG_LEVEL_DEFAULT = "detailed"
+LEAP_IMPORT_WARNING_PRINT_LIMIT_DEFAULT = 25
 
 
 def _env_flag(name: str) -> bool:
     value = os.getenv(name, "")
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _leap_import_log_level() -> str:
+    """Return LEAP import log verbosity level."""
+    value = os.getenv("LEAP_IMPORT_LOG_LEVEL", LEAP_IMPORT_LOG_LEVEL_DEFAULT)
+    level = str(value or "").strip().lower()
+    return level if level else LEAP_IMPORT_LOG_LEVEL_DEFAULT
+
+
+def _is_summary_logging() -> bool:
+    """Return True when row-level import logs should be suppressed."""
+    return _leap_import_log_level() in {"summary", "quiet", "minimal"}
+
+
+def _warning_print_limit() -> int:
+    """Max warning lines per repeated warning kind."""
+    try:
+        value = int(
+            os.getenv(
+                "LEAP_IMPORT_WARNING_PRINT_LIMIT",
+                str(LEAP_IMPORT_WARNING_PRINT_LIMIT_DEFAULT),
+            )
+        )
+    except Exception:
+        value = LEAP_IMPORT_WARNING_PRINT_LIMIT_DEFAULT
+    return max(value, 1)
 
 
 def _prompt_on_missing_branch_creation(message: str) -> None:
@@ -117,7 +165,7 @@ def _require_global(name: str, val):
 
 def is_leap_api_available():
     """Return True when win32com/LEAP API is importable."""
-    return _WIN32COM_AVAILABLE
+    return _WIN32COM_AVAILABLE and is_leap_api_allowed()
 
 _LEAP_TYPELIB = ("{6161465F-91BE-4B6B-8BB0-361F5BFA612A}", 0, 2, 3)
 
@@ -151,11 +199,16 @@ def _ensure_leap_com_wrappers():
 
 def connect_to_leap(force_rebuild: bool = True):
     """Enhanced LEAP connection with project readiness checks."""
+    ensure_leap_api_allowed("leap_core.connect_to_leap")
     if not _WIN32COM_AVAILABLE:
         raise RuntimeError(
             "LEAP API (`win32com`) is unavailable in this environment (Linux/WSL). "
             "Run this script from Windows with pywin32 installed to reach LEAP."
         )
+    pinned = get_live_pinned_leap_app()
+    if pinned is not None:
+        print("[INFO] Reusing pinned LEAP instance")
+        return pinned
     print("[INFO] Connecting to LEAP...")
     
     try:
@@ -168,6 +221,7 @@ def connect_to_leap(force_rebuild: bool = True):
         except:
             leap_app = Dispatch("LEAP.LEAPApplication")
             print("[SUCCESS] Created new LEAP instance")
+        pin_leap_app(leap_app)
         
         # Check if LEAP is ready for Branch() calls
         try:
@@ -207,29 +261,66 @@ def safe_branch_call(leap_obj, branch_path, AUTO_SET_MISSING_BRANCHES=False, THR
         else:
             print("Branch not found")
     """
+    def _clean_branch_path(path):
+        return "\\".join([part.strip() for part in str(path or "").split("\\") if str(part).strip()])
+
+    def _transport_branch_candidates(path):
+        cleaned = _clean_branch_path(path)
+        if not cleaned:
+            return []
+        parts = cleaned.split("\\")
+        if not parts or parts[0] != "Demand":
+            return [cleaned]
+        if len(parts) < 2:
+            return [cleaned]
+        non_road_roots = {
+            "Freight non road",
+            "Passenger non road",
+            "International transport",
+            "Pipeline transport",
+            "Nonspecified transport",
+        }
+        if parts[1] == "Transport non road":
+            logical_parts = parts[2:]
+            if logical_parts and logical_parts[0] in non_road_roots:
+                legacy = "\\".join(["Demand", *logical_parts])
+                return [cleaned, legacy]
+            return [cleaned]
+        if parts[1] in non_road_roots:
+            canonical = "\\".join(["Demand", "Transport non road", *parts[1:]])
+            return [canonical, cleaned]
+        return [cleaned]
+
+    ensure_analysis_view_api_read_allowed("leap_core.safe_branch_call")
+
     if leap_obj is None:
         return None
-    
-    branches = leap_obj.Branches
-    try:
-        exists = branches.Exists(branch_path)
-    except Exception as e:
-        breakpoint()
-        raise Exception(f"Branches.Exists failed for '{branch_path}': {e}")
 
-    if not exists:
-        if AUTO_SET_MISSING_BRANCHES:
-            print(f"[INFO] AUTO_SET_MISSING_BRANCHES is set to true. The branch will be auto-created: {branch_path}")
-            #set it 
-        elif THROW_ERROR_ON_MISSING:
-            breakpoint()
-            raise Exception(f"Branches.Exists returned false for '{branch_path}'. AUTO_SET_MISSING_BRANCHES is False and THROW_ERROR_ON_MISSING is true so throwing an error.")
-        else:
-            pass# THROW_ERROR_ON_MISSING is false so we just want to return None
+    branch_candidates = _transport_branch_candidates(branch_path)
+    if not branch_candidates:
         return None
 
-    branch = leap_obj.Branch(branch_path)
-    return branch
+    branches = leap_obj.Branches
+    for candidate_path in branch_candidates:
+        try:
+            exists = branches.Exists(candidate_path)
+        except Exception as e:
+            breakpoint()
+            raise Exception(f"Branches.Exists failed for '{candidate_path}': {e}")
+
+        if exists:
+            return leap_obj.Branch(candidate_path)
+
+    requested_path = branch_candidates[0]
+    if AUTO_SET_MISSING_BRANCHES:
+        print(f"[INFO] AUTO_SET_MISSING_BRANCHES is set to true. The branch will be auto-created: {requested_path}")
+    elif THROW_ERROR_ON_MISSING:
+        breakpoint()
+        raise Exception(
+            f"Branches.Exists returned false for '{requested_path}'. "
+            "AUTO_SET_MISSING_BRANCHES is False and THROW_ERROR_ON_MISSING is true so throwing an error."
+        )
+    return None
     # except Exception as e:
     #     if timeout_msg:
     #         error_str = str(e)
@@ -264,27 +355,26 @@ def safe_set_variable(
     context="",
 ):
     """Safely assign expressions to LEAP variables with logging."""
-        
+    ensure_api_write_allowed("leap_core.safe_set_variable")
     try:
         var = obj.Variable(varname)
         if var is None:
-            print(f"[WARN] Missing variable '{varname}' on {context} within LEAP.")
+            if not _is_summary_logging():
+                print(f"[WARN] Missing variable '{varname}' on {context} within LEAP.")
             return False
-        prev_expr = var.Expression
-        prev_expr_text = str(prev_expr).strip() if prev_expr is not None else ""
-        if prev_expr_text:
-            print(f"[INFO] Clearing previous expression for '{varname}' on {context}")
-            var.Expression = ""
-            try:
-                obj.Application.RefreshBranches()
-            except Exception:
-                pass
         var.Expression = expr
         #check that the expression is a string
         short_expr = str(expr)[:80] + ("..." if len(str(expr)) > 80 else "")
-        print(f"[SET] {context} → {varname} = {short_expr}")
+        if not _is_summary_logging():
+            print(f"[SET] {context} → {varname} = {short_expr}")
         
-        _set_variable_unit(L, var, unit_name, context=context)
+        try:
+            _set_variable_unit(L, var, unit_name, context=context)
+        except Exception as exc:
+            if not _is_summary_logging():
+                print(
+                    f"[WARN] Unit assignment skipped for '{varname}' on {context}: {exc}"
+                )
         # Set scale if provided #NOTE i tried to set scale here but it didnt work. cannot access Scales from var.
         # if scale_value is None:
         #     return True
@@ -305,20 +395,34 @@ def _set_variable_unit(L, var, unit_name, context=""):
         return True
     if isinstance(unit_name, str) and unit_name.strip().lower() in {"", "nan"}:
         return True
+    normalized_unit_name = str(unit_name).strip()
+    if normalized_unit_name.lower() in _SKIP_UNIT_ASSIGNMENT_ALIASES:
+        # LEAP does not expose a generic "Percent" unit in all models; keep expression only.
+        return True
     units = L.Units
-    if not units.Exists(unit_name):
-        raise ValueError(f"Unit not found: {unit_name}. Unit not set.")
-    unit = units.Item(unit_name)  # returns ILEAPUnit
+    if not units.Exists(normalized_unit_name):
+        raise ValueError(f"Unit not found: {normalized_unit_name}. Unit not set.")
+    unit = units.Item(normalized_unit_name)  # returns ILEAPUnit
     if unit is None:
-        known_units = {u.get("name") for u in LEAP_UNITS_BY_ID.values()}
-        if unit_name not in known_units:
+        if normalized_unit_name.lower() not in _LEAP_KNOWN_UNIT_NAMES:
             print(
-                f"[WARN] Unit name '{unit_name}' not found in LEAP units list. Proceeding without setting unit."
+                f"[WARN] Unit name '{normalized_unit_name}' not found in LEAP units list. Proceeding without setting unit."
             )
             return True
         raise ValueError(
-            f"Unit name '{unit_name}' found in LEAP_UNITS_BY_ID but ILEAPUnit not found in LEAP. Cannot set unit."
+            f"Unit name '{normalized_unit_name}' found in LEAP_UNITS_BY_ID but ILEAPUnit not found in LEAP. Cannot set unit."
         )
+    try:
+        current_unit = var.DataUnit
+    except Exception:
+        current_unit = None
+    if current_unit is not None:
+        try:
+            current_name = str(current_unit.Name).strip()
+        except Exception:
+            current_name = ""
+        if current_name and current_name.lower() == normalized_unit_name.lower():
+            return True
     var.DataUnit = unit  # or: var.DataUnitID = unit.ID
     return True
 
@@ -826,12 +930,77 @@ def create_transformation_process(
     dispatch_rule=0,
 ):
     """Create a transformation process branch (LEAP.AddProcess) under a process category."""
+    def _find_existing_process(parent, target_name):
+        target = _normalize_label(target_name)
+        if not target:
+            return None
+        try:
+            children = parent.Children
+            child_count = int(children.Count)
+        except Exception:
+            child_count = 0
+        for idx in range(1, child_count + 1):
+            try:
+                child = children.Item(idx)
+                child_name = str(child.Name).strip()
+            except Exception:
+                continue
+            if _normalize_label(child_name) == target:
+                return child
+        try:
+            parent_full = str(parent.FullName).strip()
+        except Exception:
+            parent_full = ""
+        if parent_full:
+            return safe_branch_call(
+                L,
+                parent_full + "\\" + target_name,
+                AUTO_SET_MISSING_BRANCHES=False,
+                THROW_ERROR_ON_MISSING=False,
+            )
+        return None
+
     try:
         parent = _resolve_branch_reference(L, parent_branch, description="process parent")
         sanitized_feedstock = sanitize_leap_name(feedstock_fuel) if feedstock_fuel else ""
         if sanitized_feedstock:
             ensure_fuel_exists(L, sanitized_feedstock)
-        return L.AddProcess(parent.ID, process_name, sanitized_feedstock or "", int(dispatch_rule))
+        existing = _find_existing_process(parent, process_name)
+        if existing is not None:
+            return existing
+
+        # LEAP COM signatures can vary by build; try the common variants.
+        attempts = [
+            lambda: L.AddProcess(parent.ID, process_name, sanitized_feedstock or "", int(dispatch_rule)),
+            lambda: L.AddProcess(parent.ID, process_name, int(dispatch_rule), sanitized_feedstock or ""),
+            lambda: L.AddProcess(parent.ID, process_name, int(dispatch_rule)),
+            lambda: L.AddProcess(parent.ID, process_name, sanitized_feedstock or ""),
+        ]
+        errors = []
+        for attempt in attempts:
+            try:
+                created = attempt()
+                if created is not None:
+                    if sanitized_feedstock:
+                        try:
+                            create_transformation_feedstock(L, created, sanitized_feedstock)
+                        except Exception:
+                            pass
+                    return created
+            except Exception as exc:
+                errors.append(str(exc))
+                continue
+
+        # One last check in case LEAP created the process despite COM arg ambiguity.
+        existing_after = _find_existing_process(parent, process_name)
+        if existing_after is not None:
+            if sanitized_feedstock:
+                try:
+                    create_transformation_feedstock(L, existing_after, sanitized_feedstock)
+                except Exception:
+                    pass
+            return existing_after
+        raise RuntimeError("; ".join(errors) if errors else "Unknown AddProcess failure")
     except Exception as exc:
         print(f"[ERROR] Failed to create transformation process '{process_name}': {exc}")
         breakpoint()
@@ -871,11 +1040,37 @@ def create_transformation_feedstock(L, parent_branch, fuel_name):
     def _normalize_feedstock_label(text):
         return sanitize_leap_name(text).strip().lower()
 
+    def _child_fuel_label(child):
+        """Return the fuel label linked to a feedstock child branch when available."""
+        try:
+            fuel_obj = child.Fuel
+        except Exception:
+            return ""
+        try:
+            name = str(fuel_obj.Name).strip()
+            if name:
+                return name
+        except Exception:
+            pass
+        try:
+            text = str(fuel_obj).strip()
+            if text:
+                return text
+        except Exception:
+            pass
+        return ""
+
     def _find_existing_feedstock(parent, target_name):
         target_norm = _normalize_feedstock_label(target_name)
         if not target_norm:
             return None
         feedstock_category = None
+        try:
+            parent_name = str(parent.Name).strip()
+        except Exception:
+            parent_name = ""
+        if _normalize_label(parent_name) == "feedstock fuels":
+            feedstock_category = parent
         try:
             children = parent.Children
             child_count = int(children.Count)
@@ -890,7 +1085,7 @@ def create_transformation_feedstock(L, parent_branch, fuel_name):
                 child_name = str(child.Name).strip()
             except Exception:
                 child_name = ""
-            if _normalize_label(child_name) == "feedstock fuels":
+            if feedstock_category is None and _normalize_label(child_name) == "feedstock fuels":
                 feedstock_category = child
                 break
         if feedstock_category is None:
@@ -931,6 +1126,9 @@ def create_transformation_feedstock(L, parent_branch, fuel_name):
             if not child_name:
                 continue
             if _normalize_feedstock_label(child_name) == target_norm:
+                return child
+            linked_fuel = _child_fuel_label(child)
+            if linked_fuel and _normalize_feedstock_label(linked_fuel) == target_norm:
                 return child
         try:
             category_full = str(feedstock_category.FullName).strip()
@@ -987,6 +1185,7 @@ def create_simple_transformation_process(
 
 def get_resource_branch_for_fuel(L, fuel_name):
     """Returns the supply branch assigned to the fuel (Resources → Primary/Secondary)."""
+    ensure_analysis_view_api_read_allowed("leap_core.get_resource_branch_for_fuel")
     try:
         sanitized_fuel = sanitize_leap_name(fuel_name)
         branch = L.ResourceBranchFromFuel(sanitized_fuel)
@@ -1003,6 +1202,7 @@ def get_resource_branch_for_fuel(L, fuel_name):
 
 def ensure_fuel_exists(L, fuel_name, copy_from=None, fuel_state=2):
     """Create a new fuel entry if one does not already exist."""
+    ensure_api_write_allowed("leap_core.ensure_fuel_exists")
     sanitized_fuel = sanitize_leap_name(fuel_name)
     if not sanitized_fuel:
         raise ValueError(f"Fuel name '{fuel_name}' is empty after sanitization.")
@@ -1169,6 +1369,83 @@ def sanitize_leap_branch_path(raw: str | None) -> str:
     return "\\".join(sanitized_segments)
 
 
+def is_placeholder_branch_path(raw: str | None) -> bool:
+    """Return True when a branch-path token is placeholder text."""
+    text = str(raw or "").strip().lower()
+    return text in {"", "none", "nan", "<na>", "null"}
+
+
+def ensure_analysis_view_context(
+    L,
+    *,
+    context_label: str = "",
+    preferred_branches: tuple[str, ...] = ("Transformation", "Demand", "Resources", "Key"),
+) -> bool:
+    """
+    Best-effort switch LEAP to Analysis view and a safe active branch.
+
+    Some LEAP API operations can fail or behave inconsistently when LEAP is in
+    Results view; this helper is defensive across LEAP UI/API variants.
+    """
+    ensure_analysis_view_api_read_allowed("leap_core.ensure_analysis_view_context")
+    if L is None:
+        return False
+    prefix = f"{context_label}: " if str(context_label).strip() else ""
+    switched = False
+
+    for attr_name, attr_value in (
+        ("ActiveView", "Analysis"),
+        ("View", "Analysis"),
+        ("Mode", "Analysis"),
+    ):
+        if not hasattr(L, attr_name):
+            continue
+        try:
+            setattr(L, attr_name, attr_value)
+            print(f"[INFO] {prefix}LEAP view set via {attr_name}='{attr_value}'.")
+            switched = True
+            break
+        except Exception:
+            continue
+
+    for method_name in (
+        "ShowAnalysisView",
+        "ShowAnalysisViewTree",
+        "ShowAnalysisViewBranches",
+        "ShowAnalysisViewTable",
+        "ShowAnalysis",
+    ):
+        method = getattr(L, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            method()
+            print(f"[INFO] {prefix}LEAP view reset via {method_name}().")
+            switched = True
+            break
+        except Exception:
+            continue
+
+    branch_set = False
+    for branch_name in preferred_branches:
+        try:
+            if not bool(L.Branches.Exists(branch_name)):
+                continue
+            L.ActiveBranch = branch_name
+            print(f"[INFO] {prefix}LEAP active branch reset to '{branch_name}'.")
+            branch_set = True
+            break
+        except Exception:
+            continue
+
+    if not switched and not branch_set:
+        print(
+            f"[WARN] {prefix}Could not confirm Analysis-view reset. "
+            "If imports fail, switch LEAP UI to Analysis and retry."
+        )
+    return switched or branch_set
+
+
 def _collect_transformation_category_paths(branch_paths):
     """Return transformation-specific category paths (process/output/feedstock/aux)."""
     category_types = {
@@ -1299,7 +1576,6 @@ def _ensure_path_exists_create_if_not(
         elif branch_type in (
             BRANCH_PROCESS_CATEGORY,
             BRANCH_OUTPUT_CATEGORY,
-            BRANCH_FEEDSTOCK_CATEGORY,
             BRANCH_AUX_CATEGORY,
         ):
             warning = (
@@ -1311,6 +1587,10 @@ def _ensure_path_exists_create_if_not(
             if missing_process_categories is not None:
                 missing_process_categories.add(current_path)
             return None
+        elif branch_type == BRANCH_FEEDSTOCK_CATEGORY:
+            # Feedstock category is typically created implicitly with processes/feedstocks.
+            # Keep parent unchanged and continue to create the child feedstock branch.
+            continue
         elif branch_type in (
             BRANCH_TRANSFORMATION_MODULE,
             BRANCH_RESOURCE_ROOT,
@@ -1480,8 +1760,13 @@ def create_branches_from_export_file(
         > this arg is used when branch_type_mapping does not provide a type for a given path. this is currently only used for demand branches. in future it would be good to shift to only using branch_type_mapping for all branch types but its a bit difficult to do that right now without breaking existing functionality.
     - branch_type_mapping overrides default_branch_type for specific paths. set in create_branches_from_export_file 
     """
+    ensure_api_write_allowed("leap_core.create_branches_from_export_file")
     if L is None:
         raise RuntimeError("LEAP application instance (L) is required to create branches.")
+    ensure_analysis_view_context(
+        L,
+        context_label="create_branches_from_export_file",
+    )
 
     def _read_sheet(path, header_guess):
         try:
@@ -1509,12 +1794,16 @@ def create_branches_from_export_file(
 
     auxiliary_units_by_path = _build_auxiliary_units_by_path(df, branch_path_col)
 
-    branch_paths_raw = [bp for bp in df[branch_path_col].dropna().unique() if isinstance(bp, str)]
+    branch_paths_raw = [
+        bp
+        for bp in df[branch_path_col].dropna().unique()
+        if isinstance(bp, str) and not is_placeholder_branch_path(bp)
+    ]
     branch_paths = []
     seen = set()
     for bp in branch_paths_raw:
         sanitized_bp = sanitize_leap_branch_path(bp)
-        if not sanitized_bp or sanitized_bp in seen:
+        if is_placeholder_branch_path(sanitized_bp) or sanitized_bp in seen:
             continue
         seen.add(sanitized_bp)
         branch_paths.append(sanitized_bp)
@@ -1522,9 +1811,18 @@ def create_branches_from_export_file(
 
     created = []
     skipped = []
+    skipped_existing = []
+    skipped_locked = []
     failed = []
     branch_type_mapping = branch_type_mapping or {}#if we were provided a branchtype mapping then the branch types will be inferred from that where possible
     branch_paths_copy = branch_paths.copy()
+    def _is_locked_transformation_fuel_child(path: str | None) -> bool:
+        text = str(path or "").strip()
+        return text.startswith("Transformation\\") and (
+            "\\Auxiliary Fuels\\" in text
+            or "\\Feedstock Fuels\\" in text
+            or "\\Output Fuels\\" in text
+        )
     inferred_mapping = build_branch_type_mapping_from_paths(branch_paths)
     for path, bt in inferred_mapping.items():
         branch_type_mapping.setdefault(path, bt)
@@ -1537,7 +1835,12 @@ def create_branches_from_export_file(
             missing_process_categories.add(category)
     # breakpoint()#investiage how to handle tranformation process categories sych as Transformation\Transfers\Processes\Upstream liquids transfers
     for bp in branch_paths:
+        if _is_locked_transformation_fuel_child(bp):
+            skipped_locked.append(bp)
+            skipped.append(bp)
+            continue
         if safe_branch_call(L, bp, AUTO_SET_MISSING_BRANCHES=False, THROW_ERROR_ON_MISSING=False) is not None:
+            skipped_existing.append(bp)
             skipped.append(bp)
             continue
                 
@@ -1566,7 +1869,11 @@ def create_branches_from_export_file(
         failed.append(bp)
         print(f"[WARN] Failed to create branch at '{bp}'.")
 
-    print(f"[INFO] Branch creation complete. Created {len(created)}, skipped existing {len(skipped)}.")
+    print(
+        "[INFO] Branch creation complete. "
+        f"Created {len(created)}, skipped existing {len(skipped_existing)}, "
+        f"skipped locked {len(skipped_locked)}."
+    )
     if missing_process_categories:
         print(
             "[WARN] The following Transformation process categories need to be "
@@ -1574,7 +1881,13 @@ def create_branches_from_export_file(
         )
         for category in sorted(missing_process_categories):
             print(f"  - {category}")
-    return {"created": created, "skipped": skipped, "failed": failed}
+    return {
+        "created": created,
+        "skipped": skipped,
+        "skipped_existing": skipped_existing,
+        "skipped_locked": skipped_locked,
+        "failed": failed,
+    }
 
 
 def fill_branches_from_export_file(
@@ -1583,7 +1896,7 @@ def fill_branches_from_export_file(
     sheet_name="LEAP",
     scenario=None,
     region=None,
-    RAISE_ERROR_ON_FAILED_SET=True,
+    RAISE_ERROR_ON_FAILED_SET=False,
     RAISE_ERROR_ON_MISSING_SCENARIO=True,
     SET_UNITS=True,
     HANDLE_CURRENT_ACCOUNTS_TOO=False,
@@ -1596,6 +1909,7 @@ def fill_branches_from_export_file(
     STALE_BRANCH_MIN_DEPTH=3,
     STALE_BRANCH_REQUIRE_PARENT_IN_IMPORT=True,
     SKIP_VARIABLES=None,
+    RUN_FUEL_CATALOG_PREFLIGHT=True,
     # SET_SCALE=True,
 ):
     """
@@ -1655,13 +1969,25 @@ def fill_branches_from_export_file(
     SKIP_VARIABLES : list[str] | set[str] | None
         Variable names to skip setting (case-insensitive). Useful for variables
         that are not allowed or applicable in a given LEAP branch.
+    RUN_FUEL_CATALOG_PREFLIGHT : bool
+        If True, run shared fuel-catalog preflight checks before filling values.
         
     Returns:
     --------
     dict with keys 'success', 'failed', 'skipped' containing lists of (branch_path, variable) tuples
     """
+    ensure_api_write_allowed("leap_core.fill_branches_from_export_file")
     if L is None:
         raise RuntimeError("LEAP application instance (L) is required to fill branches.")
+
+    if RUN_FUEL_CATALOG_PREFLIGHT:
+        fuel_catalog_preflight.run_fuel_catalog_preflight(
+            export_path=leap_export_filename,
+            sheet_name=sheet_name,
+            scenario=scenario,
+            context="fill_branches_from_export_file",
+            leap_app=L,
+        )
 
     skip_variables = {str(v).strip().lower() for v in (SKIP_VARIABLES or []) if str(v).strip()}
 
@@ -1678,6 +2004,13 @@ def fill_branches_from_export_file(
         df = _read_sheet(leap_export_filename, header_guess=2)
     if df is None or "Branch Path" not in df.columns:
         raise ValueError(f"Columns 'Branch Path' or 'Variable' not found in {leap_export_filename} (sheet '{sheet_name}').")
+    available_import_scenarios: set[str] = set()
+    if "Scenario" in df.columns:
+        available_import_scenarios = {
+            str(value).strip().lower()
+            for value in df["Scenario"].dropna().astype(str).tolist()
+            if str(value).strip()
+        }
 
     stale_branch_decisions = {}
     stale_delete_all = False
@@ -1725,6 +2058,74 @@ def fill_branches_from_export_file(
                 THROW_ERROR_ON_MISSING=False,
             )
         return branch
+
+    def _swap_resources_primary_secondary(path: str | None) -> str | None:
+        text = str(path or "").strip()
+        if not text:
+            return None
+        parts = [segment.strip() for segment in text.split("\\") if segment.strip()]
+        if len(parts) < 2:
+            return None
+        if parts[0].lower() != "resources":
+            return None
+        level = parts[1].lower()
+        if level == "primary":
+            parts[1] = "Secondary"
+            return "\\".join(parts)
+        if level == "secondary":
+            parts[1] = "Primary"
+            return "\\".join(parts)
+        return None
+
+    def _resolve_branch_with_resource_fallback(
+        sanitized_path: str,
+        original_path: str | None = None,
+    ) -> tuple[object | None, str]:
+        branch = safe_branch_call(
+            L,
+            sanitized_path,
+            AUTO_SET_MISSING_BRANCHES=False,
+            THROW_ERROR_ON_MISSING=False,
+        )
+        if branch is not None:
+            return branch, sanitized_path
+
+        original_text = str(original_path or "").strip()
+        if original_text and original_text != str(sanitized_path).strip():
+            branch = safe_branch_call(
+                L,
+                original_text,
+                AUTO_SET_MISSING_BRANCHES=False,
+                THROW_ERROR_ON_MISSING=False,
+            )
+            if branch is not None:
+                return branch, original_text
+
+        candidates = [
+            _swap_resources_primary_secondary(sanitized_path),
+            _swap_resources_primary_secondary(original_text),
+        ]
+        seen: set[str] = set()
+        for candidate in candidates:
+            if not candidate:
+                continue
+            token = str(candidate).strip()
+            if not token or token in seen:
+                continue
+            seen.add(token)
+            branch = safe_branch_call(
+                L,
+                token,
+                AUTO_SET_MISSING_BRANCHES=False,
+                THROW_ERROR_ON_MISSING=False,
+            )
+            if branch is not None:
+                source = original_text or str(sanitized_path).strip()
+                print(
+                    f"[INFO] Branch fallback matched '{source}' to existing '{token}'."
+                )
+                return branch, token
+        return None, original_text or str(sanitized_path).strip()
 
     def _list_child_branches(parent_branch):
         rows = []
@@ -2021,7 +2422,29 @@ def fill_branches_from_export_file(
                 return False
             print("Please enter 'y' or 'n'.")
 
+    def _is_leap_locked_transformation_fuel_child(
+        path: str | None,
+        variable_name: str | None = None,
+    ) -> bool:
+        text = str(path or "").strip()
+        is_fuel_child = text.startswith("Transformation\\") and (
+            "\\Auxiliary Fuels\\" in text
+            or "\\Feedstock Fuels\\" in text
+            or "\\Output Fuels\\" in text
+        )
+        if not is_fuel_child:
+            return False
+        # Import/Export targets on Output Fuels must still be writable so we can
+        # explicitly clear stale trade settings in LEAP.
+        var_text = str(variable_name or "").strip().lower()
+        if var_text in {"import target", "export target"}:
+            return False
+        return True
+
     def _fill_from_df(df_in):
+        current_accounts_scenario_active = (
+            str(scenario or "").strip().lower() in {"current accounts", "current account"}
+        )
         # Filter by scenario/region if specified
         if scenario is not None and "Scenario" in df_in.columns:
             df_in = df_in[df_in["Scenario"] == scenario]
@@ -2035,10 +2458,17 @@ def fill_branches_from_export_file(
                 raise ValueError(f"No rows found for region '{region}' in {leap_export_filename} (sheet '{sheet_name}').")
         
         df_in = df_in.copy()
+        if "Branch Path" in df_in.columns:
+            before_count = len(df_in)
+            df_in = df_in[~df_in["Branch Path"].apply(is_placeholder_branch_path)]
+            dropped = before_count - len(df_in)
+            if dropped > 0:
+                print(f"[INFO] Dropped {dropped} row(s) with placeholder Branch Path values.")
         df_in["_Sanitized Branch Path"] = df_in["Branch Path"].apply(
             sanitize_leap_branch_path
         )
         df_in = df_in[df_in["_Sanitized Branch Path"] != ""]
+        df_in = df_in[~df_in["_Sanitized Branch Path"].apply(is_placeholder_branch_path)]
         _check_and_handle_stale_children(df_in)
 
         #if the df contains year cols then we use those instead of expression cols.
@@ -2107,6 +2537,68 @@ def fill_branches_from_export_file(
         success = []
         failed = []
         skipped = []
+        warning_counts: dict[str, int] = {}
+        suppressed_warning_kinds: set[str] = set()
+
+        def _warn_limited(kind: str, message: str) -> None:
+            count = warning_counts.get(kind, 0) + 1
+            warning_counts[kind] = count
+            limit = _warning_print_limit()
+            if _is_summary_logging():
+                limit = min(limit, 5)
+            if count <= limit:
+                print(message)
+            elif kind not in suppressed_warning_kinds:
+                suppressed_warning_kinds.add(kind)
+                print(
+                    f"[WARN] Suppressing additional '{kind}' warnings after {limit} messages. "
+                    "Counts will be shown in summary."
+                )
+
+        missing_feedstock_share_rows = []
+        try:
+            variable_text = df_in["Variable"].astype(str).str.strip().str.lower()
+            feedstock_mask = variable_text.eq("feedstock fuel share")
+            if feedstock_mask.any():
+                feedstock_df = df_in.loc[feedstock_mask].copy()
+                feedstock_df["_Parent Path"] = feedstock_df["_Sanitized Branch Path"].apply(
+                    lambda x: "\\".join(str(x).split("\\")[:-1])
+                    if isinstance(x, str) and x
+                    else ""
+                )
+                feedstock_groups = feedstock_df.groupby("_Parent Path", dropna=False)
+                for parent_path, group in feedstock_groups:
+                    parent_path = str(parent_path or "").strip()
+                    if not parent_path:
+                        continue
+                    expected_children = set(
+                        group["_Sanitized Branch Path"].astype(str).str.strip().str.lower()
+                    )
+                    if not expected_children:
+                        continue
+                    parent_branch, parent_used = _resolve_branch_with_resource_fallback(
+                        parent_path,
+                        parent_path,
+                    )
+                    if parent_branch is None:
+                        continue
+                    for child_name, full_name in _list_child_branches(parent_branch):
+                        child_path = full_name if full_name else f"{parent_used}\\{child_name}"
+                        child_path = sanitize_leap_branch_path(child_path)
+                        if not child_path:
+                            continue
+                        if child_path.lower() in expected_children:
+                            continue
+                        missing_feedstock_share_rows.append(
+                            {
+                                "branch_path": child_path,
+                                "variable": "Feedstock Fuel Share",
+                                "units": group["Units"].iloc[0] if "Units" in group.columns else None,
+                            }
+                        )
+                df_in = df_in.drop(columns=["_Parent Path"], errors="ignore")
+        except Exception as exc:
+            print(f"[WARN] Failed to prepare missing feedstock share rows: {exc}")
         
         # Group by branch path and variable
         
@@ -2117,25 +2609,21 @@ def fill_branches_from_export_file(
                 original_bp = group["Branch Path"].iloc[0]
                 skipped.append((original_bp, var))
                 continue
-            branch_path_used = sanitized_bp
-            branch = safe_branch_call(
-                L,
-                sanitized_bp,
-                AUTO_SET_MISSING_BRANCHES=False,
-                THROW_ERROR_ON_MISSING=False,
-            )
-            if branch is None:
-                original_bp = group["Branch Path"].iloc[0]
-                branch = safe_branch_call(
-                    L,
-                    original_bp,
-                    AUTO_SET_MISSING_BRANCHES=False,
-                    THROW_ERROR_ON_MISSING=False,
+            original_bp = group["Branch Path"].iloc[0]
+            if _is_leap_locked_transformation_fuel_child(sanitized_bp, variable_name=var):
+                _warn_limited(
+                    "locked_transformation_fuel_child",
+                    "[WARN] Skipping LEAP-locked transformation fuel-child import row "
+                    f"'{original_bp}' / '{var}'.",
                 )
-                branch_path_used = original_bp
+                skipped.append((original_bp, var))
+                continue
+            branch, branch_path_used = _resolve_branch_with_resource_fallback(
+                sanitized_bp,
+                original_bp,
+            )
             
             if branch is None:
-                original_bp = group["Branch Path"].iloc[0]
                 msg = (
                     f"Branch '{original_bp}' (sanitized '{sanitized_bp}') not found - "
                     f"skipping variable '{var}'"
@@ -2144,7 +2632,7 @@ def fill_branches_from_export_file(
                     breakpoint()
                     raise RuntimeError(msg)
                 else:
-                    print(f"[WARN] {msg}")
+                    _warn_limited("missing_branch", f"[WARN] {msg}")
                     failed.append((branch_path_used, var))
                     continue
             if year_cols == ["Expression"]:
@@ -2172,8 +2660,14 @@ def fill_branches_from_export_file(
                     failed.append((branch_path_used, var))
                     continue
 
-                # Build expression for multi-year time series values.
-                expr = build_expr(points, expression_type="Interp")
+                # For Current Accounts, preserve a single base-year point as Data(year, value)
+                # so LEAP does not treat it as a constant across future years.
+                if current_accounts_scenario_active and len(points) == 1:
+                    single_year, single_value = points[0]
+                    expr = f"Data({int(single_year)}, {float(single_value):.6g})"
+                else:
+                    # Build expression for multi-year time series values.
+                    expr = build_expr(points, expression_type="Interp")
             
             if expr is None:
                 if RAISE_ERROR_ON_FAILED_SET:
@@ -2219,10 +2713,56 @@ def fill_branches_from_export_file(
                     )
                 failed.append((branch_path_used, var))
 
+        if missing_feedstock_share_rows:
+            zero_expr = (
+                "0"
+                if year_cols == ["Expression"]
+                else build_expr([(int(year), 0.0) for year in year_cols], expression_type="Interp")
+            )
+            for item in missing_feedstock_share_rows:
+                if _is_leap_locked_transformation_fuel_child(
+                    item["branch_path"],
+                    variable_name=item.get("variable"),
+                ):
+                    _warn_limited(
+                        "locked_feedstock_backfill",
+                        "[WARN] Skipping zero Feedstock Fuel Share backfill for "
+                        f"LEAP-locked branch '{item['branch_path']}'.",
+                    )
+                    skipped.append((item["branch_path"], item["variable"]))
+                    continue
+                branch, branch_path_used = _resolve_branch_with_resource_fallback(
+                    item["branch_path"],
+                    item["branch_path"],
+                )
+                if branch is None:
+                    continue
+                set_success = safe_set_variable(
+                    L,
+                    branch,
+                    item["variable"],
+                    zero_expr,
+                    unit_name=item.get("units") if SET_UNITS else None,
+                    context=branch_path_used,
+                )
+                if set_success:
+                    success.append((branch_path_used, item["variable"]))
+                else:
+                    failed.append((branch_path_used, item["variable"]))
+            print(
+                "[INFO] Applied zero feedstock shares to "
+                f"{len(missing_feedstock_share_rows)} stale sibling branch(es)."
+            )
+
         print(
             f"[INFO] Data fill complete. Success: {len(success)}, "
             f"Failed: {len(failed)}, Skipped: {len(skipped)}"
         )
+        if warning_counts:
+            summary_text = ", ".join(
+                f"{kind}={count}" for kind, count in sorted(warning_counts.items())
+            )
+            print(f"[INFO] Warning summary: {summary_text}")
         return {"success": success, "failed": failed, "skipped": skipped}
 
     def _list_scenarios():
@@ -2335,9 +2875,47 @@ def fill_branches_from_export_file(
         print(f"[WARN] Region '{name}' was not found in LEAP; skipping fill.")
         return False
 
+    def _reset_ui_context():
+        # LEAP can keep an invalid branch/view selection when scenario or region changes.
+        # Reset to a neutral analysis context before branch lookups and writes.
+        return ensure_analysis_view_context(
+            L,
+            context_label="fill_branches_from_export_file",
+        )
+
     results = []
     scenarios_to_run = [scenario]
-    if HANDLE_CURRENT_ACCOUNTS_TOO and scenario and scenario != "Current Accounts":
+    current_accounts_in_workbook = any(
+        label in available_import_scenarios
+        for label in {"current accounts", "current account"}
+    )
+    print(
+        "[INFO] fill_branches_from_export_file scenario planning: "
+        f"workbook='{leap_export_filename}', "
+        f"requested_scenario={scenario!r}, "
+        f"HANDLE_CURRENT_ACCOUNTS_TOO={HANDLE_CURRENT_ACCOUNTS_TOO}, "
+        f"current_accounts_in_workbook={current_accounts_in_workbook}, "
+        f"available_import_scenarios={sorted(available_import_scenarios)}"
+    )
+    if HANDLE_CURRENT_ACCOUNTS_TOO and not current_accounts_in_workbook:
+        print(
+            "[INFO] Skipping appended Current Accounts pass because the workbook "
+            f"does not contain it: {sorted(available_import_scenarios)}"
+        )
+    if (
+        HANDLE_CURRENT_ACCOUNTS_TOO
+        and current_accounts_in_workbook
+        and scenario
+        and scenario != "Current Accounts"
+    ):
+        caller_frames = [
+            f"{os.path.basename(frame.filename)}:{frame.lineno}:{frame.function}"
+            for frame in inspect.stack()[1:6]
+        ]
+        print(
+            "[INFO] Appending Current Accounts pass. "
+            f"Caller stack: {caller_frames}"
+        )
         scenarios_to_run.append("Current Accounts")
 
     for scen in scenarios_to_run:
@@ -2350,6 +2928,7 @@ def fill_branches_from_export_file(
                 continue
             if not _activate_region(region):
                 continue
+            _reset_ui_context()
             results.append(_fill_from_df(df.copy()))
         finally:
             scenario = prev_scenario

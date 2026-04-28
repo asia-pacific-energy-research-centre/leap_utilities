@@ -24,11 +24,16 @@ from codebase.functions.leap_core import (
     create_branches_from_export_file,
     connect_to_leap
 )
+from codebase.functions.analysis_input_write_dispatcher import (
+    dispatch_analysis_input_write,
+    get_analysis_input_write_mode,
+)
 from codebase.functions.leap_excel_io import (
     copy_energy_spreadsheet_into_leap_import_file,
 )
-# Connect to LEAP
-L = connect_to_leap()
+# Connect to LEAP only in API mode.
+WRITE_MODE = get_analysis_input_write_mode()
+L = connect_to_leap() if WRITE_MODE == "api" else None
 
 # Define parameters
 leap_export_filename = '../outputs/leap_balances_export_file.xlsx'
@@ -69,8 +74,18 @@ if COPY_ENERGY_SPREADSHEET_INTO_LEAP_IMPORT_FILE:
 
 #%%
 CREATE_BRANCHES_FROM_EXPORT_FILE = True
+FILL_BRANCHES_FROM_EXPORT_FILE = True
 
-if CREATE_BRANCHES_FROM_EXPORT_FILE:
+if WRITE_MODE == "workbook" and (CREATE_BRANCHES_FROM_EXPORT_FILE or FILL_BRANCHES_FROM_EXPORT_FILE):
+    dispatch_analysis_input_write(
+        export_path=Path(leap_export_filename),
+        sheet_name=sheet_name,
+        scenario=SCENARIO,
+        region=REGION,
+        context_label="examples.balance_tables_example",
+    )
+
+if CREATE_BRANCHES_FROM_EXPORT_FILE and WRITE_MODE == "api":
     # Create branches from export file
     create_branches_from_export_file(
         L,
@@ -85,8 +100,7 @@ if CREATE_BRANCHES_FROM_EXPORT_FILE:
         RAISE_ERROR_ON_FAILED_BRANCH_CREATION=True,
     )
 #%%
-FILL_BRANCHES_FROM_EXPORT_FILE = True
-if FILL_BRANCHES_FROM_EXPORT_FILE:
+if FILL_BRANCHES_FROM_EXPORT_FILE and WRITE_MODE == "api":
     # Fill branches with data from export file
     fill_branches_from_export_file(
         L,

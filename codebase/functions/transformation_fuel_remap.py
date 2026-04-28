@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from codebase.utilities.master_config import read_config_table
 from codebase.functions.leap_excel_io import read_export_sheet, write_export_sheet
 from codebase.functions.leap_labels import clean_fuel_label_for_leap
 
@@ -24,7 +25,7 @@ def _normalize_text(value: object) -> str:
 
 
 def _load_mapping(mapping_csv_path: Path) -> dict[str, MappingRow]:
-    df = pd.read_csv(mapping_csv_path).fillna("")
+    df = read_config_table(mapping_csv_path).fillna("")
     rows: dict[str, MappingRow] = {}
     for _, row in df.iterrows():
         source_fuel = _normalize_text(row.get("source_fuel"))
@@ -43,7 +44,7 @@ def _load_mapping(mapping_csv_path: Path) -> dict[str, MappingRow]:
 
 
 def _load_pairs(pairs_path: Path) -> pd.DataFrame:
-    df = pd.read_excel(pairs_path, sheet_name=0)
+    df = read_config_table(pairs_path)
     df = df.fillna("")
     df["9th_fuel"] = df["9th_fuel"].astype(str).str.strip()
     df["esto_product"] = df["esto_product"].astype(str).str.strip()

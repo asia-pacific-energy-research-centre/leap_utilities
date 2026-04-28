@@ -5,6 +5,8 @@ from typing import Iterable, Sequence
 
 import pandas as pd
 
+from codebase.utilities.master_config import config_table_exists, read_config_table
+
 DEFAULT_SCENARIO = "reference"
 NINTH_SECTOR_COLS = [
     "sub4sectors",
@@ -543,12 +545,9 @@ def build_esto_projection_table(
             If True, raise ValueError when allocated totals do not match source totals.
     """
     mapping_path = Path(mapping_path)
-    if not mapping_path.exists():
+    if not config_table_exists(mapping_path):
         return pd.DataFrame(), pd.DataFrame()
-    if mapping_path.suffix.lower() in {".xlsx", ".xls"}:
-        mapping_df = pd.read_excel(mapping_path, dtype=str).fillna("")
-    else:
-        mapping_df = pd.read_csv(mapping_path, dtype=str).fillna("")
+    mapping_df = read_config_table(mapping_path, dtype=str).fillna("")
     if mapping_df.empty:
         return pd.DataFrame(), pd.DataFrame()
     ninth_filtered = filter_ninth_projection_rows(ninth_data, scenario=scenario)

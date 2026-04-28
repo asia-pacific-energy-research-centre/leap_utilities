@@ -6,6 +6,7 @@ from typing import Literal
 
 import pandas as pd
 
+from codebase.utilities.master_config import read_config_table
 from codebase.functions.leap_excel_io import read_export_sheet, save_export_files
 from codebase.functions.leap_labels import clean_fuel_label_for_leap
 from codebase.functions.leap_series_adapter import (
@@ -22,7 +23,12 @@ from codebase.functions.ninth_projection_mapping import (
     compute_esto_base_year_shares,
     normalize_economy_key,
 )
-from codebase.scrapbook.utilities import apply_matt_subtotal_mapping, filter_matt_subtotals
+from codebase.scrapbook.utilities import (
+    apply_matt_subtotal_mapping,
+    filter_matt_subtotals,
+    load_augmented_reference_tables,
+)
+from codebase.utilities.workflow_common import archive_config_dir_once_per_day
 
 CURRENT_ACCOUNT_LABELS = {"current accounts", "current account"}
 FLOW_BY_SECTOR_PREFIX = {
@@ -59,10 +65,18 @@ def _normalize_year_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _load_esto_data(path: Path, subtotal_mapping_path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path)
+    archive_config_dir_once_per_day()
+    df, _ = load_augmented_reference_tables(
+        esto_path=path,
+        ninth_path=Path("data/merged_file_energy_ALL_20251106.csv"),
+        subtotal_mapping_path=subtotal_mapping_path,
+        synthetic_rules_path=Path("config/synthetic_reference_rows.csv"),
+        cache_dir=Path("data/.cache/buildings_reference_tables"),
+        apply_esto_subtotal_map=True,
+        filter_esto_subtotals_flag=True,
+        filter_ninth_subtotals_flag=False,
+    )
     df = _normalize_year_columns(df)
-    df = apply_matt_subtotal_mapping(df, subtotal_mapping_path)
-    df = filter_matt_subtotals(df)
     df["economy_key"] = df["economy"].apply(normalize_economy_key)
     df["flows"] = df["flows"].astype(str).str.strip()
     df["products"] = df["products"].astype(str).str.strip()
@@ -70,7 +84,7 @@ def _load_esto_data(path: Path, subtotal_mapping_path: Path) -> pd.DataFrame:
 
 
 def _load_mapping(mapping_path: Path) -> dict[tuple[str, str, str], MappingRow]:
-    df = pd.read_csv(mapping_path).fillna("")
+    df = read_config_table(mapping_path).fillna("")
     rows: dict[tuple[str, str, str], MappingRow] = {}
     for _, row in df.iterrows():
         sector_key = _normalize_text(row.get("sector_key"))

@@ -68,8 +68,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--projection-end-year",
         type=int,
-        default=2061,
-        help="Projection end year (default: 2061).",
+        default=2060,
+        help="Projection end year (default: 2060).",
     )
     parser.add_argument(
         "--output-dir",

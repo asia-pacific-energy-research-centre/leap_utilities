@@ -2,6 +2,12 @@
 """
 Minor demand workflow (draft scaffold).
 
+This script builds LEAP import-ready minor demand branches from ESTO and 9th
+projection inputs.
+It is a focused scaffold for Agriculture, Fishing, and Non-specified others,
+using allocated 9th projections and ESTO base-year values to populate activity
+and fuel rows.
+
 Goal:
 - Pull minor demand sector data (Agriculture, Fishing, Non-specified others) from ESTO.
 - Map those flows to 9th Outlook sectors (via config/ninth_pairs_to_esto_pairs.xlsx).
@@ -29,6 +35,8 @@ from collections.abc import Mapping, Sequence
 
 import pandas as pd
 
+from codebase.utilities.master_config import config_table_exists, read_config_table
+
 # Allow the repository root to be importable regardless of the working directory.
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CURRENT_DIR = Path.cwd()
@@ -49,10 +57,15 @@ from codebase.functions.leap_core import (
     is_leap_api_available,
     sanitize_leap_name,
 )
+from codebase.functions.analysis_input_write_dispatcher import (
+    dispatch_analysis_input_write,
+)
 from codebase.functions.leap_excel_io import finalise_export_df, save_export_files
 from codebase.functions.ninth_projection_mapping import (
     add_ninth_pair_columns,
-    build_esto_projection_table,
+    allocate_ninth_projection_to_esto,
+    build_esto_base_year_values,
+    build_ninth_projection_series,
     filter_ninth_projection_rows,
     normalize_economy_key,
 )
@@ -61,8 +74,10 @@ from codebase.functions.leap_labels import clean_fuel_label_for_leap
 from codebase.scrapbook.utilities import (
     apply_matt_subtotal_mapping,
     filter_matt_subtotals,
+    load_augmented_reference_tables,
 )
 from codebase.utilities import workflow_common
+from codebase.utilities import fuel_catalog_preflight
 from codebase.configuration import workflow_config as workflow_cfg
 
 # --- File paths (adjust to taste) ---
@@ -71,6 +86,7 @@ NINTH_DATA_PATH = "data/merged_file_energy_ALL_20250814_pre_trump.csv"
 # Use merged_file_energy_ALL_20251106.csv and merged_file_energy_00_APEC_20251106 for exact 9th edition projection matching.
 NINTH_TO_ESTO_MAPPING_PATH = "config/ninth_pairs_to_esto_pairs.xlsx"
 ESTO_SUBTOTAL_MAPPING_PATH = "config/ESTO_subtotal_mapping.xlsx"
+REFERENCE_CACHE_DIR = "data/.cache/minor_demand_reference_tables"
 LEAP_TEMPLATE_PATH = "data/industry export.xlsx"
 
 
@@ -208,7 +224,7 @@ def _default_export_filename_template() -> str:
     return str(
         globals().get(
             "EXPORT_FILENAME_TEMPLATE",
-            "outputs/leap_exports/minor_demand_export_{economy}_{scenario}.xlsx",
+            str(workflow_cfg.MINOR_DEMAND_EXPORT_FILENAME_TEMPLATE),
         )
     )
 
@@ -406,10 +422,18 @@ def load_esto_data(path: str = ESTO_DATA_PATH) -> pd.DataFrame:
     - The mapping file (ninth_pairs_to_esto_pairs.xlsx) includes subtotal pairs.
     - We only want real flow/product rows for the minor demand sectors.
     """
-    df = pd.read_csv(path)
+    workflow_common.archive_config_dir_once_per_day()
+    df, _ = load_augmented_reference_tables(
+        esto_path=path,
+        ninth_path=NINTH_DATA_PATH,
+        subtotal_mapping_path=ESTO_SUBTOTAL_MAPPING_PATH,
+        synthetic_rules_path="config/synthetic_reference_rows.csv",
+        cache_dir=REFERENCE_CACHE_DIR,
+        apply_esto_subtotal_map=True,
+        filter_esto_subtotals_flag=True,
+        filter_ninth_subtotals_flag=False,
+    )
     df = _normalize_year_columns(df)
-    df = apply_matt_subtotal_mapping(df, ESTO_SUBTOTAL_MAPPING_PATH)
-    df = filter_matt_subtotals(df)
     df["economy_key"] = df["economy"].apply(normalize_economy_key)
     df["flows"] = df["flows"].astype(str).str.strip()
     df["products"] = df["products"].astype(str).str.strip()
@@ -424,7 +448,17 @@ def load_ninth_data(path: str = NINTH_DATA_PATH) -> pd.DataFrame:
     - Activity Level is derived from 9th projections.
     - We want non-subtotal rows and a consistent scenario.
     """
-    df = pd.read_csv(path)
+    workflow_common.archive_config_dir_once_per_day()
+    _, df = load_augmented_reference_tables(
+        esto_path=ESTO_DATA_PATH,
+        ninth_path=path,
+        subtotal_mapping_path=ESTO_SUBTOTAL_MAPPING_PATH,
+        synthetic_rules_path="config/synthetic_reference_rows.csv",
+        cache_dir=REFERENCE_CACHE_DIR,
+        apply_esto_subtotal_map=True,
+        filter_esto_subtotals_flag=True,
+        filter_ninth_subtotals_flag=False,
+    )
     df = _normalize_year_columns(df)
     df = filter_ninth_projection_rows(df, scenario=NINTH_SCENARIO)
     df = add_ninth_pair_columns(df)
@@ -438,7 +472,7 @@ def load_mapping(path: str = NINTH_TO_ESTO_MAPPING_PATH) -> pd.DataFrame:
 
     We only keep the columns we need for minor demand mapping.
     """
-    mapping = pd.read_excel(path, dtype=str).fillna("")
+    mapping = read_config_table(path, dtype=str).fillna("")
     keep_cols = ["9th_sector", "9th_fuel", "esto_flow", "esto_product"]
     mapping = mapping[[col for col in keep_cols if col in mapping.columns]].copy()
     for col in ["9th_sector", "9th_fuel", "esto_flow", "esto_product"]:
@@ -571,6 +605,7 @@ def build_allocated_projection_table(
     esto_data: pd.DataFrame,
     projection_years: Sequence[int],
     scenario: str | None = None,
+    mapping: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """
     Allocate 9th projections down to ESTO flow/product pairs.
@@ -583,18 +618,154 @@ def build_allocated_projection_table(
     only has a combined "16_02_agriculture_and_fishing" projection.
     """
     scenario = scenario or _default_ninth_scenario()
-    projection_df, diagnostics = build_esto_projection_table(
-        ninth_data=ninth_data,
-        esto_data=esto_data,
-        mapping_path=NINTH_TO_ESTO_MAPPING_PATH,
-        base_year=EXPORT_BASE_YEAR,
-        projection_years=projection_years,
-        scenario=scenario,
+    mapping_df = mapping.copy() if mapping is not None else load_mapping()
+    if mapping_df is None or mapping_df.empty:
+        print("[WARN] No mapping rows available for allocation.")
+        return pd.DataFrame()
+    ninth_filtered = filter_ninth_projection_rows(ninth_data, scenario=scenario)
+    ninth_pairs = add_ninth_pair_columns(ninth_filtered)
+    if "economy_key" not in ninth_pairs.columns and "economy" in ninth_pairs.columns:
+        ninth_pairs["economy_key"] = ninth_pairs["economy"].apply(normalize_economy_key)
+    ninth_series = build_ninth_projection_series(ninth_pairs, projection_years)
+    base_values = build_esto_base_year_values(esto_data, EXPORT_BASE_YEAR)
+    projection_df, diagnostics = allocate_ninth_projection_to_esto(
+        mapping_df,
+        ninth_series,
+        base_values,
+        projection_years,
     )
     if projection_df is None or projection_df.empty:
         print("[WARN] No allocated projection data returned from build_esto_projection_table.")
         return pd.DataFrame()
     return projection_df
+
+
+def _base_year_column(df: pd.DataFrame, base_year: int) -> int | str | None:
+    """Return the matching base-year column name if present."""
+    if int(base_year) in df.columns:
+        return int(base_year)
+    if str(base_year) in df.columns:
+        return str(base_year)
+    return None
+
+
+def build_base_year_activity_value(
+    esto_data: pd.DataFrame,
+    flow: str,
+    economy_key: str,
+    base_year: int,
+) -> float:
+    """Return the ESTO base-year total for a flow."""
+    year_col = _base_year_column(esto_data, base_year)
+    if year_col is None:
+        return 0.0
+    subset = esto_data[
+        (esto_data["economy_key"] == economy_key)
+        & (esto_data["flows"] == flow)
+    ]
+    if subset.empty:
+        return 0.0
+    values = pd.to_numeric(subset[year_col], errors="coerce").fillna(0.0)
+    return float(values.sum())
+
+
+def build_base_year_fuel_value(
+    esto_data: pd.DataFrame,
+    flow: str,
+    esto_product: str,
+    economy_key: str,
+    base_year: int,
+) -> float:
+    """Return the ESTO base-year value for one flow/product row."""
+    year_col = _base_year_column(esto_data, base_year)
+    if year_col is None:
+        return 0.0
+    subset = esto_data[
+        (esto_data["economy_key"] == economy_key)
+        & (esto_data["flows"] == flow)
+        & (esto_data["products"] == esto_product)
+    ]
+    if subset.empty:
+        return 0.0
+    values = pd.to_numeric(subset[year_col], errors="coerce").fillna(0.0)
+    return float(values.sum())
+
+
+def add_base_year_to_sector_activity(
+    activity_series: dict[int, float],
+    esto_data: pd.DataFrame,
+    flow: str,
+    economy_key: str,
+    base_year: int,
+) -> dict[int, float]:
+    """Inject the ESTO base-year total so Current Accounts uses actual history."""
+    updated = {int(year): float(value) for year, value in activity_series.items()}
+    updated[int(base_year)] = build_base_year_activity_value(
+        esto_data,
+        flow,
+        economy_key,
+        base_year,
+    )
+    return updated
+
+
+def add_base_year_to_fuel_activity(
+    fuel_activity_series: dict[int, float],
+    esto_data: pd.DataFrame,
+    flow: str,
+    esto_product: str,
+    economy_key: str,
+    base_year: int,
+    mode: str,
+) -> dict[int, float]:
+    """Inject the ESTO base-year fuel value or share."""
+    updated = {int(year): float(value) for year, value in fuel_activity_series.items()}
+    flow_total = build_base_year_activity_value(esto_data, flow, economy_key, base_year)
+    fuel_value = build_base_year_fuel_value(
+        esto_data,
+        flow,
+        esto_product,
+        economy_key,
+        base_year,
+    )
+    normalized_mode = _normalize_fuel_activity_mode(mode)
+    if normalized_mode == "sector_share":
+        updated[int(base_year)] = 0.0 if flow_total == 0.0 else fuel_value / flow_total
+    elif normalized_mode == "activity_as_energy_intensity_as_one":
+        updated[int(base_year)] = fuel_value
+    return updated
+
+
+def add_base_year_to_intensity(
+    intensity_series: dict[int, float],
+    esto_data: pd.DataFrame,
+    flow: str,
+    esto_product: str,
+    economy_key: str,
+    base_year: int,
+) -> dict[int, float]:
+    """Inject a deterministic base-year intensity for Current Accounts exports."""
+    updated = {int(year): float(value) for year, value in intensity_series.items()}
+    if FUEL_ACTIVITY_MODE == "sector_share":
+        updated[int(base_year)] = 1.0
+        return updated
+    if INTENSITY_MODE == "fuel_share":
+        flow_total = build_base_year_activity_value(esto_data, flow, economy_key, base_year)
+        fuel_value = build_base_year_fuel_value(
+            esto_data,
+            flow,
+            esto_product,
+            economy_key,
+            base_year,
+        )
+        updated[int(base_year)] = 0.0 if flow_total == 0.0 else fuel_value / flow_total
+        return updated
+    if updated:
+        first_year = min(updated)
+        updated[int(base_year)] = float(updated[first_year])
+    else:
+        updated[int(base_year)] = 0.0
+    return updated
 
 
 def print_allocation_summary(
@@ -1148,7 +1319,7 @@ def align_to_template_schema(
     This adds missing columns (IDs, Unnamed: 12, extra Level columns) as NA,
     and drops columns that are not in the template.
     """
-    template = pd.read_excel(template_path, sheet_name=template_sheet, header=2, nrows=1)
+    template = read_config_table(template_path, sheet_name=template_sheet, header=2, nrows=1)
     template_cols = list(template.columns)
     aligned = export_df.reindex(columns=template_cols)
     return aligned
@@ -1207,6 +1378,7 @@ def build_minor_demand_rows(
         esto_data=esto_data,
         projection_years=projection_years,
         scenario=_default_ninth_scenario(),
+        mapping=mapping,
     )
     # Keep only the minor demand flows (reduces noise and speeds later filters).
     flow_list = [cfg["esto_flow"] for cfg in flow_configs]
@@ -1253,6 +1425,13 @@ def build_minor_demand_rows(
                 economy_key,
                 projection_years,
             )
+        activity_series = add_base_year_to_sector_activity(
+            activity_series,
+            esto_data,
+            flow,
+            economy_key,
+            EXPORT_BASE_YEAR,
+        )
         rows.extend(
             build_year_rows(
                 sector_path,
@@ -1285,6 +1464,15 @@ def build_minor_demand_rows(
                     mapping,
                     activity_series,
                     allocated_projection,
+                )
+                fuel_activity_series = add_base_year_to_fuel_activity(
+                    fuel_activity_series,
+                    esto_data,
+                    flow,
+                    fuel,
+                    economy_key,
+                    EXPORT_BASE_YEAR,
+                    normalized_fuel_activity_mode,
                 )
                 if not any(abs(value) > 0 for value in fuel_activity_series.values()):
                     # Skip unused fuels to reduce clutter in the export.
@@ -1343,6 +1531,14 @@ def build_minor_demand_rows(
                 economy_key,
                 mapping,
                 allocated_projection,
+            )
+            intensity_series = add_base_year_to_intensity(
+                intensity_series,
+                esto_data,
+                flow,
+                fuel,
+                economy_key,
+                EXPORT_BASE_YEAR,
             )
             rows.extend(
                 build_year_rows(
@@ -1491,10 +1687,27 @@ def assemble_minor_demand_workbook(
 
     # --- Optional: push into LEAP ---
     if include_leap_import:
+        dispatch_result = dispatch_analysis_input_write(
+            export_path=Path(export_filename),
+            sheet_name="LEAP",
+            scenario=scenario_to_import,
+            region=region,
+            context_label="minor_demand_workflow.include_leap_import",
+        )
+        if dispatch_result.get("mode") == "workbook":
+            return Path(export_filename)
+
         if not is_leap_api_available():
             print("[INFO] LEAP API unavailable; skipping LEAP import.")
             return Path(export_filename)
         L = connect_to_leap()
+        fuel_catalog_preflight.run_fuel_catalog_preflight(
+            export_path=export_filename,
+            sheet_name="LEAP",
+            scenario=scenario_to_import,
+            context="minor_demand_workflow.include_leap_import",
+            leap_app=L,
+        )
         # Default branch types:
         # - Non-leaf branches are demand categories.
         # - Leaf branches are demand technologies (fuel-named technologies).
@@ -1522,6 +1735,7 @@ def assemble_minor_demand_workbook(
                 region=region,
                 RAISE_ERROR_ON_FAILED_SET=True,
                 HANDLE_CURRENT_ACCOUNTS_TOO=index == 0,
+                RUN_FUEL_CATALOG_PREFLIGHT=False,
             )
 
     return Path(export_filename)
@@ -1630,3 +1844,14 @@ if __name__ == "__main__":
         aggregate_economy_label=AGGREGATE_ECONOMY_LABEL,
     )
 #%%
+
+
+try:
+    from codebase.utilities.workflow_common import emit_completion_beep as _emit_completion_beep
+except Exception:  # pragma: no cover
+    def _emit_completion_beep(*, success: bool = True) -> None:  # noqa: ARG001
+        return
+
+
+if __name__ == "__main__":  # pragma: no cover
+    _emit_completion_beep(success=True, style="chime")

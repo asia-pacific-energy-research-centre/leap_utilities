@@ -1,4 +1,13 @@
 #%%
+"""
+Build and optionally import LEAP buildings demand branches from export data.
+
+This workflow reads the buildings export workbook, validates its expected
+sector/fuel structure, and optionally remaps fuel labels before import. It can
+write through the LEAP API or dispatch a workbook-based import depending on the
+configured analysis input write mode.
+"""
+
 from __future__ import annotations
 
 import sys
@@ -22,8 +31,13 @@ from codebase.functions.leap_core import (
     create_branches_from_export_file,
     fill_branches_from_export_file,
 )
+from codebase.functions.analysis_input_write_dispatcher import (
+    dispatch_analysis_input_write,
+    get_analysis_input_write_mode,
+)
 from codebase.functions.leap_exports import list_scenarios as list_export_scenarios
 from codebase.functions.leap_excel_io import read_export_sheet
+from codebase.utilities.output_paths import STANDALONE_LEAP_EXPORTS_ROOT
 
 CREATE_BRANCHES_FROM_EXPORT_FILE = True
 FILL_BRANCHES_FROM_EXPORT_FILE = True
@@ -42,7 +56,7 @@ SERIES_FORMAT_POLICY = "preserve"  # preserve | expression | year_columns
 ESTO_DATA_PATH = "../data/00APEC_2024_low.csv"
 ESTO_SUBTOTAL_MAPPING_PATH = "../config/ESTO_subtotal_mapping.xlsx"
 REMAP_OUTPUT_PATH = (
-    REPO_ROOT / "outputs" / "leap_exports" / "buildings_export_remapped_20_USA.xlsx"
+    STANDALONE_LEAP_EXPORTS_ROOT / "buildings_export_remapped_20_USA.xlsx"
 )
 REMAP_REPORT_PATH = "../intermediate_data/buildings_fuel_remap_report.csv"
 REMAP_VALIDATION_PATH = "../intermediate_data/buildings_fuel_remap_validation.csv"
@@ -121,7 +135,10 @@ def _discover_fill_scenarios(export_filename: str | Path, sheet_name: str) -> li
     return resolved
 
 
-L = connect_to_leap()
+WRITE_MODE = get_analysis_input_write_mode()
+L = None
+if WRITE_MODE == "api" and (CREATE_BRANCHES_FROM_EXPORT_FILE or FILL_BRANCHES_FROM_EXPORT_FILE):
+    L = connect_to_leap()
 
 _assert_export_matches_expected(
     export_filename=LEAP_EXPORT_FILENAME,
@@ -151,7 +168,16 @@ if REMAP_FUELS:
 
 scenarios_to_fill = _discover_fill_scenarios(LEAP_EXPORT_FILENAME, SHEET_NAME)
 
-if CREATE_BRANCHES_FROM_EXPORT_FILE:
+if WRITE_MODE == "workbook" and (CREATE_BRANCHES_FROM_EXPORT_FILE or FILL_BRANCHES_FROM_EXPORT_FILE):
+    dispatch_analysis_input_write(
+        export_path=Path(LEAP_EXPORT_FILENAME),
+        sheet_name=SHEET_NAME,
+        scenario=scenarios_to_fill[0] if scenarios_to_fill else None,
+        region=REGION,
+        context_label="buildings_workflow",
+    )
+
+if CREATE_BRANCHES_FROM_EXPORT_FILE and WRITE_MODE == "api":
     create_branches_from_export_file(
         L,
         LEAP_EXPORT_FILENAME,
@@ -168,7 +194,7 @@ if CREATE_BRANCHES_FROM_EXPORT_FILE:
         RAISE_ERROR_ON_FAILED_BRANCH_CREATION=True,
     )
 
-if FILL_BRANCHES_FROM_EXPORT_FILE:
+if FILL_BRANCHES_FROM_EXPORT_FILE and WRITE_MODE == "api":
     for idx, scenario_name in enumerate(scenarios_to_fill):
         include_current_accounts = HANDLE_CURRENT_ACCOUNTS_TOO and idx == 0
         fill_branches_from_export_file(
@@ -183,3 +209,14 @@ if FILL_BRANCHES_FROM_EXPORT_FILE:
             CHECK_STALE_CHILD_BRANCHES=True,
             PROMPT_DELETE_STALE_BRANCHES=True,
         )
+
+
+try:
+    from codebase.utilities.workflow_common import emit_completion_beep as _emit_completion_beep
+except Exception:  # pragma: no cover
+    def _emit_completion_beep(*, success: bool = True) -> None:  # noqa: ARG001
+        return
+
+
+if __name__ == "__main__":  # pragma: no cover
+    _emit_completion_beep(success=True, style="chime")

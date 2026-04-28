@@ -1,0 +1,2117 @@
+gap_type,key_col_1,key_col_2,pair_1,pair_2,abs_sum
+esto_missing,esto_flow,esto_product,01 Production,01 Coal,144226.457761
+esto_missing,esto_flow,esto_product,01 Production,03 Peat,10.624549
+esto_missing,esto_flow,esto_product,01 Production,06 Crude oil & NGL,84492.07328
+esto_missing,esto_flow,esto_product,01 Production,06.04 Additives/  oxygenates,59.381217
+esto_missing,esto_flow,esto_product,01 Production,08 Gas,90040.273417
+esto_missing,esto_flow,esto_product,01 Production,12 Solar,3330.571442
+esto_missing,esto_flow,esto_product,01 Production,"13 Tide, wave, ocean",1.525837
+esto_missing,esto_flow,esto_product,01 Production,19 Total,371365.136097
+esto_missing,esto_flow,esto_product,01 Production,20 Total Renewables,31427.575018
+esto_missing,esto_flow,esto_product,01 Production,21 Modern renewables,30165.157602
+esto_missing,esto_flow,esto_product,02 Imports,01 Coal,18840.927417000003
+esto_missing,esto_flow,esto_product,02 Imports,02 Coal products,137.981195
+esto_missing,esto_flow,esto_product,02 Imports,03 Peat,0.315475
+esto_missing,esto_flow,esto_product,02 Imports,06 Crude oil & NGL,57819.764382999994
+esto_missing,esto_flow,esto_product,02 Imports,06.04 Additives/  oxygenates,154.888349
+esto_missing,esto_flow,esto_product,02 Imports,07 Petroleum products,22575.263488
+esto_missing,esto_flow,esto_product,02 Imports,07.15 Paraffin  waxes,16.384148
+esto_missing,esto_flow,esto_product,02 Imports,08 Gas,19909.175123
+esto_missing,esto_flow,esto_product,02 Imports,19 Total,120076.538705
+esto_missing,esto_flow,esto_product,02 Imports,20 Total Renewables,311.736071
+esto_missing,esto_flow,esto_product,02 Imports,21 Modern renewables,307.893484
+esto_missing,esto_flow,esto_product,03 Exports,01 Coal,27302.129688999998
+esto_missing,esto_flow,esto_product,03 Exports,02 Coal products,410.577484
+esto_missing,esto_flow,esto_product,03 Exports,03 Peat,0.974143
+esto_missing,esto_flow,esto_product,03 Exports,06 Crude oil & NGL,31698.314041
+esto_missing,esto_flow,esto_product,03 Exports,06.04 Additives/  oxygenates,76.108068
+esto_missing,esto_flow,esto_product,03 Exports,07 Petroleum products,27032.122889000002
+esto_missing,esto_flow,esto_product,03 Exports,07.15 Paraffin  waxes,43.036213000000004
+esto_missing,esto_flow,esto_product,03 Exports,08 Gas,22750.301574999998
+esto_missing,esto_flow,esto_product,03 Exports,19 Total,109899.113833
+esto_missing,esto_flow,esto_product,03 Exports,20 Total Renewables,251.82750099999998
+esto_missing,esto_flow,esto_product,03 Exports,21 Modern renewables,246.787622
+esto_missing,esto_flow,esto_product,04 International marine bunkers,07 Petroleum products,3879.807399
+esto_missing,esto_flow,esto_product,04 International marine bunkers,07.13 Lubricants,0.8198599999999999
+esto_missing,esto_flow,esto_product,04 International marine bunkers,08 Gas,0.393852
+esto_missing,esto_flow,esto_product,04 International marine bunkers,16 Others,5.509075
+esto_missing,esto_flow,esto_product,04 International marine bunkers,19 Total,3885.710369
+esto_missing,esto_flow,esto_product,04 International marine bunkers,20 Total Renewables,5.509075
+esto_missing,esto_flow,esto_product,04 International marine bunkers,21 Modern renewables,218.02470200000002
+esto_missing,esto_flow,esto_product,05 International aviation bunkers,07 Petroleum products,2427.773253
+esto_missing,esto_flow,esto_product,05 International aviation bunkers,19 Total,2427.773253
+esto_missing,esto_flow,esto_product,05 International aviation bunkers,21 Modern renewables,0.0088
+esto_missing,esto_flow,esto_product,06 Stock changes,01 Coal,3704.0037939999997
+esto_missing,esto_flow,esto_product,06 Stock changes,01.01 Coking coal,135.103893
+esto_missing,esto_flow,esto_product,06 Stock changes,01.02 Other bituminous coal,3588.713346
+esto_missing,esto_flow,esto_product,06 Stock changes,01.03 Sub-bituminous coal,30.800637999999992
+esto_missing,esto_flow,esto_product,06 Stock changes,01.04 Anthracite,66.42854700000001
+esto_missing,esto_flow,esto_product,06 Stock changes,01.05 Lignite,15.814465
+esto_missing,esto_flow,esto_product,06 Stock changes,02 Coal products,277.182367
+esto_missing,esto_flow,esto_product,06 Stock changes,02.01 Coke oven coke,282.35732
+esto_missing,esto_flow,esto_product,06 Stock changes,02.08 BKB/PB,5.174953
+esto_missing,esto_flow,esto_product,06 Stock changes,04 Peat products,0.060039
+esto_missing,esto_flow,esto_product,06 Stock changes,06 Crude oil & NGL,867.7157530000001
+esto_missing,esto_flow,esto_product,06 Stock changes,06.01 Crude oil,928.7996730000001
+esto_missing,esto_flow,esto_product,06 Stock changes,06.02 Natural gas liquids,20.420907
+esto_missing,esto_flow,esto_product,06 Stock changes,06.03 Refinery feedstocks,47.593968000000004
+esto_missing,esto_flow,esto_product,06 Stock changes,06.04 Additives/  oxygenates,6.915298
+esto_missing,esto_flow,esto_product,06 Stock changes,06.05 Other hydrocarbons,0.015659
+esto_missing,esto_flow,esto_product,06 Stock changes,07 Petroleum products,819.113367
+esto_missing,esto_flow,esto_product,06 Stock changes,07.01 Motor gasoline,5.795113000000005
+esto_missing,esto_flow,esto_product,06 Stock changes,07.02 Aviation gasoline,0.626517
+esto_missing,esto_flow,esto_product,06 Stock changes,07.03 Naphtha,5.139346999999999
+esto_missing,esto_flow,esto_product,06 Stock changes,07.05 Kerosene type jet fuel,11.362203000000001
+esto_missing,esto_flow,esto_product,06 Stock changes,07.06 Kerosene,3.0988459999999995
+esto_missing,esto_flow,esto_product,06 Stock changes,07.07 Gas/diesel oil,599.6859919999999
+esto_missing,esto_flow,esto_product,06 Stock changes,07.08 Fuel oil,14.337005000000001
+esto_missing,esto_flow,esto_product,06 Stock changes,07.09 LPG,135.941913
+esto_missing,esto_flow,esto_product,06 Stock changes,07.11 Ethane,28.511271
+esto_missing,esto_flow,esto_product,06 Stock changes,07.12 White spirit SBP,1.7659920000000002
+esto_missing,esto_flow,esto_product,06 Stock changes,07.13 Lubricants,2.623117
+esto_missing,esto_flow,esto_product,06 Stock changes,07.14 Bitumen,35.524023
+esto_missing,esto_flow,esto_product,06 Stock changes,07.15 Paraffin  waxes,1.223695
+esto_missing,esto_flow,esto_product,06 Stock changes,07.16 Petroleum coke,25.195922
+esto_missing,esto_flow,esto_product,06 Stock changes,07.17 Other products,119.08578200000001
+esto_missing,esto_flow,esto_product,06 Stock changes,08 Gas,291.783896
+esto_missing,esto_flow,esto_product,06 Stock changes,08.01 Natural gas,273.020234
+esto_missing,esto_flow,esto_product,06 Stock changes,08.02 LNG,18.763659999999998
+esto_missing,esto_flow,esto_product,06 Stock changes,15 Solid biomass,0.876925
+esto_missing,esto_flow,esto_product,06 Stock changes,15.05 Other biomass,0.876925
+esto_missing,esto_flow,esto_product,06 Stock changes,16 Others,2.548914
+esto_missing,esto_flow,esto_product,06 Stock changes,16.05 Biogasoline,5.861796
+esto_missing,esto_flow,esto_product,06 Stock changes,16.06 Biodiesel,8.453583000000002
+esto_missing,esto_flow,esto_product,06 Stock changes,16.07 Bio jet kerosene,0.042873
+esto_missing,esto_flow,esto_product,06 Stock changes,19 Total,4221.002326999999
+esto_missing,esto_flow,esto_product,06 Stock changes,20 Total Renewables,3.4258380000000006
+esto_missing,esto_flow,esto_product,06 Stock changes,21 Modern renewables,21.885362
+esto_missing,esto_flow,esto_product,07 Total primary energy supply,01 Coal,132061.251571
+esto_missing,esto_flow,esto_product,07 Total primary energy supply,02 Coal products,549.77878
+esto_missing,esto_flow,esto_product,07 Total primary energy supply,03 Peat,9.965882
+esto_missing,esto_flow,esto_product,07 Total primary energy supply,04 Peat products,0.060039
+esto_missing,esto_flow,esto_product,07 Total primary energy supply,06 Crude oil & NGL,111481.239249
+esto_missing,esto_flow,esto_product,07 Total primary energy supply,06.04 Additives/  oxygenates,145.076753
+esto_missing,esto_flow,esto_product,07 Total primary energy supply,07 Petroleum products,11583.553629
+esto_missing,esto_flow,esto_product,07 Total primary energy supply,07.15 Paraffin  waxes,27.875758
+esto_missing,esto_flow,esto_product,07 Total primary energy supply,08 Gas,86906.969292
+esto_missing,esto_flow,esto_product,07 Total primary energy supply,12 Solar,3330.571442
+esto_missing,esto_flow,esto_product,07 Total primary energy supply,"13 Tide, wave, ocean",1.525837
+esto_missing,esto_flow,esto_product,07 Total primary energy supply,19 Total,371008.0749
+esto_missing,esto_flow,esto_product,07 Total primary energy supply,20 Total Renewables,31485.400351999997
+esto_missing,esto_flow,esto_product,07 Total primary energy supply,21 Modern renewables,29986.344429
+esto_missing,esto_flow,esto_product,08 Transfers,06 Crude oil & NGL,5925.299008
+esto_missing,esto_flow,esto_product,08 Transfers,06.01 Crude oil,0.448239
+esto_missing,esto_flow,esto_product,08 Transfers,06.04 Additives/  oxygenates,22.230733
+esto_missing,esto_flow,esto_product,08 Transfers,07 Petroleum products,1010.7488599999995
+esto_missing,esto_flow,esto_product,08 Transfers,07.15 Paraffin  waxes,9.165289999999999
+esto_missing,esto_flow,esto_product,08 Transfers,19 Total,4914.550523
+esto_missing,esto_flow,esto_product,08.02 Interproduct transfers,06 Crude oil & NGL,149.706961
+esto_missing,esto_flow,esto_product,08.02 Interproduct transfers,06.02 Natural gas liquids,149.706961
+esto_missing,esto_flow,esto_product,08.02 Interproduct transfers,07 Petroleum products,102.57199
+esto_missing,esto_flow,esto_product,08.02 Interproduct transfers,07.01 Motor gasoline,108.649508
+esto_missing,esto_flow,esto_product,08.02 Interproduct transfers,07.03 Naphtha,81.47570900000001
+esto_missing,esto_flow,esto_product,08.02 Interproduct transfers,07.05 Kerosene type jet fuel,0.594786
+esto_missing,esto_flow,esto_product,08.02 Interproduct transfers,07.07 Gas/diesel oil,19.412326
+esto_missing,esto_flow,esto_product,08.02 Interproduct transfers,07.08 Fuel oil,21.676831999999997
+esto_missing,esto_flow,esto_product,08.02 Interproduct transfers,07.09 LPG,69.342645
+esto_missing,esto_flow,esto_product,08.02 Interproduct transfers,07.12 White spirit SBP,0.024981
+esto_missing,esto_flow,esto_product,08.02 Interproduct transfers,07.13 Lubricants,0.033948
+esto_missing,esto_flow,esto_product,08.02 Interproduct transfers,07.14 Bitumen,230.270568
+esto_missing,esto_flow,esto_product,08.02 Interproduct transfers,07.17 Other products,72.925007
+esto_missing,esto_flow,esto_product,08.02 Interproduct transfers,19 Total,252.278951
+esto_missing,esto_flow,esto_product,08.03 Products transferred,06 Crude oil & NGL,318.890884
+esto_missing,esto_flow,esto_product,08.03 Products transferred,06.03 Refinery feedstocks,296.66015100000004
+esto_missing,esto_flow,esto_product,08.03 Products transferred,06.04 Additives/  oxygenates,22.230733
+esto_missing,esto_flow,esto_product,08.03 Products transferred,07 Petroleum products,5652.683142999999
+esto_missing,esto_flow,esto_product,08.03 Products transferred,07.01 Motor gasoline,86.950745
+esto_missing,esto_flow,esto_product,08.03 Products transferred,07.03 Naphtha,1079.2084989999998
+esto_missing,esto_flow,esto_product,08.03 Products transferred,07.07 Gas/diesel oil,121.443395
+esto_missing,esto_flow,esto_product,08.03 Products transferred,07.08 Fuel oil,1068.6951760000002
+esto_missing,esto_flow,esto_product,08.03 Products transferred,07.09 LPG,500.420579
+esto_missing,esto_flow,esto_product,08.03 Products transferred,07.10 Refinery gas (not liquefied),78.14076
+esto_missing,esto_flow,esto_product,08.03 Products transferred,07.12 White spirit SBP,1.506175
+esto_missing,esto_flow,esto_product,08.03 Products transferred,07.13 Lubricants,1.803319
+esto_missing,esto_flow,esto_product,08.03 Products transferred,07.15 Paraffin  waxes,8.819963
+esto_missing,esto_flow,esto_product,08.03 Products transferred,07.16 Petroleum coke,12.031507
+esto_missing,esto_flow,esto_product,08.03 Products transferred,07.17 Other products,2693.663026
+esto_missing,esto_flow,esto_product,08.03 Products transferred,19 Total,5333.7922579999995
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,06 Crude oil & NGL,6094.482931
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,06.01 Crude oil,0.448239
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,06.02 Natural gas liquids,7352.5642880000005
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,06.03 Refinery feedstocks,1776.262377
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,06.05 Other hydrocarbons,518.6292569999999
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07 Petroleum products,6766.003993
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.01 Motor gasoline,407.435887
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.02 Aviation gasoline,0.15604200000000001
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.03 Naphtha,289.78906800000004
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.05 Kerosene type jet fuel,16.936066
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.06 Kerosene,143.849069
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.07 Gas/diesel oil,224.57442500000002
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.08 Fuel oil,257.354056
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.09 LPG,4178.952221
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.10 Refinery gas (not liquefied),275.780287
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.11 Ethane,2831.04198
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.12 White spirit SBP,2.399455
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.13 Lubricants,13.582942
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.14 Bitumen,8.094131
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.15 Paraffin  waxes,0.34532700000000005
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.16 Petroleum coke,168.672397
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.17 Other products,649.29715
+esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,19 Total,671.5206860000001
+esto_missing,esto_flow,esto_product,09 Total transformation sector,01 Coal,106586.87864000001
+esto_missing,esto_flow,esto_product,09 Total transformation sector,02 Coal products,13374.842437000001
+esto_missing,esto_flow,esto_product,09 Total transformation sector,02.06 Patent fuel,7.366675
+esto_missing,esto_flow,esto_product,09 Total transformation sector,02.07 Coal tar,385.384555
+esto_missing,esto_flow,esto_product,09 Total transformation sector,02.08 BKB/PB,253.919378
+esto_missing,esto_flow,esto_product,09 Total transformation sector,03 Peat,9.318644
+esto_missing,esto_flow,esto_product,09 Total transformation sector,04 Peat products,0.450374
+esto_missing,esto_flow,esto_product,09 Total transformation sector,06 Crude oil & NGL,106106.581304
+esto_missing,esto_flow,esto_product,09 Total transformation sector,06.04 Additives/  oxygenates,120.40502599999999
+esto_missing,esto_flow,esto_product,09 Total transformation sector,07 Petroleum products,106802.488816
+esto_missing,esto_flow,esto_product,09 Total transformation sector,08 Gas,35166.313354
+esto_missing,esto_flow,esto_product,09 Total transformation sector,12 Solar,3139.86783
+esto_missing,esto_flow,esto_product,09 Total transformation sector,"13 Tide, wave, ocean",1.525837
+esto_missing,esto_flow,esto_product,09 Total transformation sector,15.03 Charcoal,108.509869
+esto_missing,esto_flow,esto_product,09 Total transformation sector,16 Others,1777.815102
+esto_missing,esto_flow,esto_product,09 Total transformation sector,16.09 Other sources,68.25112
+esto_missing,esto_flow,esto_product,09 Total transformation sector,19 Total,87963.19894700001
+esto_missing,esto_flow,esto_product,09 Total transformation sector,20 Total Renewables,22797.522997
+esto_missing,esto_flow,esto_product,09 Total transformation sector,21 Modern renewables,22797.522745
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,01 Coal,79738.53050800001
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,01.02 Other bituminous coal,70310.88292799999
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,01.03 Sub-bituminous coal,6435.7544849999995
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,01.04 Anthracite,1149.1693759999998
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,01.05 Lignite,1842.723719
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,02 Coal products,2333.804291
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,02.01 Coke oven coke,88.042468
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,02.03 Coke oven gas,570.2321499999999
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,02.04 Blast furnace gas,1334.0769579999999
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,02.05 Other recovered gases,341.452716
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,03 Peat,5.311919
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,06 Crude oil & NGL,7.1727
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,06.01 Crude oil,7.149337
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,06.02 Natural gas liquids,0.023362
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,07 Petroleum products,1551.7486979999999
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,07.01 Motor gasoline,1.075212
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,07.03 Naphtha,0.021018
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,07.05 Kerosene type jet fuel,0.777866
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,07.06 Kerosene,13.330478
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,07.07 Gas/diesel oil,356.059254
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,07.08 Fuel oil,723.6959860000001
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,07.09 LPG,38.12764
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,07.10 Refinery gas (not liquefied),145.76171
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,07.14 Bitumen,24.304248
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,07.16 Petroleum coke,233.60633
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,07.17 Other products,14.988959
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,08 Gas,29365.205005
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,08.01 Natural gas,29334.212086
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,08.03 Gas works gas,30.992918
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,09 Nuclear,19637.690502999998
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,10 Hydro,9024.016946
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,11 Geothermal,1753.0249769999998
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,12 Solar,2600.50929
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,12.01 of which: Photovoltaics,2570.457906
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,12.99 Solar nonspecified,30.051384
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,"13 Tide, wave, ocean",1.525837
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,14 Wind,4786.062928
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,15 Solid biomass,2060.414099
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,15.01 Fuelwood & woodwaste,0.879228
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,15.02 Bagasse,276.987991
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,15.04 Black liqour,13.902676
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,15.05 Other biomass,1768.644205
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,16 Others,1182.876579
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,16.01 Biogas,222.445228
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,16.02 Industrial waste,659.367932
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,16.03 Municipal solid waste (renewable),103.034877
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,16.04 Municipal solid waste (non-renewable),90.077686
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,16.06 Biodiesel,33.147226
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,16.08 Other liquid biofuels,10.680569
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,16.09 Other sources,64.123061
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,17 Electricity,65952.769734
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,18 Heat,12989.940352000001
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,19 Total,75105.184451
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,20 Total Renewables,20594.862054
+esto_missing,esto_flow,esto_product,09.01 Main activity producer,21 Modern renewables,20594.86197
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,01 Coal,68181.030656
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,02 Coal products,1991.2745690000002
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,02.01 Coke oven coke,40.943623
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,02.05 Other recovered gases,303.37622300000004
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,06 Crude oil & NGL,7.1727
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,06.01 Crude oil,7.149337
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,06.02 Natural gas liquids,0.023362
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,07 Petroleum products,1204.967849
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,07.01 Motor gasoline,1.075212
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,07.03 Naphtha,0.021018
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,07.09 LPG,12.61444
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,07.14 Bitumen,24.304248
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,08 Gas,21280.468632
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,08.03 Gas works gas,19.169632
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,12 Solar,2600.50929
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,"13 Tide, wave, ocean",1.525837
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,15 Solid biomass,1773.850631
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,16 Others,977.95983
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,16.09 Other sources,64.123061
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,19 Total,70273.298975
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,20 Total Renewables,20281.044195000002
+esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,21 Modern renewables,20281.044111
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,01 Coal,2328.522684
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,02 Coal products,6.041008
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,02.04 Blast furnace gas,6.041008
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,03 Peat,5.311919
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,07 Petroleum products,63.267925
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,07.06 Kerosene,0.02106
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,07.07 Gas/diesel oil,1.639509
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,07.08 Fuel oil,38.521006
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,07.09 LPG,3.264574
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,07.16 Petroleum coke,19.470253
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,07.17 Other products,0.351524
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,08 Gas,7190.618282
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,09 Nuclear,14.595352
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,15 Solid biomass,72.736539
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,15.05 Other biomass,72.736539
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,16 Others,36.237840000000006
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,16.01 Biogas,10.140094999999999
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,16.02 Industrial waste,4.991919
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,16.03 Municipal solid waste (renewable),9.765083
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,16.04 Municipal solid waste (non-renewable),11.286524
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,16.06 Biodiesel,0.054219
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,19 Total,3589.582091
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,20 Total Renewables,92.69593599999999
+esto_missing,esto_flow,esto_product,09.01.02 CHP plants,21 Modern renewables,92.695936
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,01 Coal,9228.97717
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,02 Coal products,336.488714
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,02.01 Coke oven coke,47.098845
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,02.03 Coke oven gas,107.662441
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,02.04 Blast furnace gas,143.650935
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,02.05 Other recovered gases,38.076493
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07 Petroleum products,283.512924
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07.06 Kerosene,0.2165
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07.07 Gas/diesel oil,1.43313
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07.08 Fuel oil,101.956177
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07.09 LPG,22.248627
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07.10 Refinery gas (not liquefied),85.416692
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07.16 Petroleum coke,65.976694
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07.17 Other products,6.265106
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,08 Gas,894.1180889999999
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,08.03 Gas works gas,11.823287
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,15 Solid biomass,213.826929
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,15.05 Other biomass,213.826929
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,16 Others,168.678909
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,16.01 Biogas,4.327979
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,16.02 Industrial waste,159.231897
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,16.03 Municipal solid waste (renewable),2.967018
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,16.04 Municipal solid waste (non-renewable),2.152015
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,19 Total,1242.303386
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,20 Total Renewables,221.121926
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,21 Modern renewables,221.121926
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,01 Coal,1336.8831010000001
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,01.02 Other bituminous coal,1147.705789
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,01.03 Sub-bituminous coal,36.420700999999994
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,01.05 Lignite,152.75661200000002
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,02 Coal products,387.571836
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,02.01 Coke oven coke,0.238145
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,02.03 Coke oven gas,104.45066299999999
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,02.04 Blast furnace gas,261.500895
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,02.05 Other recovered gases,21.382132000000002
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,03 Peat,3.380506
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,04 Peat products,0.1022
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,06 Crude oil & NGL,26.73789
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,06.01 Crude oil,24.181994
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,06.03 Refinery feedstocks,2.555896
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,07 Petroleum products,691.236745
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,07.03 Naphtha,35.928062
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,07.06 Kerosene,2.544402
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,07.07 Gas/diesel oil,204.412017
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,07.08 Fuel oil,182.9023
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,07.09 LPG,7.465082000000001
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,07.10 Refinery gas (not liquefied),126.02080699999999
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,07.14 Bitumen,12.337872
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,07.16 Petroleum coke,77.31909999999999
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,07.17 Other products,42.307103999999995
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,08 Gas,4657.64491
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,08.01 Natural gas,4657.64491
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,10 Hydro,133.67158899999998
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,11 Geothermal,34.205682
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,12 Solar,539.358538
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,12.01 of which: Photovoltaics,539.358538
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,14 Wind,37.944128
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,15 Solid biomass,842.777343
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,15.01 Fuelwood & woodwaste,0.041578
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,15.02 Bagasse,6.138807
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,15.04 Black liqour,0.713601
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,15.05 Other biomass,835.8833569999999
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,16 Others,558.9680370000001
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,16.01 Biogas,112.140852
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,16.02 Industrial waste,233.074267
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,16.03 Municipal solid waste (renewable),98.593688
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,16.04 Municipal solid waste (non-renewable),109.087484
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,16.06 Biodiesel,0.19305899999999998
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,16.08 Other liquid biofuels,1.750627
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,16.09 Other sources,4.128058
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,17 Electricity,2726.014272
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,18 Heat,1657.7610900000002
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,19 Total,4866.707317
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,20 Total Renewables,1800.635678
+esto_missing,esto_flow,esto_product,09.02 Autoproducers,21 Modern renewables,1800.635511
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,01 Coal,143.122423
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,02 Coal products,196.830177
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,02.01 Coke oven coke,0.209507
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,02.05 Other recovered gases,17.326737
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,06 Crude oil & NGL,1.684685
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,06.01 Crude oil,1.684685
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,07 Petroleum products,419.037313
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,07.03 Naphtha,7.67855
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,07.09 LPG,6.275762
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,07.14 Bitumen,12.337872
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,08 Gas,1181.688075
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,12 Solar,539.358538
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,15 Solid biomass,451.680237
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,16 Others,267.983389
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,16.09 Other sources,1.011195
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,19 Total,3273.146361
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,20 Total Renewables,1359.1319330000001
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,21 Modern renewables,1359.13185
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,01 Coal,631.604401
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,02 Coal products,169.28020600000002
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,02.03 Coke oven gas,73.086757
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,02.05 Other recovered gases,4.055395
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,06 Crude oil & NGL,2.6290810000000002
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,06.01 Crude oil,0.073185
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,06.03 Refinery feedstocks,2.555896
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,07 Petroleum products,167.787216
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,07.03 Naphtha,27.365469
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,07.09 LPG,0.171132
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,07.10 Refinery gas (not liquefied),55.213927
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,07.17 Other products,28.784703
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,08 Gas,1646.027511
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,11 Geothermal,1.249802
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,15 Solid biomass,370.64919299999997
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,15.01 Fuelwood & woodwaste,0.041578
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,15.02 Bagasse,0.008112
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,15.04 Black liqour,0.713601
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,16 Others,188.456071
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,16.08 Other liquid biofuels,1.750627
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,16.09 Other sources,3.116863
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,19 Total,1445.622985
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,20 Total Renewables,415.100194
+esto_missing,esto_flow,esto_product,09.02.02 CHP plants,21 Modern renewables,415.10011
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,01 Coal,562.156277
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,01.05 Lignite,103.935552
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,02 Coal products,21.461453
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,03 Peat,3.380506
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,04 Peat products,0.1022
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,06 Crude oil & NGL,22.424124
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,06.01 Crude oil,22.424124
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,07 Petroleum products,104.412219
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,07.03 Naphtha,0.884043
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,08 Gas,1829.929324
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,15 Solid biomass,20.447912
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,16 Others,102.528577
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,16.01 Biogas,1.899007
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,16.02 Industrial waste,90.909872
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,16.03 Municipal solid waste (renewable),4.056632
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,16.04 Municipal solid waste (non-renewable),5.663066
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,17 Electricity,0.57708
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,19 Total,147.937969
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,20 Total Renewables,26.403552
+esto_missing,esto_flow,esto_product,09.02.03 Heat plants,21 Modern renewables,26.403552
+esto_missing,esto_flow,esto_product,09.04 Electric boilers,17 Electricity,16.448556000000004
+esto_missing,esto_flow,esto_product,09.04 Electric boilers,18 Heat,19.930257
+esto_missing,esto_flow,esto_product,09.04 Electric boilers,19 Total,3.4817430000000003
+esto_missing,esto_flow,esto_product,09.05 Chemical heat for electricity production,17 Electricity,0.301617
+esto_missing,esto_flow,esto_product,09.05 Chemical heat for electricity production,18 Heat,2.252792
+esto_missing,esto_flow,esto_product,09.05 Chemical heat for electricity production,19 Total,1.951175
+esto_missing,esto_flow,esto_product,09.06 Gas processing plants,01 Coal,1132.127739
+esto_missing,esto_flow,esto_product,09.06 Gas processing plants,01.02 Other bituminous coal,1060.360795
+esto_missing,esto_flow,esto_product,09.06 Gas processing plants,02 Coal products,198.65079
+esto_missing,esto_flow,esto_product,09.06 Gas processing plants,02.01 Coke oven coke,5.02964
+esto_missing,esto_flow,esto_product,09.06 Gas processing plants,07 Petroleum products,22.425508
+esto_missing,esto_flow,esto_product,09.06 Gas processing plants,07.06 Kerosene,1.842192
+esto_missing,esto_flow,esto_product,09.06 Gas processing plants,07.07 Gas/diesel oil,5.400972
+esto_missing,esto_flow,esto_product,09.06 Gas processing plants,07.10 Refinery gas (not liquefied),22.58765
+esto_missing,esto_flow,esto_product,09.06 Gas processing plants,07.17 Other products,11.30436
+esto_missing,esto_flow,esto_product,09.06 Gas processing plants,08 Gas,177.25074200000003
+esto_missing,esto_flow,esto_product,09.06 Gas processing plants,16 Others,30.445949
+esto_missing,esto_flow,esto_product,09.06 Gas processing plants,19 Total,1206.399284
+esto_missing,esto_flow,esto_product,09.06 Gas processing plants,20 Total Renewables,30.445949
+esto_missing,esto_flow,esto_product,09.06 Gas processing plants,21 Modern renewables,30.445949
+esto_missing,esto_flow,esto_product,09.06.01 Gas works plants,01 Coal,1132.127739
+esto_missing,esto_flow,esto_product,09.06.01 Gas works plants,01.02 Other bituminous coal,1060.360795
+esto_missing,esto_flow,esto_product,09.06.01 Gas works plants,02 Coal products,198.65079
+esto_missing,esto_flow,esto_product,09.06.01 Gas works plants,02.01 Coke oven coke,5.02964
+esto_missing,esto_flow,esto_product,09.06.01 Gas works plants,07 Petroleum products,25.633388
+esto_missing,esto_flow,esto_product,09.06.01 Gas works plants,07.10 Refinery gas (not liquefied),16.561924
+esto_missing,esto_flow,esto_product,09.06.01 Gas works plants,08 Gas,472.44548999999995
+esto_missing,esto_flow,esto_product,09.06.01 Gas works plants,19 Total,883.9664660000001
+esto_missing,esto_flow,esto_product,09.06.02 Liquefaction/regasification plants,07 Petroleum products,59.963004999999995
+esto_missing,esto_flow,esto_product,09.06.02 Liquefaction/regasification plants,07.03 Naphtha,6.562047
+esto_missing,esto_flow,esto_product,09.06.02 Liquefaction/regasification plants,07.09 LPG,53.400958
+esto_missing,esto_flow,esto_product,09.06.02 Liquefaction/regasification plants,08 Gas,679.895519
+esto_missing,esto_flow,esto_product,09.06.02 Liquefaction/regasification plants,19 Total,619.932515
+esto_missing,esto_flow,esto_product,09.06.03 Natural gas blending plants,07 Petroleum products,127.302705
+esto_missing,esto_flow,esto_product,09.06.03 Natural gas blending plants,07.10 Refinery gas (not liquefied),6.025726
+esto_missing,esto_flow,esto_product,09.06.03 Natural gas blending plants,08 Gas,533.635758
+esto_missing,esto_flow,esto_product,09.06.03 Natural gas blending plants,16 Others,30.445949
+esto_missing,esto_flow,esto_product,09.06.03 Natural gas blending plants,19 Total,375.887104
+esto_missing,esto_flow,esto_product,09.06.03 Natural gas blending plants,20 Total Renewables,30.445949
+esto_missing,esto_flow,esto_product,09.06.03 Natural gas blending plants,21 Modern renewables,30.445949
+esto_missing,esto_flow,esto_product,09.06.04 Gas-to-liquids plants,07 Petroleum products,70.54758
+esto_missing,esto_flow,esto_product,09.06.04 Gas-to-liquids plants,07.06 Kerosene,1.842192
+esto_missing,esto_flow,esto_product,09.06.04 Gas-to-liquids plants,07.07 Gas/diesel oil,5.400972
+esto_missing,esto_flow,esto_product,09.06.04 Gas-to-liquids plants,07.09 LPG,52.000056
+esto_missing,esto_flow,esto_product,09.06.04 Gas-to-liquids plants,07.17 Other products,11.30436
+esto_missing,esto_flow,esto_product,09.06.04 Gas-to-liquids plants,08 Gas,148.934987
+esto_missing,esto_flow,esto_product,09.06.04 Gas-to-liquids plants,08.01 Natural gas,148.934987
+esto_missing,esto_flow,esto_product,09.06.04 Gas-to-liquids plants,19 Total,78.387407
+esto_missing,esto_flow,esto_product,09.07 Oil refineries,06 Crude oil & NGL,107432.295235
+esto_missing,esto_flow,esto_product,09.07 Oil refineries,06.04 Additives/  oxygenates,120.40502599999999
+esto_missing,esto_flow,esto_product,09.07 Oil refineries,07 Petroleum products,109803.839557
+esto_missing,esto_flow,esto_product,09.07 Oil refineries,19 Total,2371.5438959999997
+esto_missing,esto_flow,esto_product,09.08 Coal transformation,01 Coal,24360.32758
+esto_missing,esto_flow,esto_product,09.08 Coal transformation,02 Coal products,16294.869354
+esto_missing,esto_flow,esto_product,09.08 Coal transformation,03 Peat,0.62622
+esto_missing,esto_flow,esto_product,09.08 Coal transformation,04 Peat products,0.552574
+esto_missing,esto_flow,esto_product,09.08 Coal transformation,07 Petroleum products,15.914697
+esto_missing,esto_flow,esto_product,09.08 Coal transformation,16 Others,4.831777
+esto_missing,esto_flow,esto_product,09.08 Coal transformation,19 Total,8086.2786
+esto_missing,esto_flow,esto_product,09.08.01 Coke ovens,01 Coal,22802.485084
+esto_missing,esto_flow,esto_product,09.08.01 Coke ovens,02 Coal products,20190.868231
+esto_missing,esto_flow,esto_product,09.08.01 Coke ovens,02.07 Coal tar,691.1600119999999
+esto_missing,esto_flow,esto_product,09.08.01 Coke ovens,07 Petroleum products,15.914697
+esto_missing,esto_flow,esto_product,09.08.01 Coke ovens,16 Others,4.831777
+esto_missing,esto_flow,esto_product,09.08.01 Coke ovens,19 Total,2632.363534
+esto_missing,esto_flow,esto_product,09.08.02 Blast furnaces,01 Coal,630.793053
+esto_missing,esto_flow,esto_product,09.08.02 Blast furnaces,02 Coal products,3855.3474319999996
+esto_missing,esto_flow,esto_product,09.08.02 Blast furnaces,02.05 Other recovered gases,992.4885529999999
+esto_missing,esto_flow,esto_product,09.08.02 Blast furnaces,19 Total,4486.140485
+esto_missing,esto_flow,esto_product,09.08.03 Patent fuel plants,01 Coal,7.542813
+esto_missing,esto_flow,esto_product,09.08.03 Patent fuel plants,02 Coal products,7.366675
+esto_missing,esto_flow,esto_product,09.08.03 Patent fuel plants,19 Total,0.176139
+esto_missing,esto_flow,esto_product,09.08.04 BKB/PB plants,01 Coal,8.726456
+esto_missing,esto_flow,esto_product,09.08.04 BKB/PB plants,02 Coal products,253.919378
+esto_missing,esto_flow,esto_product,09.08.04 BKB/PB plants,03 Peat,0.62622
+esto_missing,esto_flow,esto_product,09.08.04 BKB/PB plants,04 Peat products,0.552574
+esto_missing,esto_flow,esto_product,09.08.04 BKB/PB plants,19 Total,245.119234
+esto_missing,esto_flow,esto_product,09.08.05 Liquefaction (coal to oil),01 Coal,910.780179
+esto_missing,esto_flow,esto_product,09.08.05 Liquefaction (coal to oil),02 Coal products,301.937498
+esto_missing,esto_flow,esto_product,09.08.05 Liquefaction (coal to oil),19 Total,1212.717677
+esto_missing,esto_flow,esto_product,09.09 Petrochemical industry,06 Crude oil & NGL,970.877555
+esto_missing,esto_flow,esto_product,09.09 Petrochemical industry,06.03 Refinery feedstocks,970.877555
+esto_missing,esto_flow,esto_product,09.09 Petrochemical industry,07 Petroleum products,923.3253040000001
+esto_missing,esto_flow,esto_product,09.09 Petrochemical industry,07.03 Naphtha,688.447163
+esto_missing,esto_flow,esto_product,09.09 Petrochemical industry,07.09 LPG,128.071658
+esto_missing,esto_flow,esto_product,09.09 Petrochemical industry,07.10 Refinery gas (not liquefied),66.306645
+esto_missing,esto_flow,esto_product,09.09 Petrochemical industry,07.17 Other products,40.499837
+esto_missing,esto_flow,esto_product,09.09 Petrochemical industry,19 Total,47.552251999999996
+esto_missing,esto_flow,esto_product,09.11 Charcoal processing,15 Solid biomass,217.199763
+esto_missing,esto_flow,esto_product,09.11 Charcoal processing,19 Total,217.199763
+esto_missing,esto_flow,esto_product,09.11 Charcoal processing,20 Total Renewables,217.199763
+esto_missing,esto_flow,esto_product,09.11 Charcoal processing,21 Modern renewables,217.199763
+esto_missing,esto_flow,esto_product,09.12 Non-specified transformation,01 Coal,19.009705
+esto_missing,esto_flow,esto_product,09.12 Non-specified transformation,01.02 Other bituminous coal,19.009705
+esto_missing,esto_flow,esto_product,09.12 Non-specified transformation,06 Crude oil & NGL,388.746974
+esto_missing,esto_flow,esto_product,09.12 Non-specified transformation,06.02 Natural gas liquids,26.030541
+esto_missing,esto_flow,esto_product,09.12 Non-specified transformation,07 Petroleum products,203.300219
+esto_missing,esto_flow,esto_product,09.12 Non-specified transformation,07.11 Ethane,49.779185
+esto_missing,esto_flow,esto_product,09.12 Non-specified transformation,08 Gas,1320.714185
+esto_missing,esto_flow,esto_product,09.12 Non-specified transformation,15 Solid biomass,153.686791
+esto_missing,esto_flow,esto_product,09.12 Non-specified transformation,16 Others,0.69276
+esto_missing,esto_flow,esto_product,09.12 Non-specified transformation,16.01 Biogas,0.69276
+esto_missing,esto_flow,esto_product,09.12 Non-specified transformation,19 Total,902.056247
+esto_missing,esto_flow,esto_product,09.12 Non-specified transformation,20 Total Renewables,154.379551
+esto_missing,esto_flow,esto_product,09.12 Non-specified transformation,21 Modern renewables,154.379551
+esto_missing,esto_flow,esto_product,10 Losses & own use,01 Coal,1400.3092080000001
+esto_missing,esto_flow,esto_product,10 Losses & own use,01.01 Coking coal,0.267913
+esto_missing,esto_flow,esto_product,10 Losses & own use,01.02 Other bituminous coal,1376.621636
+esto_missing,esto_flow,esto_product,10 Losses & own use,01.03 Sub-bituminous coal,22.327156000000002
+esto_missing,esto_flow,esto_product,10 Losses & own use,01.05 Lignite,1.092504
+esto_missing,esto_flow,esto_product,10 Losses & own use,02 Coal products,733.814006
+esto_missing,esto_flow,esto_product,10 Losses & own use,02.01 Coke oven coke,55.744536000000004
+esto_missing,esto_flow,esto_product,10 Losses & own use,02.03 Coke oven gas,387.44375
+esto_missing,esto_flow,esto_product,10 Losses & own use,02.04 Blast furnace gas,280.62654100000003
+esto_missing,esto_flow,esto_product,10 Losses & own use,02.05 Other recovered gases,9.855152
+esto_missing,esto_flow,esto_product,10 Losses & own use,02.07 Coal tar,0.144026
+esto_missing,esto_flow,esto_product,10 Losses & own use,03 Peat,0.486925
+esto_missing,esto_flow,esto_product,10 Losses & own use,04 Peat products,0.007494
+esto_missing,esto_flow,esto_product,10 Losses & own use,06 Crude oil & NGL,428.854402
+esto_missing,esto_flow,esto_product,10 Losses & own use,06.01 Crude oil,427.76234
+esto_missing,esto_flow,esto_product,10 Losses & own use,06.03 Refinery feedstocks,1.092062
+esto_missing,esto_flow,esto_product,10 Losses & own use,07 Petroleum products,6996.143005999999
+esto_missing,esto_flow,esto_product,10 Losses & own use,07.01 Motor gasoline,50.613604
+esto_missing,esto_flow,esto_product,10 Losses & own use,07.03 Naphtha,978.406635
+esto_missing,esto_flow,esto_product,10 Losses & own use,07.05 Kerosene type jet fuel,1.704111
+esto_missing,esto_flow,esto_product,10 Losses & own use,07.06 Kerosene,2.349517
+esto_missing,esto_flow,esto_product,10 Losses & own use,07.07 Gas/diesel oil,608.586923
+esto_missing,esto_flow,esto_product,10 Losses & own use,07.08 Fuel oil,114.925172
+esto_missing,esto_flow,esto_product,10 Losses & own use,07.09 LPG,867.152607
+esto_missing,esto_flow,esto_product,10 Losses & own use,07.10 Refinery gas (not liquefied),2548.687771
+esto_missing,esto_flow,esto_product,10 Losses & own use,07.11 Ethane,0.945296
+esto_missing,esto_flow,esto_product,10 Losses & own use,07.12 White spirit SBP,10.800699999999999
+esto_missing,esto_flow,esto_product,10 Losses & own use,07.13 Lubricants,2.20657
+esto_missing,esto_flow,esto_product,10 Losses & own use,07.14 Bitumen,60.787142
+esto_missing,esto_flow,esto_product,10 Losses & own use,07.16 Petroleum coke,523.941595
+esto_missing,esto_flow,esto_product,10 Losses & own use,07.17 Other products,1225.0353650000002
+esto_missing,esto_flow,esto_product,10 Losses & own use,08 Gas,8410.635869
+esto_missing,esto_flow,esto_product,10 Losses & own use,08.01 Natural gas,8371.51755
+esto_missing,esto_flow,esto_product,10 Losses & own use,08.02 LNG,23.320476
+esto_missing,esto_flow,esto_product,10 Losses & own use,08.03 Gas works gas,15.797843
+esto_missing,esto_flow,esto_product,10 Losses & own use,15 Solid biomass,37.848085999999995
+esto_missing,esto_flow,esto_product,10 Losses & own use,15.05 Other biomass,37.848085999999995
+esto_missing,esto_flow,esto_product,10 Losses & own use,16 Others,7.173436
+esto_missing,esto_flow,esto_product,10 Losses & own use,16.01 Biogas,0.103288
+esto_missing,esto_flow,esto_product,10 Losses & own use,16.02 Industrial waste,5.893758
+esto_missing,esto_flow,esto_product,10 Losses & own use,16.06 Biodiesel,1.1763899999999998
+esto_missing,esto_flow,esto_product,10 Losses & own use,17 Electricity,9575.19617
+esto_missing,esto_flow,esto_product,10 Losses & own use,18 Heat,2429.0139
+esto_missing,esto_flow,esto_product,10 Losses & own use,19 Total,30019.483175999998
+esto_missing,esto_flow,esto_product,10 Losses & own use,20 Total Renewables,39.127764
+esto_missing,esto_flow,esto_product,10 Losses & own use,21 Modern renewables,39.127764
+esto_missing,esto_flow,esto_product,10.01 Own Use,01 Coal,1400.3092080000001
+esto_missing,esto_flow,esto_product,10.01 Own Use,01.01 Coking coal,0.267913
+esto_missing,esto_flow,esto_product,10.01 Own Use,01.02 Other bituminous coal,1376.621636
+esto_missing,esto_flow,esto_product,10.01 Own Use,01.03 Sub-bituminous coal,22.327156000000002
+esto_missing,esto_flow,esto_product,10.01 Own Use,01.05 Lignite,1.092504
+esto_missing,esto_flow,esto_product,10.01 Own Use,02 Coal products,728.367773
+esto_missing,esto_flow,esto_product,10.01 Own Use,02.01 Coke oven coke,52.360967
+esto_missing,esto_flow,esto_product,10.01 Own Use,02.03 Coke oven gas,387.159334
+esto_missing,esto_flow,esto_product,10.01 Own Use,02.04 Blast furnace gas,279.19698800000003
+esto_missing,esto_flow,esto_product,10.01 Own Use,02.05 Other recovered gases,9.506454999999999
+esto_missing,esto_flow,esto_product,10.01 Own Use,02.07 Coal tar,0.144026
+esto_missing,esto_flow,esto_product,10.01 Own Use,03 Peat,0.486925
+esto_missing,esto_flow,esto_product,10.01 Own Use,04 Peat products,0.007494
+esto_missing,esto_flow,esto_product,10.01 Own Use,06 Crude oil & NGL,172.54907
+esto_missing,esto_flow,esto_product,10.01 Own Use,06.01 Crude oil,171.457008
+esto_missing,esto_flow,esto_product,10.01 Own Use,06.03 Refinery feedstocks,1.092062
+esto_missing,esto_flow,esto_product,10.01 Own Use,07 Petroleum products,6995.952088
+esto_missing,esto_flow,esto_product,10.01 Own Use,07.01 Motor gasoline,50.613604
+esto_missing,esto_flow,esto_product,10.01 Own Use,07.03 Naphtha,978.406635
+esto_missing,esto_flow,esto_product,10.01 Own Use,07.05 Kerosene type jet fuel,1.704111
+esto_missing,esto_flow,esto_product,10.01 Own Use,07.06 Kerosene,2.349517
+esto_missing,esto_flow,esto_product,10.01 Own Use,07.07 Gas/diesel oil,608.586923
+esto_missing,esto_flow,esto_product,10.01 Own Use,07.08 Fuel oil,114.925172
+esto_missing,esto_flow,esto_product,10.01 Own Use,07.09 LPG,866.961689
+esto_missing,esto_flow,esto_product,10.01 Own Use,07.10 Refinery gas (not liquefied),2548.687771
+esto_missing,esto_flow,esto_product,10.01 Own Use,07.11 Ethane,0.945296
+esto_missing,esto_flow,esto_product,10.01 Own Use,07.12 White spirit SBP,10.800699999999999
+esto_missing,esto_flow,esto_product,10.01 Own Use,07.13 Lubricants,2.20657
+esto_missing,esto_flow,esto_product,10.01 Own Use,07.14 Bitumen,60.787142
+esto_missing,esto_flow,esto_product,10.01 Own Use,07.16 Petroleum coke,523.941595
+esto_missing,esto_flow,esto_product,10.01 Own Use,07.17 Other products,1225.0353650000002
+esto_missing,esto_flow,esto_product,10.01 Own Use,08 Gas,7799.732351000001
+esto_missing,esto_flow,esto_product,10.01 Own Use,08.01 Natural gas,7783.934508
+esto_missing,esto_flow,esto_product,10.01 Own Use,08.03 Gas works gas,15.797843
+esto_missing,esto_flow,esto_product,10.01 Own Use,15 Solid biomass,37.848085999999995
+esto_missing,esto_flow,esto_product,10.01 Own Use,15.05 Other biomass,37.848085999999995
+esto_missing,esto_flow,esto_product,10.01 Own Use,16 Others,7.173436
+esto_missing,esto_flow,esto_product,10.01 Own Use,16.01 Biogas,0.103288
+esto_missing,esto_flow,esto_product,10.01 Own Use,16.02 Industrial waste,5.893758
+esto_missing,esto_flow,esto_product,10.01 Own Use,16.06 Biodiesel,1.1763899999999998
+esto_missing,esto_flow,esto_product,10.01 Own Use,17 Electricity,6468.986395
+esto_missing,esto_flow,esto_product,10.01 Own Use,18 Heat,1767.839061
+esto_missing,esto_flow,esto_product,10.01 Own Use,19 Total,25379.252515
+esto_missing,esto_flow,esto_product,10.01 Own Use,20 Total Renewables,39.127764
+esto_missing,esto_flow,esto_product,10.01 Own Use,21 Modern renewables,39.127764
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",01 Coal,154.29913
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",01.02 Other bituminous coal,154.29913
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",02 Coal products,27.688303
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",02.01 Coke oven coke,23.116694000000003
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",02.03 Coke oven gas,4.511319
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",02.07 Coal tar,0.06029
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",03 Peat,0.486925
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",04 Peat products,0.007494
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",06 Crude oil & NGL,1.134414
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",06.01 Crude oil,1.134414
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",07 Petroleum products,78.208772
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",07.01 Motor gasoline,6.935542
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",07.06 Kerosene,0.428865
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",07.07 Gas/diesel oil,54.694772
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",07.08 Fuel oil,10.881041
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",07.09 LPG,0.032573000000000005
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",07.10 Refinery gas (not liquefied),3.344542
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",07.16 Petroleum coke,1.883641
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",07.17 Other products,0.007796
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",08 Gas,124.051553
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",08.01 Natural gas,124.051553
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",15 Solid biomass,4.751014
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",15.05 Other biomass,4.751014
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",16 Others,0.105783
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",16.01 Biogas,0.103288
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",16.06 Biodiesel,0.002495
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",17 Electricity,3908.899658
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",18 Heat,194.994014
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",19 Total,4494.627016
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",20 Total Renewables,4.856797
+esto_missing,esto_flow,esto_product,"10.01.01 Electricity, CHP and heat plants",21 Modern renewables,4.856797
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,01 Coal,0.319679
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,01.02 Other bituminous coal,0.319679
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,02 Coal products,1.109083
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,02.03 Coke oven gas,1.085219
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,02.05 Other recovered gases,0.023865
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,07 Petroleum products,2.004388
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,07.01 Motor gasoline,0.9362109999999999
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,07.07 Gas/diesel oil,0.646149
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,07.09 LPG,0.422029
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,08 Gas,415.139569
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,08.01 Natural gas,414.875047
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,08.03 Gas works gas,0.264522
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,17 Electricity,69.867908
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,18 Heat,49.0666
+esto_missing,esto_flow,esto_product,10.01.02 Gas works plants,19 Total,537.5072289999999
+esto_missing,esto_flow,esto_product,10.01.03 Liquefaction/regasification plants,08 Gas,371.576143
+esto_missing,esto_flow,esto_product,10.01.03 Liquefaction/regasification plants,08.01 Natural gas,371.576143
+esto_missing,esto_flow,esto_product,10.01.03 Liquefaction/regasification plants,17 Electricity,32.337947
+esto_missing,esto_flow,esto_product,10.01.03 Liquefaction/regasification plants,19 Total,403.914132
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,01 Coal,867.810221
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,01.02 Other bituminous coal,867.810221
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,02 Coal products,550.701291
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,02.01 Coke oven coke,26.878466
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,02.03 Coke oven gas,350.05447100000004
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,02.04 Blast furnace gas,164.285763
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,02.05 Other recovered gases,9.48259
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,07 Petroleum products,0.603443
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,07.06 Kerosene,0.093408
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,07.07 Gas/diesel oil,0.498732
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,07.08 Fuel oil,0.009253
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,07.09 LPG,0.002052
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,08 Gas,15.660390999999999
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,08.01 Natural gas,0.391592
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,08.03 Gas works gas,15.268799
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,17 Electricity,12.137406
+esto_missing,esto_flow,esto_product,10.01.05 Coke ovens,19 Total,1446.912794
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,01 Coal,337.953774
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,01.01 Coking coal,0.267913
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,01.02 Other bituminous coal,336.462101
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,01.03 Sub-bituminous coal,0.131257
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,01.05 Lignite,1.092504
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,02 Coal products,3.044906
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,02.01 Coke oven coke,2.365807
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,02.03 Coke oven gas,0.045217
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,02.04 Blast furnace gas,0.550146
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,02.07 Coal tar,0.083736
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,06 Crude oil & NGL,0.025121
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,06.01 Crude oil,0.025121
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,07 Petroleum products,406.655108
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,07.01 Motor gasoline,2.620643
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,07.03 Naphtha,65.208573
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,07.06 Kerosene,0.179613
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,07.07 Gas/diesel oil,307.341265
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,07.08 Fuel oil,5.342649
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,07.09 LPG,25.751583999999998
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,07.17 Other products,0.21078
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,08 Gas,4.1348
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,08.01 Natural gas,3.870278
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,08.03 Gas works gas,0.264522
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,16 Others,0.276161
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,16.06 Biodiesel,0.276161
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,17 Electricity,447.213092
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,18 Heat,28.434351
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,19 Total,1227.7374379999999
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,20 Total Renewables,0.276161
+esto_missing,esto_flow,esto_product,10.01.06 Coal mines,21 Modern renewables,0.276161
+esto_missing,esto_flow,esto_product,10.01.07 Blast furnaces,02 Coal products,145.824188
+esto_missing,esto_flow,esto_product,10.01.07 Blast furnaces,02.03 Coke oven gas,31.463107
+esto_missing,esto_flow,esto_product,10.01.07 Blast furnaces,02.04 Blast furnace gas,114.36107999999999
+esto_missing,esto_flow,esto_product,10.01.07 Blast furnaces,07 Petroleum products,1.99836
+esto_missing,esto_flow,esto_product,10.01.07 Blast furnaces,07.08 Fuel oil,1.99836
+esto_missing,esto_flow,esto_product,10.01.07 Blast furnaces,08 Gas,15.374557
+esto_missing,esto_flow,esto_product,10.01.07 Blast furnaces,08.01 Natural gas,15.374557
+esto_missing,esto_flow,esto_product,10.01.07 Blast furnaces,17 Electricity,12.363536
+esto_missing,esto_flow,esto_product,10.01.07 Blast furnaces,19 Total,175.560685
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,01 Coal,26.407569000000002
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,01.02 Other bituminous coal,4.21167
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,01.03 Sub-bituminous coal,22.195899
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,06 Crude oil & NGL,64.297723
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,06.01 Crude oil,63.205661000000006
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,06.03 Refinery feedstocks,1.092062
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07 Petroleum products,5852.5442539999995
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07.01 Motor gasoline,12.194379000000001
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07.03 Naphtha,913.198063
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07.05 Kerosene type jet fuel,1.704111
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07.06 Kerosene,1.023421
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07.07 Gas/diesel oil,6.382903000000001
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07.08 Fuel oil,70.12690500000001
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07.09 LPG,832.6599480000001
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07.10 Refinery gas (not liquefied),2312.8743
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07.11 Ethane,0.087923
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07.12 White spirit SBP,10.800699999999999
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07.13 Lubricants,2.20657
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07.14 Bitumen,60.787142
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07.16 Petroleum coke,423.515712
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,07.17 Other products,1204.98218
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,08 Gas,1511.324178
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,08.01 Natural gas,1511.324178
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,16 Others,5.893758
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,16.02 Industrial waste,5.893758
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,17 Electricity,1007.104024
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,18 Heat,1327.759296
+esto_missing,esto_flow,esto_product,10.01.11 Oil refineries,19 Total,9795.331138
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,01 Coal,13.518836
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,01.02 Other bituminous coal,13.518836
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,06 Crude oil & NGL,107.09181299999999
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,06.01 Crude oil,107.09181299999999
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,07 Petroleum products,626.343292
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,07.01 Motor gasoline,27.926249
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,07.06 Kerosene,0.527411
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,07.07 Gas/diesel oil,237.87400499999998
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,07.08 Fuel oil,16.072999000000003
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,07.09 LPG,5.662019
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,07.10 Refinery gas (not liquefied),232.46893
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,07.11 Ethane,0.857373
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,07.16 Petroleum coke,98.542241
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,07.17 Other products,6.412063
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,08 Gas,5277.506496
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,08.01 Natural gas,5277.506496
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,16 Others,0.897734
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,16.06 Biodiesel,0.897734
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,17 Electricity,784.2547880000001
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,18 Heat,157.179555
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,19 Total,6966.792598
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,20 Total Renewables,0.897734
+esto_missing,esto_flow,esto_product,10.01.12 Oil and gas extraction,21 Modern renewables,0.897734
+esto_missing,esto_flow,esto_product,10.01.13 Pump storage plants,17 Electricity,57.053822000000004
+esto_missing,esto_flow,esto_product,10.01.13 Pump storage plants,19 Total,57.053822000000004
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,07 Petroleum products,27.594469999999998
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,07.01 Motor gasoline,0.000581
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,07.06 Kerosene,0.096799
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,07.07 Gas/diesel oil,1.149097
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,07.08 Fuel oil,10.493963
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,07.09 LPG,2.431484
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,07.17 Other products,13.422546
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,08 Gas,64.96466000000001
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,08.01 Natural gas,64.96466000000001
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,15 Solid biomass,33.097073
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,15.05 Other biomass,33.097073
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,17 Electricity,137.754212
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,18 Heat,10.405245
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,19 Total,273.81565900000004
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,20 Total Renewables,33.097073
+esto_missing,esto_flow,esto_product,10.01.17 Non-specified own uses,21 Modern renewables,33.097073
+esto_missing,esto_flow,esto_product,10.02 Transmission and distribution losses,02 Coal products,5.446232999999999
+esto_missing,esto_flow,esto_product,10.02 Transmission and distribution losses,02.01 Coke oven coke,3.383569
+esto_missing,esto_flow,esto_product,10.02 Transmission and distribution losses,02.03 Coke oven gas,0.284415
+esto_missing,esto_flow,esto_product,10.02 Transmission and distribution losses,02.04 Blast furnace gas,1.429551
+esto_missing,esto_flow,esto_product,10.02 Transmission and distribution losses,02.05 Other recovered gases,0.34869700000000003
+esto_missing,esto_flow,esto_product,10.02 Transmission and distribution losses,06 Crude oil & NGL,256.305333
+esto_missing,esto_flow,esto_product,10.02 Transmission and distribution losses,06.01 Crude oil,256.305333
+esto_missing,esto_flow,esto_product,10.02 Transmission and distribution losses,07 Petroleum products,0.190918
+esto_missing,esto_flow,esto_product,10.02 Transmission and distribution losses,07.09 LPG,0.190918
+esto_missing,esto_flow,esto_product,10.02 Transmission and distribution losses,08 Gas,610.903519
+esto_missing,esto_flow,esto_product,10.02 Transmission and distribution losses,08.01 Natural gas,587.5830430000001
+esto_missing,esto_flow,esto_product,10.02 Transmission and distribution losses,08.02 LNG,23.320476
+esto_missing,esto_flow,esto_product,10.02 Transmission and distribution losses,18 Heat,661.1748379999999
+esto_missing,esto_flow,esto_product,10.02 Transmission and distribution losses,19 Total,4640.230662
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,01 Coal,5239.108367000001
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,01.01 Coking coal,86.905631
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,01.02 Other bituminous coal,5283.990079
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,01.03 Sub-bituminous coal,278.47659
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,01.04 Anthracite,359.501172
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,01.05 Lignite,39.00066100000001
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,02 Coal products,139.907168
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,02.01 Coke oven coke,109.14570700000002
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,02.03 Coke oven gas,20.126037
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,02.04 Blast furnace gas,24.12547
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,02.05 Other recovered gases,36.401232
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,02.06 Patent fuel,4.2e-05
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,02.07 Coal tar,35.563368
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,02.08 BKB/PB,12.652141
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,03 Peat,0.159057
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,04 Peat products,0.001424
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,06 Crude oil & NGL,1206.020077
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,06.01 Crude oil,1358.617771
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,06.02 Natural gas liquids,7.6608589999999985
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,06.03 Refinery feedstocks,115.092872
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,06.04 Additives/  oxygenates,45.100996
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,06.05 Other hydrocarbons,0.064686
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07 Petroleum products,70.63258299999995
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.01 Motor gasoline,358.33974
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.02 Aviation gasoline,3.699961
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.03 Naphtha,251.055302
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.05 Kerosene type jet fuel,9.871046999999999
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.06 Kerosene,61.507435
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.07 Gas/diesel oil,23.131059000000032
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.08 Fuel oil,180.670525
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.09 LPG,66.41535900000001
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.10 Refinery gas (not liquefied),55.921255
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.11 Ethane,131.501945
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.12 White spirit SBP,5.807066999999999
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.13 Lubricants,33.182234
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.14 Bitumen,40.730033
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.15 Paraffin  waxes,5.590898
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.16 Petroleum coke,45.034563000000006
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,07.17 Other products,1.4818060000000166
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,08 Gas,2243.6536
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,08.01 Natural gas,2270.334307
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,08.02 LNG,69.281552
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,08.03 Gas works gas,42.600845
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,09 Nuclear,4.2e-05
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,10 Hydro,4.2e-05
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,11 Geothermal,4.2e-05
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,12 Solar,8.4e-05
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,12.01 of which: Photovoltaics,8.4e-05
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,14 Wind,4.2e-05
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,15 Solid biomass,87.142556
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,15.01 Fuelwood & woodwaste,0.003053
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,15.02 Bagasse,0.025121
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,15.03 Charcoal,0.0001
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,15.05 Other biomass,87.170829
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,16 Others,134.7116
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,16.01 Biogas,2.02348
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,16.02 Industrial waste,4.909814999999999
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,16.03 Municipal solid waste (renewable),0.015011
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,16.04 Municipal solid waste (non-renewable),0.017127
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,16.05 Biogasoline,10.184932000000002
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,16.06 Biodiesel,127.41503499999999
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,16.08 Other liquid biofuels,8.4e-05
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,17 Electricity,13.973736999999995
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,18 Heat,4.171066000000001
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,19 Total,6104.126436
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,20 Total Renewables,52.495946
+esto_missing,esto_flow,esto_product,11 Statistical discrepancy,21 Modern renewables,52.496111000000006
+esto_missing,esto_flow,esto_product,12 Total final consumption,01 Coal,18834.955357
+esto_missing,esto_flow,esto_product,12 Total final consumption,01.01 Coking coal,36.353692
+esto_missing,esto_flow,esto_product,12 Total final consumption,01.02 Other bituminous coal,17663.266935
+esto_missing,esto_flow,esto_product,12 Total final consumption,01.03 Sub-bituminous coal,268.413247
+esto_missing,esto_flow,esto_product,12 Total final consumption,01.04 Anthracite,825.9096300000001
+esto_missing,esto_flow,esto_product,12 Total final consumption,01.05 Lignite,41.011849
+esto_missing,esto_flow,esto_product,12 Total final consumption,02 Coal products,12231.156813
+esto_missing,esto_flow,esto_product,12 Total final consumption,02.01 Coke oven coke,5904.206859000001
+esto_missing,esto_flow,esto_product,12 Total final consumption,02.03 Coke oven gas,1563.878358
+esto_missing,esto_flow,esto_product,12 Total final consumption,02.04 Blast furnace gas,3505.542645
+esto_missing,esto_flow,esto_product,12 Total final consumption,02.05 Other recovered gases,583.39732
+esto_missing,esto_flow,esto_product,12 Total final consumption,02.06 Patent fuel,7.36747
+esto_missing,esto_flow,esto_product,12 Total final consumption,02.07 Coal tar,420.76579699999996
+esto_missing,esto_flow,esto_product,12 Total final consumption,02.08 BKB/PB,245.99836599999998
+esto_missing,esto_flow,esto_product,12 Total final consumption,03 Peat,0.001256
+esto_missing,esto_flow,esto_product,12 Total final consumption,04 Peat products,0.384265
+esto_missing,esto_flow,esto_product,12 Total final consumption,06 Crude oil & NGL,226.524624
+esto_missing,esto_flow,esto_product,12 Total final consumption,06.01 Crude oil,193.418081
+esto_missing,esto_flow,esto_product,12 Total final consumption,06.02 Natural gas liquids,25.669468
+esto_missing,esto_flow,esto_product,12 Total final consumption,06.03 Refinery feedstocks,5.635612
+esto_missing,esto_flow,esto_product,12 Total final consumption,06.04 Additives/  oxygenates,1.801463
+esto_missing,esto_flow,esto_product,12 Total final consumption,07 Petroleum products,89304.173629
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.01 Motor gasoline,31012.899348000003
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.02 Aviation gasoline,27.058145
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.03 Naphtha,7151.918603
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.05 Kerosene type jet fuel,3988.7286289999997
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.06 Kerosene,681.5589
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.07 Gas/diesel oil,24965.460474
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.08 Fuel oil,1636.105419
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.09 LPG,8149.257505
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.10 Refinery gas (not liquefied),251.248966
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.11 Ethane,2598.335173
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.12 White spirit SBP,184.449663
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.13 Lubricants,985.728811
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.14 Bitumen,2522.555946
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.15 Paraffin  waxes,119.91722
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.16 Petroleum coke,1692.573362
+esto_missing,esto_flow,esto_product,12 Total final consumption,07.17 Other products,3336.3774559999997
+esto_missing,esto_flow,esto_product,12 Total final consumption,08 Gas,41086.366475
+esto_missing,esto_flow,esto_product,12 Total final consumption,08.01 Natural gas,40655.940279
+esto_missing,esto_flow,esto_product,12 Total final consumption,08.03 Gas works gas,430.426196
+esto_missing,esto_flow,esto_product,12 Total final consumption,11 Geothermal,39.172748
+esto_missing,esto_flow,esto_product,12 Total final consumption,12 Solar,190.70353
+esto_missing,esto_flow,esto_product,12 Total final consumption,12.99 Solar nonspecified,190.70353
+esto_missing,esto_flow,esto_product,12 Total final consumption,15 Solid biomass,5704.580278
+esto_missing,esto_flow,esto_product,12 Total final consumption,15.01 Fuelwood & woodwaste,581.614356
+esto_missing,esto_flow,esto_product,12 Total final consumption,15.02 Bagasse,141.51893199999998
+esto_missing,esto_flow,esto_product,12 Total final consumption,15.03 Charcoal,102.85231999999999
+esto_missing,esto_flow,esto_product,12 Total final consumption,15.04 Black liqour,3.597009
+esto_missing,esto_flow,esto_product,12 Total final consumption,15.05 Other biomass,4874.997659000001
+esto_missing,esto_flow,esto_product,12 Total final consumption,16 Others,3024.837973
+esto_missing,esto_flow,esto_product,12 Total final consumption,16.01 Biogas,112.57759300000001
+esto_missing,esto_flow,esto_product,12 Total final consumption,16.02 Industrial waste,336.83380999999997
+esto_missing,esto_flow,esto_product,12 Total final consumption,16.03 Municipal solid waste (renewable),31.699246
+esto_missing,esto_flow,esto_product,12 Total final consumption,16.04 Municipal solid waste (non-renewable),26.206865
+esto_missing,esto_flow,esto_product,12 Total final consumption,16.05 Biogasoline,1398.1481099999999
+esto_missing,esto_flow,esto_product,12 Total final consumption,16.06 Biodiesel,1108.284365
+esto_missing,esto_flow,esto_product,12 Total final consumption,16.08 Other liquid biofuels,11.087986
+esto_missing,esto_flow,esto_product,12 Total final consumption,17 Electricity,59129.923808
+esto_missing,esto_flow,esto_product,12 Total final consumption,18 Heat,12233.93791
+esto_missing,esto_flow,esto_product,12 Total final consumption,19 Total,242006.715845
+esto_missing,esto_flow,esto_product,12 Total final consumption,20 Total Renewables,8596.253643
+esto_missing,esto_flow,esto_product,12 Total final consumption,21 Modern renewables,22164.495023
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,01 Coal,16157.98474
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,01.01 Coking coal,36.353692
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,02 Coal products,10721.437941
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,03 Peat,0.001256
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,04 Peat products,0.384265
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,06 Crude oil & NGL,2.208738
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,06.01 Crude oil,2.203471
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,06.03 Refinery feedstocks,0.005267
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,07 Petroleum products,68155.660413
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,08 Gas,37248.850033
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,08.03 Gas works gas,424.880345
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,12 Solar,190.70353
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,19 Total,212609.680853
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,20 Total Renewables,8596.253643
+esto_missing,esto_flow,esto_product,13 Total final energy consumption,21 Modern renewables,22164.495023
+esto_missing,esto_flow,esto_product,14 Industry sector,01 Coal,13586.515522
+esto_missing,esto_flow,esto_product,14 Industry sector,01.01 Coking coal,36.353692
+esto_missing,esto_flow,esto_product,14 Industry sector,02 Coal products,10612.873154
+esto_missing,esto_flow,esto_product,14 Industry sector,06 Crude oil & NGL,1.697069
+esto_missing,esto_flow,esto_product,14 Industry sector,06.01 Crude oil,1.691802
+esto_missing,esto_flow,esto_product,14 Industry sector,06.03 Refinery feedstocks,0.005267
+esto_missing,esto_flow,esto_product,14 Industry sector,07 Petroleum products,5490.913758
+esto_missing,esto_flow,esto_product,14 Industry sector,08 Gas,16419.009598
+esto_missing,esto_flow,esto_product,14 Industry sector,08.03 Gas works gas,358.216019
+esto_missing,esto_flow,esto_product,14 Industry sector,11 Geothermal,4.6219339999999995
+esto_missing,esto_flow,esto_product,14 Industry sector,12 Solar,1.542567
+esto_missing,esto_flow,esto_product,14 Industry sector,12.99 Solar nonspecified,1.539067
+esto_missing,esto_flow,esto_product,14 Industry sector,19 Total,83527.750294
+esto_missing,esto_flow,esto_product,14 Industry sector,20 Total Renewables,3186.9228040000003
+esto_missing,esto_flow,esto_product,14 Industry sector,21 Modern renewables,10823.906549
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,01 Coal,164.17448499999998
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,01.02 Other bituminous coal,144.63015099999998
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,01.03 Sub-bituminous coal,3.416722
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,01.04 Anthracite,15.268188
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,01.05 Lignite,0.859424
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,02 Coal products,96.68094599999999
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,02.01 Coke oven coke,72.480415
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,02.03 Coke oven gas,9.17914
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,02.04 Blast furnace gas,10.467837
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,02.05 Other recovered gases,2.171693
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,02.07 Coal tar,0.110532
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,02.08 BKB/PB,2.271329
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,06 Crude oil & NGL,0.008374
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,06.01 Crude oil,0.008374
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,07 Petroleum products,703.135649
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,07.05 Kerosene type jet fuel,1.003785
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,07.06 Kerosene,0.847764
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,07.09 LPG,15.94076
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,07.16 Petroleum coke,0.104335
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,07.17 Other products,4.605287
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,08 Gas,252.76939299999998
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,08.03 Gas works gas,0.279218
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,12 Solar,0.0008
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,18 Heat,86.919028
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,19 Total,2439.296523
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,20 Total Renewables,6.937616000000001
+esto_missing,esto_flow,esto_product,14.01 Mining and quarrying,21 Modern renewables,380.03251200000005
+esto_missing,esto_flow,esto_product,14.02 Construction,01 Coal,80.004512
+esto_missing,esto_flow,esto_product,14.02 Construction,01.02 Other bituminous coal,79.364734
+esto_missing,esto_flow,esto_product,14.02 Construction,01.04 Anthracite,0.547961
+esto_missing,esto_flow,esto_product,14.02 Construction,01.05 Lignite,0.091817
+esto_missing,esto_flow,esto_product,14.02 Construction,02 Coal products,0.535476
+esto_missing,esto_flow,esto_product,14.02 Construction,02.01 Coke oven coke,0.535476
+esto_missing,esto_flow,esto_product,14.02 Construction,07 Petroleum products,1421.823381
+esto_missing,esto_flow,esto_product,14.02 Construction,07.01 Motor gasoline,246.261319
+esto_missing,esto_flow,esto_product,14.02 Construction,07.05 Kerosene type jet fuel,0.000141
+esto_missing,esto_flow,esto_product,14.02 Construction,07.06 Kerosene,16.639331000000002
+esto_missing,esto_flow,esto_product,14.02 Construction,07.08 Fuel oil,21.334292
+esto_missing,esto_flow,esto_product,14.02 Construction,07.17 Other products,36.607362
+esto_missing,esto_flow,esto_product,14.02 Construction,08 Gas,421.34927500000003
+esto_missing,esto_flow,esto_product,14.02 Construction,18 Heat,41.518121
+esto_missing,esto_flow,esto_product,14.02 Construction,19 Total,2762.744175
+esto_missing,esto_flow,esto_product,14.02 Construction,20 Total Renewables,16.412065000000002
+esto_missing,esto_flow,esto_product,14.02 Construction,21 Modern renewables,220.110626
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,01 Coal,13342.336524999999
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,01.01 Coking coal,36.353692
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,02 Coal products,10515.656731
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,06 Crude oil & NGL,1.688696
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,06.01 Crude oil,1.683429
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,06.03 Refinery feedstocks,0.005267
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,07 Petroleum products,3365.954729
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,07.01 Motor gasoline,75.65435800000002
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,08 Gas,15744.890933
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,08.03 Gas works gas,357.936801
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,11 Geothermal,4.6219339999999995
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,12 Solar,1.5417669999999999
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,12.99 Solar nonspecified,1.539067
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,19 Total,78325.709592
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,20 Total Renewables,3163.5731260000002
+esto_missing,esto_flow,esto_product,14.03 Manufacturing,21 Modern renewables,10223.763411
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,01 Coal,3509.562505
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,01.01 Coking coal,5.689693999999999
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,02 Coal products,8125.398955000001
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,07 Petroleum products,167.26306
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,07.01 Motor gasoline,0.563604
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,07.05 Kerosene type jet fuel,0.000268
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,07.06 Kerosene,3.6825940000000004
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,07.10 Refinery gas (not liquefied),0.28315300000000004
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,07.12 White spirit SBP,0.050618
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,07.16 Petroleum coke,16.227786000000002
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,07.17 Other products,0.685244
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,08 Gas,1702.194582
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,08.03 Gas works gas,3.071395
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,19 Total,17529.514439
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,20 Total Renewables,9.713943
+esto_missing,esto_flow,esto_product,14.03.01 Iron and steel,21 Modern renewables,984.732275
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),01 Coal,752.081226
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),02 Coal products,1476.960787
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),02.01 Coke oven coke,1192.34898
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),02.03 Coke oven gas,170.09063400000002
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),02.04 Blast furnace gas,9.921502
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),02.05 Other recovered gases,8.265162
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),02.07 Coal tar,41.779441000000006
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),02.08 BKB/PB,54.555067
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),06 Crude oil & NGL,0.219449
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),06.01 Crude oil,0.214182
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),06.03 Refinery feedstocks,0.005267
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),07 Petroleum products,1209.6799
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),07.01 Motor gasoline,3.5616559999999997
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),08 Gas,5068.210099
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),08.03 Gas works gas,17.198487
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),19 Total,17472.860065
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),20 Total Renewables,181.70013
+esto_missing,esto_flow,esto_product,14.03.02 Chemical (incl. petrochemical),21 Modern renewables,1581.1011529999998
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,01 Coal,469.33420199999995
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,01.01 Coking coal,0.000126
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,01.02 Other bituminous coal,414.56256799999994
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,01.03 Sub-bituminous coal,41.540843
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,01.04 Anthracite,13.028275
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,01.05 Lignite,0.20239
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,02 Coal products,177.553988
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,02.01 Coke oven coke,113.18158399999999
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,02.03 Coke oven gas,57.380931
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,02.04 Blast furnace gas,1.931999
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,02.05 Other recovered gases,1.885316
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,02.07 Coal tar,1.9514559999999999
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,02.08 BKB/PB,1.222702
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,06 Crude oil & NGL,0.129935
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,06.01 Crude oil,0.129935
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,07 Petroleum products,57.517417
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,07.01 Motor gasoline,0.7773629999999999
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,07.08 Fuel oil,6.918861999999999
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,08 Gas,907.666589
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,08.03 Gas works gas,268.298811
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,19 Total,5669.3046859999995
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,20 Total Renewables,6.759127
+esto_missing,esto_flow,esto_product,14.03.03 Non ferrous metals,21 Modern renewables,1179.556244
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,01 Coal,6806.68879
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,01.05 Lignite,7.418704
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,02 Coal products,444.72976600000004
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,02.01 Coke oven coke,300.762021
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,02.03 Coke oven gas,75.84978600000001
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,02.04 Blast furnace gas,18.095098
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,02.05 Other recovered gases,22.811655000000002
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,02.07 Coal tar,14.033044
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,02.08 BKB/PB,13.178165
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,06 Crude oil & NGL,1.2662339999999999
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,06.01 Crude oil,1.2662339999999999
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,07 Petroleum products,560.446251
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,07.01 Motor gasoline,3.763995
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,08 Gas,2057.239838
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,08.03 Gas works gas,64.400973
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,19 Total,12116.803205999999
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,20 Total Renewables,92.932473
+esto_missing,esto_flow,esto_product,14.03.04 Non-metallic mineral products,21 Modern renewables,644.953159
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,01 Coal,13.649215
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,01.02 Other bituminous coal,13.62736
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,01.05 Lignite,0.021855
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,02 Coal products,8.618607
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,02.01 Coke oven coke,7.282146
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,02.03 Coke oven gas,0.663189
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,02.04 Blast furnace gas,0.079131
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,02.05 Other recovered gases,0.286377
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,02.08 BKB/PB,0.307764
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,07 Petroleum products,79.995267
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,07.01 Motor gasoline,5.3311850000000005
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,07.05 Kerosene type jet fuel,0.191106
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,07.06 Kerosene,2.334183
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,07.12 White spirit SBP,0.757476
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,07.17 Other products,0.397587
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,08 Gas,499.076843
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,08.03 Gas works gas,0.014696
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,19 Total,1701.381655
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,20 Total Renewables,0.7316849999999999
+esto_missing,esto_flow,esto_product,14.03.05 Transportation equipment,21 Modern renewables,258.411678
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,01 Coal,60.167091
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,01.05 Lignite,0.002763
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,02 Coal products,223.507721
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,02.01 Coke oven coke,183.83957900000001
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,02.03 Coke oven gas,7.39929
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,02.04 Blast furnace gas,29.933945
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,02.05 Other recovered gases,1.304607
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,02.07 Coal tar,0.225378
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,02.08 BKB/PB,0.804922
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,07 Petroleum products,150.749102
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,07.01 Motor gasoline,16.11681
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,07.08 Fuel oil,4.509571
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,08 Gas,1184.80095
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,08.03 Gas works gas,4.658527
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,19 Total,5663.453702
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,20 Total Renewables,7.419488
+esto_missing,esto_flow,esto_product,14.03.06 Machinery,21 Modern renewables,998.1181590000001
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",01 Coal,495.376045
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",02 Coal products,6.869635
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",02.01 Coke oven coke,4.115365
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",02.03 Coke oven gas,0.06029
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",02.07 Coal tar,0.000693
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",02.08 BKB/PB,2.693287
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",06 Crude oil & NGL,0.055894
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",06.01 Crude oil,0.055894
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",07 Petroleum products,199.376169
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",07.01 Motor gasoline,4.327796
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",07.06 Kerosene,6.5123489999999995
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",07.17 Other products,2.467025
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",08 Gas,1478.296411
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",08.03 Gas works gas,0.279218
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",11 Geothermal,0.003601
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",19 Total,4751.497825
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",20 Total Renewables,493.708838
+esto_missing,esto_flow,esto_product,"14.03.07 Food, beverages and tobacco",21 Modern renewables,899.2870949999999
+esto_missing,esto_flow,esto_product,"14.03.08 Pulp, paper and printing",01 Coal,409.37143100000003
+esto_missing,esto_flow,esto_product,"14.03.08 Pulp, paper and printing",01.05 Lignite,4.2e-05
+esto_missing,esto_flow,esto_product,"14.03.08 Pulp, paper and printing",02 Coal products,3.127519
+esto_missing,esto_flow,esto_product,"14.03.08 Pulp, paper and printing",02.01 Coke oven coke,0.6723669999999999
+esto_missing,esto_flow,esto_product,"14.03.08 Pulp, paper and printing",02.08 BKB/PB,2.455152
+esto_missing,esto_flow,esto_product,"14.03.08 Pulp, paper and printing",06 Crude oil & NGL,0.012574
+esto_missing,esto_flow,esto_product,"14.03.08 Pulp, paper and printing",06.01 Crude oil,0.012574
+esto_missing,esto_flow,esto_product,"14.03.08 Pulp, paper and printing",07 Petroleum products,115.41519100000001
+esto_missing,esto_flow,esto_product,"14.03.08 Pulp, paper and printing",07.01 Motor gasoline,1.9225309999999998
+esto_missing,esto_flow,esto_product,"14.03.08 Pulp, paper and printing",08 Gas,998.303639
+esto_missing,esto_flow,esto_product,"14.03.08 Pulp, paper and printing",19 Total,4735.4756449999995
+esto_missing,esto_flow,esto_product,"14.03.08 Pulp, paper and printing",20 Total Renewables,1481.6744860000001
+esto_missing,esto_flow,esto_product,"14.03.08 Pulp, paper and printing",21 Modern renewables,1823.180733
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,01 Coal,2.7165179999999998
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,01.02 Other bituminous coal,2.339431
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,01.03 Sub-bituminous coal,0.138457
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,01.04 Anthracite,0.23662
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,01.05 Lignite,0.00201
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,02 Coal products,0.144892
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,02.01 Coke oven coke,0.002847
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,02.08 BKB/PB,0.142045
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,06 Crude oil & NGL,0.000419
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,06.01 Crude oil,0.000419
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,07 Petroleum products,47.979662999999995
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,07.01 Motor gasoline,0.5194579999999999
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,07.06 Kerosene,1.238497
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,08 Gas,108.832896
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,19 Total,797.6441249999999
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,20 Total Renewables,257.760258
+esto_missing,esto_flow,esto_product,14.03.09 Wood and wood products,21 Modern renewables,348.747901
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,01 Coal,142.807975
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,01.05 Lignite,0.084515
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,02 Coal products,4.7911969999999995
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,02.01 Coke oven coke,1.478204
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,02.08 BKB/PB,3.312993
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,07 Petroleum products,31.493149
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,07.01 Motor gasoline,2.225381
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,07.06 Kerosene,1.535593
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,07.07 Gas/diesel oil,16.562164
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,07.08 Fuel oil,5.69296
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,07.09 LPG,5.293849
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,07.17 Other products,0.183202
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,08 Gas,303.85735
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,15 Solid biomass,46.723175
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,15.01 Fuelwood & woodwaste,28.68711
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,15.05 Other biomass,18.036064
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,16 Others,2.731208
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,16.01 Biogas,0.02914
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,16.02 Industrial waste,2.656231
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,16.03 Municipal solid waste (renewable),0.019845
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,16.04 Municipal solid waste (non-renewable),0.025539
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,16.06 Biodiesel,0.000452
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,19 Total,1937.328418
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,20 Total Renewables,46.77261300000001
+esto_missing,esto_flow,esto_product,14.03.10 Textiles and leather,21 Modern renewables,344.539358
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,01 Coal,680.58153
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,01.01 Coking coal,30.663872
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,01.05 Lignite,3.046692
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,02 Coal products,43.953659
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,06 Crude oil & NGL,0.004191
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,06.01 Crude oil,0.004191
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,07 Petroleum products,746.039562
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,07.01 Motor gasoline,36.544578
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,07.08 Fuel oil,153.300384
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,08 Gas,1436.4117370000001
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,08.03 Gas works gas,0.014696
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,11 Geothermal,4.618333
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,12 Solar,1.5417669999999999
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,12.99 Solar nonspecified,1.539067
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,19 Total,5950.445823999999
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,20 Total Renewables,584.400086
+esto_missing,esto_flow,esto_product,14.03.11 Non-specified industry,21 Modern renewables,1161.135663
+esto_missing,esto_flow,esto_product,15 Transport sector,01 Coal,21.080705000000002
+esto_missing,esto_flow,esto_product,15 Transport sector,01.02 Other bituminous coal,21.080705000000002
+esto_missing,esto_flow,esto_product,15 Transport sector,02 Coal products,0.127279
+esto_missing,esto_flow,esto_product,15 Transport sector,02.07 Coal tar,0.127279
+esto_missing,esto_flow,esto_product,15 Transport sector,07 Petroleum products,52784.068547
+esto_missing,esto_flow,esto_product,15 Transport sector,07.06 Kerosene,0.32977500000000004
+esto_missing,esto_flow,esto_product,15 Transport sector,07.17 Other products,0.00314
+esto_missing,esto_flow,esto_product,15 Transport sector,08 Gas,3964.051829
+esto_missing,esto_flow,esto_product,15 Transport sector,16 Others,2471.544459
+esto_missing,esto_flow,esto_product,15 Transport sector,19 Total,60504.847776
+esto_missing,esto_flow,esto_product,15 Transport sector,20 Total Renewables,2471.544459
+esto_missing,esto_flow,esto_product,15 Transport sector,21 Modern renewables,2809.257548
+esto_missing,esto_flow,esto_product,15.01 Domestic air transport,07 Petroleum products,3978.7957619999997
+esto_missing,esto_flow,esto_product,15.01 Domestic air transport,07.01 Motor gasoline,0.027549
+esto_missing,esto_flow,esto_product,15.01 Domestic air transport,07.07 Gas/diesel oil,0.017585
+esto_missing,esto_flow,esto_product,15.01 Domestic air transport,19 Total,3978.79572
+esto_missing,esto_flow,esto_product,15.02 Road,07 Petroleum products,44846.638057000004
+esto_missing,esto_flow,esto_product,15.02 Road,07.06 Kerosene,0.25573
+esto_missing,esto_flow,esto_product,15.02 Road,07.08 Fuel oil,4.042035
+esto_missing,esto_flow,esto_product,15.02 Road,08 Gas,1445.661525
+esto_missing,esto_flow,esto_product,15.02 Road,16 Others,2430.555623
+esto_missing,esto_flow,esto_product,15.02 Road,19 Total,49011.364819
+esto_missing,esto_flow,esto_product,15.02 Road,20 Total Renewables,2430.555623
+esto_missing,esto_flow,esto_product,15.02 Road,21 Modern renewables,2516.229477
+esto_missing,esto_flow,esto_product,15.03 Rail,01 Coal,21.080705000000002
+esto_missing,esto_flow,esto_product,15.03 Rail,02 Coal products,0.127279
+esto_missing,esto_flow,esto_product,15.03 Rail,02.07 Coal tar,0.127279
+esto_missing,esto_flow,esto_product,15.03 Rail,07 Petroleum products,1009.376021
+esto_missing,esto_flow,esto_product,15.03 Rail,07.01 Motor gasoline,7.2664789999999995
+esto_missing,esto_flow,esto_product,15.03 Rail,07.08 Fuel oil,2.18294
+esto_missing,esto_flow,esto_product,15.03 Rail,07.09 LPG,0.115305
+esto_missing,esto_flow,esto_product,15.03 Rail,16 Others,32.159541
+esto_missing,esto_flow,esto_product,15.03 Rail,19 Total,1736.687101
+esto_missing,esto_flow,esto_product,15.03 Rail,20 Total Renewables,32.159541
+esto_missing,esto_flow,esto_product,15.03 Rail,21 Modern renewables,195.724693
+esto_missing,esto_flow,esto_product,15.04 Domestic navigation,07 Petroleum products,2216.488836
+esto_missing,esto_flow,esto_product,15.04 Domestic navigation,07.06 Kerosene,0.074045
+esto_missing,esto_flow,esto_product,15.04 Domestic navigation,07.09 LPG,0.189327
+esto_missing,esto_flow,esto_product,15.04 Domestic navigation,16 Others,8.829294
+esto_missing,esto_flow,esto_product,15.04 Domestic navigation,19 Total,2225.318214
+esto_missing,esto_flow,esto_product,15.04 Domestic navigation,20 Total Renewables,8.829294
+esto_missing,esto_flow,esto_product,15.04 Domestic navigation,21 Modern renewables,8.829294
+esto_missing,esto_flow,esto_product,15.05 Pipeline transport,07 Petroleum products,21.046289
+esto_missing,esto_flow,esto_product,15.05 Pipeline transport,07.01 Motor gasoline,1.641955
+esto_missing,esto_flow,esto_product,15.05 Pipeline transport,07.09 LPG,0.045887
+esto_missing,esto_flow,esto_product,15.05 Pipeline transport,08 Gas,2501.372175
+esto_missing,esto_flow,esto_product,15.05 Pipeline transport,19 Total,2649.0474860000004
+esto_missing,esto_flow,esto_product,15.05 Pipeline transport,21 Modern renewables,38.458924
+esto_missing,esto_flow,esto_product,15.06 Non-specified transport,07 Petroleum products,711.723586
+esto_missing,esto_flow,esto_product,15.06 Non-specified transport,07.02 Aviation gasoline,0.036467
+esto_missing,esto_flow,esto_product,15.06 Non-specified transport,07.05 Kerosene type jet fuel,3.3520369999999997
+esto_missing,esto_flow,esto_product,15.06 Non-specified transport,08 Gas,17.018128
+esto_missing,esto_flow,esto_product,15.06 Non-specified transport,19 Total,903.634435
+esto_missing,esto_flow,esto_product,15.06 Non-specified transport,21 Modern renewables,50.01515800000001
+esto_missing,esto_flow,esto_product,16 Other sector,01 Coal,2550.388507
+esto_missing,esto_flow,esto_product,16 Other sector,01.02 Other bituminous coal,2515.2383950000003
+esto_missing,esto_flow,esto_product,16 Other sector,01.03 Sub-bituminous coal,10.333315
+esto_missing,esto_flow,esto_product,16 Other sector,01.04 Anthracite,5.695388
+esto_missing,esto_flow,esto_product,16 Other sector,01.05 Lignite,19.121409
+esto_missing,esto_flow,esto_product,16 Other sector,02 Coal products,108.43750899999999
+esto_missing,esto_flow,esto_product,16 Other sector,02.01 Coke oven coke,22.571119
+esto_missing,esto_flow,esto_product,16 Other sector,02.03 Coke oven gas,4.949397
+esto_missing,esto_flow,esto_product,16 Other sector,02.04 Blast furnace gas,8.387835
+esto_missing,esto_flow,esto_product,16 Other sector,02.05 Other recovered gases,2.298972
+esto_missing,esto_flow,esto_product,16 Other sector,02.06 Patent fuel,7.352774
+esto_missing,esto_flow,esto_product,16 Other sector,02.07 Coal tar,0.127279
+esto_missing,esto_flow,esto_product,16 Other sector,02.08 BKB/PB,62.750133
+esto_missing,esto_flow,esto_product,16 Other sector,03 Peat,0.001256
+esto_missing,esto_flow,esto_product,16 Other sector,04 Peat products,0.384265
+esto_missing,esto_flow,esto_product,16 Other sector,06 Crude oil & NGL,0.511669
+esto_missing,esto_flow,esto_product,16 Other sector,06.01 Crude oil,0.511669
+esto_missing,esto_flow,esto_product,16 Other sector,07 Petroleum products,9880.678108
+esto_missing,esto_flow,esto_product,16 Other sector,07.01 Motor gasoline,1390.983796
+esto_missing,esto_flow,esto_product,16 Other sector,07.02 Aviation gasoline,0.016286
+esto_missing,esto_flow,esto_product,16 Other sector,07.05 Kerosene type jet fuel,32.094358
+esto_missing,esto_flow,esto_product,16 Other sector,07.06 Kerosene,596.247677
+esto_missing,esto_flow,esto_product,16 Other sector,07.07 Gas/diesel oil,3876.41034
+esto_missing,esto_flow,esto_product,16 Other sector,07.08 Fuel oil,94.775541
+esto_missing,esto_flow,esto_product,16 Other sector,07.09 LPG,3889.541894
+esto_missing,esto_flow,esto_product,16 Other sector,07.13 Lubricants,0.607588
+esto_missing,esto_flow,esto_product,16 Other sector,07.17 Other products,0.000628
+esto_missing,esto_flow,esto_product,16 Other sector,08 Gas,16865.788609
+esto_missing,esto_flow,esto_product,16 Other sector,08.01 Natural gas,16799.124283
+esto_missing,esto_flow,esto_product,16 Other sector,08.03 Gas works gas,66.664326
+esto_missing,esto_flow,esto_product,16 Other sector,11 Geothermal,34.550812
+esto_missing,esto_flow,esto_product,16 Other sector,12 Solar,189.160962
+esto_missing,esto_flow,esto_product,16 Other sector,12.99 Solar nonspecified,189.160962
+esto_missing,esto_flow,esto_product,16 Other sector,15 Solid biomass,2617.865456
+esto_missing,esto_flow,esto_product,16 Other sector,15.01 Fuelwood & woodwaste,454.52938700000004
+esto_missing,esto_flow,esto_product,16 Other sector,15.02 Bagasse,0.142351
+esto_missing,esto_flow,esto_product,16 Other sector,15.03 Charcoal,101.26924799999999
+esto_missing,esto_flow,esto_product,16 Other sector,15.05 Other biomass,2061.92447
+esto_missing,esto_flow,esto_product,16 Other sector,16 Others,171.720021
+esto_missing,esto_flow,esto_product,16 Other sector,16.01 Biogas,23.637985999999998
+esto_missing,esto_flow,esto_product,16 Other sector,16.02 Industrial waste,51.252043
+esto_missing,esto_flow,esto_product,16 Other sector,16.03 Municipal solid waste (renewable),21.346334
+esto_missing,esto_flow,esto_product,16 Other sector,16.04 Municipal solid waste (non-renewable),24.258831
+esto_missing,esto_flow,esto_product,16 Other sector,16.05 Biogasoline,5.6395729999999995
+esto_missing,esto_flow,esto_product,16 Other sector,16.06 Biodiesel,45.585255000000004
+esto_missing,esto_flow,esto_product,16 Other sector,17 Electricity,31105.367301
+esto_missing,esto_flow,esto_product,16 Other sector,18 Heat,5052.228823
+esto_missing,esto_flow,esto_product,16 Other sector,19 Total,68577.0828
+esto_missing,esto_flow,esto_product,16 Other sector,20 Total Renewables,2937.786379
+esto_missing,esto_flow,esto_product,16 Other sector,21 Modern renewables,8531.330926
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,01 Coal,377.917922
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,01.05 Lignite,3.61505
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,02 Coal products,37.341696
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,02.01 Coke oven coke,22.169701
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,02.03 Coke oven gas,3.035192
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,02.04 Blast furnace gas,8.387835
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,02.05 Other recovered gases,2.298972
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,02.06 Patent fuel,0.632165
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,02.07 Coal tar,0.127279
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,02.08 BKB/PB,0.690553
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,07 Petroleum products,1520.951839
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,07.02 Aviation gasoline,0.014193
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,07.05 Kerosene type jet fuel,12.40949
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,08 Gas,5145.217354
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,08.03 Gas works gas,13.697614
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,11 Geothermal,12.425125
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,12 Solar,89.574221
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,15 Solid biomass,174.139823
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,15.01 Fuelwood & woodwaste,20.756117
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,15.03 Charcoal,9.824105
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,16 Others,89.911611
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,16.02 Industrial waste,26.809546
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,16.05 Biogasoline,0.000369
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,19 Total,19503.6809
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,20 Total Renewables,314.990947
+esto_missing,esto_flow,esto_product,16.01 Commercial and public services,21 Modern renewables,2866.453579
+esto_missing,esto_flow,esto_product,16.02 Residential,01 Coal,1330.013407
+esto_missing,esto_flow,esto_product,16.02 Residential,01.02 Other bituminous coal,1309.0504329999999
+esto_missing,esto_flow,esto_product,16.02 Residential,01.03 Sub-bituminous coal,0.099353
+esto_missing,esto_flow,esto_product,16.02 Residential,01.04 Anthracite,5.568444
+esto_missing,esto_flow,esto_product,16.02 Residential,01.05 Lignite,15.295176
+esto_missing,esto_flow,esto_product,16.02 Residential,02 Coal products,70.285135
+esto_missing,esto_flow,esto_product,16.02 Residential,02.03 Coke oven gas,1.70319
+esto_missing,esto_flow,esto_product,16.02 Residential,02.06 Patent fuel,6.703109
+esto_missing,esto_flow,esto_product,16.02 Residential,02.08 BKB/PB,61.878836
+esto_missing,esto_flow,esto_product,16.02 Residential,03 Peat,0.001256
+esto_missing,esto_flow,esto_product,16.02 Residential,04 Peat products,0.384265
+esto_missing,esto_flow,esto_product,16.02 Residential,07 Petroleum products,4276.93864
+esto_missing,esto_flow,esto_product,16.02 Residential,07.01 Motor gasoline,0.139546
+esto_missing,esto_flow,esto_product,16.02 Residential,07.08 Fuel oil,8.141233
+esto_missing,esto_flow,esto_product,16.02 Residential,08 Gas,11291.501344
+esto_missing,esto_flow,esto_product,16.02 Residential,08.03 Gas works gas,52.966712
+esto_missing,esto_flow,esto_product,16.02 Residential,12 Solar,95.13065699999999
+esto_missing,esto_flow,esto_product,16.02 Residential,15 Solid biomass,2130.278237
+esto_missing,esto_flow,esto_product,16.02 Residential,15.01 Fuelwood & woodwaste,433.69286999999997
+esto_missing,esto_flow,esto_product,16.02 Residential,15.02 Bagasse,0.142351
+esto_missing,esto_flow,esto_product,16.02 Residential,15.03 Charcoal,91.264282
+esto_missing,esto_flow,esto_product,16.02 Residential,16 Others,21.219369999999998
+esto_missing,esto_flow,esto_product,16.02 Residential,16.01 Biogas,15.352784
+esto_missing,esto_flow,esto_product,16.02 Residential,16.05 Biogasoline,0.000251
+esto_missing,esto_flow,esto_product,16.02 Residential,18 Heat,3711.126492
+esto_missing,esto_flow,esto_product,16.02 Residential,19 Total,37957.139143
+esto_missing,esto_flow,esto_product,16.02 Residential,20 Total Renewables,2266.127996
+esto_missing,esto_flow,esto_product,16.02 Residential,21 Modern renewables,4210.964428
+esto_missing,esto_flow,esto_product,16.03 Agriculture,01 Coal,390.54931600000003
+esto_missing,esto_flow,esto_product,16.03 Agriculture,01.02 Other bituminous coal,388.427906
+esto_missing,esto_flow,esto_product,16.03 Agriculture,01.03 Sub-bituminous coal,1.910981
+esto_missing,esto_flow,esto_product,16.03 Agriculture,01.05 Lignite,0.210428
+esto_missing,esto_flow,esto_product,16.03 Agriculture,02 Coal products,0.41892
+esto_missing,esto_flow,esto_product,16.03 Agriculture,02.01 Coke oven coke,0.401419
+esto_missing,esto_flow,esto_product,16.03 Agriculture,02.06 Patent fuel,0.017501
+esto_missing,esto_flow,esto_product,16.03 Agriculture,06 Crude oil & NGL,0.44288
+esto_missing,esto_flow,esto_product,16.03 Agriculture,06.01 Crude oil,0.44288
+esto_missing,esto_flow,esto_product,16.03 Agriculture,07 Petroleum products,2296.191584
+esto_missing,esto_flow,esto_product,16.03 Agriculture,07.02 Aviation gasoline,0.00113
+esto_missing,esto_flow,esto_product,16.03 Agriculture,07.06 Kerosene,27.442302
+esto_missing,esto_flow,esto_product,16.03 Agriculture,07.13 Lubricants,0.284619
+esto_missing,esto_flow,esto_product,16.03 Agriculture,08 Gas,197.42029499999998
+esto_missing,esto_flow,esto_product,16.03 Agriculture,11 Geothermal,2.201754
+esto_missing,esto_flow,esto_product,16.03 Agriculture,12 Solar,0.0079
+esto_missing,esto_flow,esto_product,16.03 Agriculture,15 Solid biomass,288.090172
+esto_missing,esto_flow,esto_product,16.03 Agriculture,15.01 Fuelwood & woodwaste,0.0718
+esto_missing,esto_flow,esto_product,16.03 Agriculture,15.03 Charcoal,0.18066
+esto_missing,esto_flow,esto_product,16.03 Agriculture,16 Others,7.456911
+esto_missing,esto_flow,esto_product,16.03 Agriculture,16.02 Industrial waste,1.797477
+esto_missing,esto_flow,esto_product,16.03 Agriculture,16.03 Municipal solid waste (renewable),0.005987
+esto_missing,esto_flow,esto_product,16.03 Agriculture,16.04 Municipal solid waste (non-renewable),0.008541
+esto_missing,esto_flow,esto_product,16.03 Agriculture,16.05 Biogasoline,0.004739
+esto_missing,esto_flow,esto_product,16.03 Agriculture,18 Heat,121.45168299999999
+esto_missing,esto_flow,esto_product,16.03 Agriculture,19 Total,4501.0489370000005
+esto_missing,esto_flow,esto_product,16.03 Agriculture,20 Total Renewables,295.950719
+esto_missing,esto_flow,esto_product,16.03 Agriculture,21 Modern renewables,343.58881399999996
+esto_missing,esto_flow,esto_product,16.04 Fishing,01 Coal,0.665659
+esto_missing,esto_flow,esto_product,16.04 Fishing,01.02 Other bituminous coal,0.664905
+esto_missing,esto_flow,esto_product,16.04 Fishing,01.05 Lignite,0.000754
+esto_missing,esto_flow,esto_product,16.04 Fishing,07 Petroleum products,178.528612
+esto_missing,esto_flow,esto_product,16.04 Fishing,07.01 Motor gasoline,2.5869
+esto_missing,esto_flow,esto_product,16.04 Fishing,07.05 Kerosene type jet fuel,0.006699
+esto_missing,esto_flow,esto_product,16.04 Fishing,07.06 Kerosene,0.049146
+esto_missing,esto_flow,esto_product,16.04 Fishing,07.07 Gas/diesel oil,158.053693
+esto_missing,esto_flow,esto_product,16.04 Fishing,07.08 Fuel oil,17.056298
+esto_missing,esto_flow,esto_product,16.04 Fishing,07.09 LPG,0.452907
+esto_missing,esto_flow,esto_product,16.04 Fishing,07.13 Lubricants,0.32297
+esto_missing,esto_flow,esto_product,16.04 Fishing,08 Gas,0.5941850000000001
+esto_missing,esto_flow,esto_product,16.04 Fishing,08.01 Natural gas,0.5941850000000001
+esto_missing,esto_flow,esto_product,16.04 Fishing,11 Geothermal,0.123092
+esto_missing,esto_flow,esto_product,16.04 Fishing,15 Solid biomass,0.045937000000000006
+esto_missing,esto_flow,esto_product,16.04 Fishing,15.01 Fuelwood & woodwaste,0.0086
+esto_missing,esto_flow,esto_product,16.04 Fishing,15.03 Charcoal,0.0002
+esto_missing,esto_flow,esto_product,16.04 Fishing,15.05 Other biomass,0.037137
+esto_missing,esto_flow,esto_product,16.04 Fishing,16 Others,0.175639
+esto_missing,esto_flow,esto_product,16.04 Fishing,16.05 Biogasoline,0.009504
+esto_missing,esto_flow,esto_product,16.04 Fishing,16.06 Biodiesel,0.166135
+esto_missing,esto_flow,esto_product,16.04 Fishing,18 Heat,0.7244
+esto_missing,esto_flow,esto_product,16.04 Fishing,19 Total,219.074118
+esto_missing,esto_flow,esto_product,16.04 Fishing,20 Total Renewables,0.344668
+esto_missing,esto_flow,esto_product,16.04 Fishing,21 Modern renewables,10.297148
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,01 Coal,451.242205
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,01.02 Other bituminous coal,451.242205
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,02 Coal products,0.391759
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,02.03 Coke oven gas,0.211015
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,02.08 BKB/PB,0.180744
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,06 Crude oil & NGL,0.068789
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,06.01 Crude oil,0.068789
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,07 Petroleum products,1608.0674329999997
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,07.01 Motor gasoline,969.804224
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,07.02 Aviation gasoline,0.000963
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,07.05 Kerosene type jet fuel,19.678169
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,07.06 Kerosene,84.78052
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,07.07 Gas/diesel oil,483.06774199999995
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,07.08 Fuel oil,2.2709710000000003
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,07.09 LPG,48.464214999999996
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,07.17 Other products,0.000628
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,08 Gas,231.055431
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,08.01 Natural gas,231.055431
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,11 Geothermal,0.301115
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,12 Solar,4.448182
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,12.99 Solar nonspecified,4.448182
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,15 Solid biomass,25.311285
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,15.05 Other biomass,25.311285
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,16 Others,52.95649
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,16.02 Industrial waste,22.64502
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,16.05 Biogasoline,5.624711
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,16.06 Biodiesel,24.686759000000002
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,18 Heat,268.219311
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,19 Total,6396.139701
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,20 Total Renewables,60.372051000000006
+esto_missing,esto_flow,esto_product,16.05 Non-specified others,21 Modern renewables,1100.026958
+esto_missing,esto_flow,esto_product,17 Non-energy use,01 Coal,2676.9706180000003
+esto_missing,esto_flow,esto_product,17 Non-energy use,01.02 Other bituminous coal,2657.722646
+esto_missing,esto_flow,esto_product,17 Non-energy use,01.03 Sub-bituminous coal,3.801367
+esto_missing,esto_flow,esto_product,17 Non-energy use,01.04 Anthracite,15.446604
+esto_missing,esto_flow,esto_product,17 Non-energy use,02 Coal products,1509.7188749999998
+esto_missing,esto_flow,esto_product,17 Non-energy use,02.01 Coke oven coke,931.9416820000001
+esto_missing,esto_flow,esto_product,17 Non-energy use,02.03 Coke oven gas,221.450478
+esto_missing,esto_flow,esto_product,17 Non-energy use,02.04 Blast furnace gas,0.135276
+esto_missing,esto_flow,esto_product,17 Non-energy use,02.05 Other recovered gases,4.348875
+esto_missing,esto_flow,esto_product,17 Non-energy use,02.07 Coal tar,348.192066
+esto_missing,esto_flow,esto_product,17 Non-energy use,02.08 BKB/PB,3.650498
+esto_missing,esto_flow,esto_product,17 Non-energy use,06 Crude oil & NGL,224.31588599999998
+esto_missing,esto_flow,esto_product,17 Non-energy use,06.01 Crude oil,191.21461
+esto_missing,esto_flow,esto_product,17 Non-energy use,06.02 Natural gas liquids,25.669468
+esto_missing,esto_flow,esto_product,17 Non-energy use,06.03 Refinery feedstocks,5.630345
+esto_missing,esto_flow,esto_product,17 Non-energy use,06.04 Additives/  oxygenates,1.801463
+esto_missing,esto_flow,esto_product,17 Non-energy use,07 Petroleum products,21148.513205
+esto_missing,esto_flow,esto_product,17 Non-energy use,07.01 Motor gasoline,10.926884
+esto_missing,esto_flow,esto_product,17 Non-energy use,07.03 Naphtha,6889.522705
+esto_missing,esto_flow,esto_product,17 Non-energy use,07.06 Kerosene,24.880462
+esto_missing,esto_flow,esto_product,17 Non-energy use,07.07 Gas/diesel oil,55.911117000000004
+esto_missing,esto_flow,esto_product,17 Non-energy use,07.08 Fuel oil,122.28956099999999
+esto_missing,esto_flow,esto_product,17 Non-energy use,07.09 LPG,3232.1692110000004
+esto_missing,esto_flow,esto_product,17 Non-energy use,07.10 Refinery gas (not liquefied),125.905784
+esto_missing,esto_flow,esto_product,17 Non-energy use,07.11 Ethane,2598.335173
+esto_missing,esto_flow,esto_product,17 Non-energy use,07.12 White spirit SBP,183.075262
+esto_missing,esto_flow,esto_product,17 Non-energy use,07.13 Lubricants,985.121223
+esto_missing,esto_flow,esto_product,17 Non-energy use,07.14 Bitumen,2522.555946
+esto_missing,esto_flow,esto_product,17 Non-energy use,07.15 Paraffin  waxes,119.91722
+esto_missing,esto_flow,esto_product,17 Non-energy use,07.16 Petroleum coke,1286.9909840000003
+esto_missing,esto_flow,esto_product,17 Non-energy use,07.17 Other products,2990.911673
+esto_missing,esto_flow,esto_product,17 Non-energy use,08 Gas,3837.5164379999997
+esto_missing,esto_flow,esto_product,17 Non-energy use,08.01 Natural gas,3831.970587
+esto_missing,esto_flow,esto_product,17 Non-energy use,08.03 Gas works gas,5.545851
+esto_missing,esto_flow,esto_product,17 Non-energy use,19 Total,29397.034982
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,01 Coal,11.907343
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,01.02 Other bituminous coal,11.294353
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,01.04 Anthracite,0.612989
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,02 Coal products,48.65472
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,02.01 Coke oven coke,3.937979
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,02.03 Coke oven gas,0.12573
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,02.07 Coal tar,44.591010999999995
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,07 Petroleum products,133.141979
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,07.07 Gas/diesel oil,0.006907
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,07.12 White spirit SBP,12.781952
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,07.13 Lubricants,101.207629
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,07.15 Paraffin  waxes,0.533909
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,07.16 Petroleum coke,0.394271
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,07.17 Other products,18.217311000000002
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,08 Gas,2.772926
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,08.03 Gas works gas,2.772926
+esto_missing,esto_flow,esto_product,17.01 Transformation sector,19 Total,196.476967
+esto_missing,esto_flow,esto_product,17.02 Industry sector,01 Coal,2651.878042
+esto_missing,esto_flow,esto_product,17.02 Industry sector,01.02 Other bituminous coal,2646.428293
+esto_missing,esto_flow,esto_product,17.02 Industry sector,01.03 Sub-bituminous coal,3.801367
+esto_missing,esto_flow,esto_product,17.02 Industry sector,01.04 Anthracite,1.648382
+esto_missing,esto_flow,esto_product,17.02 Industry sector,02 Coal products,1458.782098
+esto_missing,esto_flow,esto_product,17.02 Industry sector,02.01 Coke oven coke,928.0037030000001
+esto_missing,esto_flow,esto_product,17.02 Industry sector,02.03 Coke oven gas,221.324748
+esto_missing,esto_flow,esto_product,17.02 Industry sector,02.04 Blast furnace gas,0.135276
+esto_missing,esto_flow,esto_product,17.02 Industry sector,02.05 Other recovered gases,4.348875
+esto_missing,esto_flow,esto_product,17.02 Industry sector,02.07 Coal tar,301.318998
+esto_missing,esto_flow,esto_product,17.02 Industry sector,02.08 BKB/PB,3.650498
+esto_missing,esto_flow,esto_product,17.02 Industry sector,06 Crude oil & NGL,224.31588599999998
+esto_missing,esto_flow,esto_product,17.02 Industry sector,06.01 Crude oil,191.21461
+esto_missing,esto_flow,esto_product,17.02 Industry sector,06.02 Natural gas liquids,25.669468
+esto_missing,esto_flow,esto_product,17.02 Industry sector,06.03 Refinery feedstocks,5.630345
+esto_missing,esto_flow,esto_product,17.02 Industry sector,06.04 Additives/  oxygenates,1.801463
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07 Petroleum products,20530.365784
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07.01 Motor gasoline,10.926884
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07.03 Naphtha,6889.522705
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07.06 Kerosene,24.880462
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07.07 Gas/diesel oil,55.90421
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07.08 Fuel oil,122.28956099999999
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07.09 LPG,3232.1692110000004
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07.10 Refinery gas (not liquefied),125.905784
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07.11 Ethane,2598.335173
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07.12 White spirit SBP,144.120368
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07.13 Lubricants,684.2184609999999
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07.14 Bitumen,2495.599959
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07.15 Paraffin  waxes,116.196487
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07.16 Petroleum coke,1286.5967130000001
+esto_missing,esto_flow,esto_product,17.02 Industry sector,07.17 Other products,2743.699807
+esto_missing,esto_flow,esto_product,17.02 Industry sector,08 Gas,3834.743512
+esto_missing,esto_flow,esto_product,17.02 Industry sector,08.01 Natural gas,3831.970587
+esto_missing,esto_flow,esto_product,17.02 Industry sector,08.03 Gas works gas,2.772926
+esto_missing,esto_flow,esto_product,17.02 Industry sector,19 Total,28700.085329
+esto_missing,esto_flow,esto_product,17.03 Transport sector,07 Petroleum products,283.554227
+esto_missing,esto_flow,esto_product,17.03 Transport sector,07.12 White spirit SBP,16.186839
+esto_missing,esto_flow,esto_product,17.03 Transport sector,07.13 Lubricants,145.109995
+esto_missing,esto_flow,esto_product,17.03 Transport sector,07.14 Bitumen,14.283841
+esto_missing,esto_flow,esto_product,17.03 Transport sector,07.15 Paraffin  waxes,2.256685
+esto_missing,esto_flow,esto_product,17.03 Transport sector,07.17 Other products,105.716867
+esto_missing,esto_flow,esto_product,17.03 Transport sector,19 Total,283.554227
+esto_missing,esto_flow,esto_product,17.04 Other sector,01 Coal,13.185233
+esto_missing,esto_flow,esto_product,17.04 Other sector,01.04 Anthracite,13.185233
+esto_missing,esto_flow,esto_product,17.04 Other sector,02 Coal products,2.282057
+esto_missing,esto_flow,esto_product,17.04 Other sector,02.07 Coal tar,2.282057
+esto_missing,esto_flow,esto_product,17.04 Other sector,07 Petroleum products,201.451214
+esto_missing,esto_flow,esto_product,17.04 Other sector,07.12 White spirit SBP,9.986104
+esto_missing,esto_flow,esto_product,17.04 Other sector,07.13 Lubricants,54.585137
+esto_missing,esto_flow,esto_product,17.04 Other sector,07.14 Bitumen,12.672146
+esto_missing,esto_flow,esto_product,17.04 Other sector,07.15 Paraffin  waxes,0.930139
+esto_missing,esto_flow,esto_product,17.04 Other sector,07.17 Other products,123.27768800000001
+esto_missing,esto_flow,esto_product,17.04 Other sector,19 Total,216.918463
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,01 Coal,7923492.787354
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,01.02 Other bituminous coal,1079597.384
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,01.03 Sub-bituminous coal,559072.227
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,01.04 Anthracite,5026.757
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,01.05 Lignite,157852.454
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,01.99 Coal nonspecified,6121943.965354
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,02 Coal products,52690.613
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,02.01 Coke oven coke,74.545
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,02.03 Coke oven gas,10921.76
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,02.04 Blast furnace gas,36858.364
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,02.05 Other recovered gases,4835.9439999999995
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,03 Peat,346.239
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,06 Crude oil & NGL,764.6759999999999
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,06.01 Crude oil,762.47
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,06.02 Natural gas liquids,2.206
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,07 Petroleum products,180301.923144
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,07.03 Naphtha,3006.7940000000003
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,07.05 Kerosene type jet fuel,57.168
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,07.06 Kerosene,1627.42
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,07.07 Gas/diesel oil,32589.27
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,07.08 Fuel oil,56720.759
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,07.09 LPG,1733.951
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,07.10 Refinery gas (not liquefied),19215.313000000002
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,07.14 Bitumen,3461.692
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,07.16 Petroleum coke,17742.929
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,07.17 Other products,3321.558
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,07.99 PetProd nonspecified,40825.069143999994
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,08 Gas,3852982.438391
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,08.01 Natural gas,3115077.9129999997
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,08.99 Gas nonspecified,737904.525391
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,09 Nuclear,1798783.7199900001
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,10 Hydro,2594823.958581
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,11 Geothermal,58776.12956
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,12 Solar,847835.3962569999
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,12.01 of which: Photovoltaics,844263.558257
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,12.99 Solar nonspecified,3571.8379999999997
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,"13 Tide, wave, ocean",423.843
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,14 Wind,1340036.078048
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,15 Solid biomass,258970.582749
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,15.05 Other biomass,258970.582749
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,16 Others,142742.676803
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,16.01 Biogas,18388.440348
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,16.02 Industrial waste,55577.18975
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,16.03 Municipal solid waste (renewable),14309.162979
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,16.04 Municipal solid waste (non-renewable),13034.901725
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,16.08 Other liquid biofuels,1678.821
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,16.09 Other sources,39754.161
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,18 Heat,83.78
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,19 Total,19077523.842150003
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,20 Total Renewables,5159711.412617
+esto_missing,esto_flow,esto_product,18 Electricity output in GWh,21 Modern renewables,5135242.412617
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,01 Coal,7650655.508579999
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,01.02 Other bituminous coal,906309.268
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,01.03 Sub-bituminous coal,553750.829
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,01.04 Anthracite,4940.757
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,01.05 Lignite,93206.636
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,01.99 Coal nonspecified,6092448.01858
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,02 Coal products,18741.264000000003
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,02.01 Coke oven coke,51.213
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,02.03 Coke oven gas,4768.08
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,02.04 Blast furnace gas,10930.069
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,02.05 Other recovered gases,2991.902
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,06 Crude oil & NGL,665.074
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,06.01 Crude oil,662.868
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,06.02 Natural gas liquids,2.206
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,07 Petroleum products,121694.585715
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,07.03 Naphtha,2.056
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,07.05 Kerosene type jet fuel,57.168
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,07.06 Kerosene,1389.8700000000001
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,07.07 Gas/diesel oil,19634.831
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,07.08 Fuel oil,47761.851
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,07.09 LPG,882.3580000000001
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,07.10 Refinery gas (not liquefied),4381.514
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,07.14 Bitumen,2307.89
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,07.16 Petroleum coke,8978.282
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,07.17 Other products,795.798
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,07.99 PetProd nonspecified,35502.967715
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,08 Gas,2943667.521581
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,08.01 Natural gas,2220521.835
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,08.99 Gas nonspecified,723145.686581
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,09 Nuclear,1798783.7199900001
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,10 Hydro,2557686.972869
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,11 Geothermal,57808.61233999999
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,12 Solar,698728.8594760001
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,12.01 of which: Photovoltaics,695157.0214760001
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,12.99 Solar nonspecified,3571.8379999999997
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,"13 Tide, wave, ocean",423.843
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,14 Wind,1329496.0442010001
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,15 Solid biomass,185949.256776
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,15.05 Other biomass,185949.256776
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,16 Others,92606.717834
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,16.01 Biogas,14223.6497
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,16.02 Industrial waste,47051.698919999995
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,16.03 Municipal solid waste (renewable),6455.642107
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,16.04 Municipal solid waste (non-renewable),4606.632106999999
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,16.08 Other liquid biofuels,1446.5549999999998
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,16.09 Other sources,18822.539999999997
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,19 Total,17481016.980547
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,20 Total Renewables,4876328.435562
+esto_missing,esto_flow,esto_product,18.01 MAP electricity plants,21 Modern renewables,4852219.435562
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,01 Coal,200651.59690200002
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,01.02 Other bituminous coal,135598.252
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,01.03 Sub-bituminous coal,897.0
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,01.04 Anthracite,86.0
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,01.05 Lignite,62552.306
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,01.99 Coal nonspecified,1518.038902
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,02 Coal products,1332.9
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,02.04 Blast furnace gas,1332.9
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,03 Peat,346.239
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,07 Petroleum products,7013.660976
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,07.06 Kerosene,0.48
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,07.07 Gas/diesel oil,177.438
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,07.08 Fuel oil,2804.018
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,07.09 LPG,272.049
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,07.10 Refinery gas (not liquefied),2172.811
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,07.16 Petroleum coke,1552.463
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,07.17 Other products,28.42
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,07.99 PetProd nonspecified,5.981976
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,08 Gas,625098.1667630001
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,08.01 Natural gas,623145.542
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,08.99 Gas nonspecified,1952.624763
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,15 Solid biomass,2707.850666
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,15.05 Other biomass,2707.850666
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,16 Others,2206.715755
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,16.01 Biogas,619.4839999999999
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,16.02 Industrial waste,299.295755
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,16.03 Municipal solid waste (renewable),567.413
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,16.04 Municipal solid waste (non-renewable),652.955
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,16.09 Other sources,67.568
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,19 Total,839357.1300629999
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,20 Total Renewables,3894.747666
+esto_missing,esto_flow,esto_product,18.02 MAP CHP plants,21 Modern renewables,3894.747666
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,01 Coal,16157.405281
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,01.02 Other bituminous coal,14769.965
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,01.99 Coal nonspecified,1387.440281
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,02 Coal products,21219.822
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,02.01 Coke oven coke,23.332
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,02.03 Coke oven gas,2698.386
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,02.04 Blast furnace gas,16654.062
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,02.05 Other recovered gases,1844.042
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,06 Crude oil & NGL,99.495
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,06.01 Crude oil,99.495
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,07 Petroleum products,36405.761439
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,07.03 Naphtha,930.0880000000001
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,07.06 Kerosene,237.07
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,07.07 Gas/diesel oil,10827.721
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,07.08 Fuel oil,4272.157
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,07.09 LPG,579.544
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,07.10 Refinery gas (not liquefied),6762.335
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,07.14 Bitumen,1153.802
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,07.16 Petroleum coke,6031.29
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,07.17 Other products,1125.904
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,07.99 PetProd nonspecified,4485.850439
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,08 Gas,112662.823399
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,08.01 Natural gas,100702.044
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,08.99 Gas nonspecified,11960.779399
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,10 Hydro,37136.985712
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,11 Geothermal,915.44122
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,12 Solar,149106.536778
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,12.01 of which: Photovoltaics,149106.536778
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,14 Wind,10540.033846999999
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,15 Solid biomass,38090.7965
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,15.05 Other biomass,38090.7965
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,16 Others,33949.509076
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,16.01 Biogas,1854.621076
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,16.02 Industrial waste,3258.366
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,16.03 Municipal solid waste (renewable),5218.544
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,16.04 Municipal solid waste (non-renewable),5873.477999999999
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,16.09 Other sources,17744.5
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,18 Heat,83.78
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,19 Total,456368.390253
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,20 Total Renewables,242862.959133
+esto_missing,esto_flow,esto_product,18.03 AP electricity plants,21 Modern renewables,242862.959133
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,01 Coal,56028.276540000006
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,01.02 Other bituminous coal,22919.899
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,01.03 Sub-bituminous coal,4424.398
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,01.05 Lignite,2093.5119999999997
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,01.99 Coal nonspecified,26590.46754
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,02 Coal products,11396.627
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,02.03 Coke oven gas,3455.294
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,02.04 Blast furnace gas,7941.3330000000005
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,06 Crude oil & NGL,0.107
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,06.01 Crude oil,0.107
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,07 Petroleum products,15187.915012000001
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,07.03 Naphtha,2074.65
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,07.07 Gas/diesel oil,1949.2799999999997
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,07.08 Fuel oil,1882.7330000000002
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,07.10 Refinery gas (not liquefied),5898.653
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,07.16 Petroleum coke,1180.894
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,07.17 Other products,1371.436
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,07.99 PetProd nonspecified,830.269012
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,08 Gas,171553.926699
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,08.01 Natural gas,170708.492
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,08.99 Gas nonspecified,845.434699
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,11 Geothermal,52.076
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,15 Solid biomass,32222.678806
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,15.05 Other biomass,32222.678806
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,16 Others,13979.734138
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,16.01 Biogas,1690.6855719999999
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,16.02 Industrial waste,4967.829075
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,16.03 Municipal solid waste (renewable),2067.5638719999997
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,16.04 Municipal solid waste (non-renewable),1901.836618
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,16.08 Other liquid biofuels,232.266
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,16.09 Other sources,3119.553
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,19 Total,300781.3412
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,20 Total Renewables,36625.27025
+esto_missing,esto_flow,esto_product,18.04 AP CHP plants,21 Modern renewables,36265.27025
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,01 Coal,9617.359444
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,01.02 Other bituminous coal,809.451419
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,01.03 Sub-bituminous coal,1.137009
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,01.04 Anthracite,0.123008
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,01.05 Lignite,299.868497
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,01.99 Coal nonspecified,8506.779510999999
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,02 Coal products,56.256692
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,02.01 Coke oven coke,0.026461
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,02.03 Coke oven gas,28.482005
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,02.04 Blast furnace gas,27.748226
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,03 Peat,2.325851
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,04 Peat products,0.085746
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,06 Crude oil & NGL,19.045251
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,06.01 Crude oil,19.045251
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,07 Petroleum products,446.10088499999995
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,07.03 Naphtha,15.011813
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,07.06 Kerosene,0.21101399999999998
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,07.07 Gas/diesel oil,8.170373
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,07.08 Fuel oil,111.378929
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,07.09 LPG,4.289376
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,07.10 Refinery gas (not liquefied),24.72745
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,07.16 Petroleum coke,8.852236
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,07.17 Other products,27.823252999999998
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,07.99 PetProd nonspecified,245.63644
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,08 Gas,4919.897643
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,08.01 Natural gas,4177.4257959999995
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,08.99 Gas nonspecified,742.4718469999999
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,09 Nuclear,14.595352
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,15 Solid biomass,355.083916
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,15.05 Other biomass,355.083916
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,16 Others,726.187807
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,16.01 Biogas,6.676019999999999
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,16.02 Industrial waste,300.068414
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,16.03 Municipal solid waste (renewable),10.924704
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,16.04 Municipal solid waste (non-renewable),12.493108
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,16.09 Other sources,396.02556100000004
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,17 Electricity,20.507337
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,18 Heat,1.74397
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,19 Total,16179.189852
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,20 Total Renewables,372.68464
+esto_missing,esto_flow,esto_product,19 Heat output in PJ,21 Modern renewables,372.68464
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,01 Coal,609.5089690000001
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,01.02 Other bituminous coal,344.554967
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,01.03 Sub-bituminous coal,1.137009
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,01.04 Anthracite,0.123008
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,01.05 Lignite,184.828798
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,01.99 Coal nonspecified,78.865187
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,03 Peat,0.078502
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,07 Petroleum products,51.199273000000005
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,07.06 Kerosene,0.007787
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,07.07 Gas/diesel oil,0.446564
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,07.08 Fuel oil,14.832074
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,07.09 LPG,1.632308
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,07.10 Refinery gas (not liquefied),24.707856
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,07.16 Petroleum coke,2.791633
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,07.17 Other products,0.055349
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,07.99 PetProd nonspecified,6.725701
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,08 Gas,2385.288341
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,08.01 Natural gas,2383.939259
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,08.99 Gas nonspecified,1.349082
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,09 Nuclear,14.595352
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,15 Solid biomass,32.026168999999996
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,15.05 Other biomass,32.026168999999996
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,16 Others,13.367273
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,16.01 Biogas,2.730044
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,16.02 Industrial waste,2.30713
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,16.03 Municipal solid waste (renewable),3.928768
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,16.04 Municipal solid waste (non-renewable),4.401332
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,19 Total,3106.063839
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,20 Total Renewables,38.684982
+esto_missing,esto_flow,esto_product,19.01 MAP CHP plants,21 Modern renewables,38.684982
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,01 Coal,8434.087927999999
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,01.02 Other bituminous coal,6.173604
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,01.99 Coal nonspecified,8427.914324
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,07 Petroleum products,242.880872
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,07.06 Kerosene,0.203227
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,07.07 Gas/diesel oil,0.005401
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,07.08 Fuel oil,1.555397
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,07.09 LPG,1.790276
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,07.10 Refinery gas (not liquefied),0.019594
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,07.16 Petroleum coke,0.396239
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,07.99 PetProd nonspecified,238.910739
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,08 Gas,762.6054029999999
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,08.01 Natural gas,21.482638
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,08.99 Gas nonspecified,741.122765
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,15 Solid biomass,299.145717
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,15.05 Other biomass,299.145717
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,16 Others,144.57951200000002
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,16.01 Biogas,2.337993
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,16.02 Industrial waste,136.27985
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,16.03 Municipal solid waste (renewable),1.645999
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,16.04 Municipal solid waste (non-renewable),1.171006
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,16.09 Other sources,3.144664
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,17 Electricity,8.350921
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,19 Total,9891.650353
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,20 Total Renewables,303.129708
+esto_missing,esto_flow,esto_product,19.02 MAP heat plants,21 Modern renewables,303.129708
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,01 Coal,143.13656
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,01.02 Other bituminous coal,115.938479
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,01.05 Lignite,27.198081
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,02 Coal products,38.098624
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,02.03 Coke oven gas,21.064796
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,02.04 Blast furnace gas,17.033828
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,06 Crude oil & NGL,0.037221
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,06.01 Crude oil,0.037221
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,07 Petroleum products,62.068933
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,07.03 Naphtha,14.197271
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,07.07 Gas/diesel oil,0.70376
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,07.08 Fuel oil,23.135838
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,07.16 Petroleum coke,5.664364
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,07.17 Other products,18.367701
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,08 Gas,312.911761
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,08.01 Natural gas,312.911761
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,15 Solid biomass,6.076345
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,15.05 Other biomass,6.076345
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,16 Others,86.91833
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,16.01 Biogas,0.5819650000000001
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,16.02 Industrial waste,81.95919699999999
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,16.03 Municipal solid waste (renewable),1.6158569999999999
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,16.04 Municipal solid waste (non-renewable),1.741447
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,16.09 Other sources,1.019863
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,18 Heat,1.74397
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,19 Total,650.991659
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,20 Total Renewables,8.274167
+esto_missing,esto_flow,esto_product,19.03 AP CHP plants,21 Modern renewables,8.274167
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,01 Coal,430.625987
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,01.02 Other bituminous coal,342.784369
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,01.05 Lignite,87.841618
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,02 Coal products,18.158068
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,02.01 Coke oven coke,0.026461
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,02.03 Coke oven gas,7.417209
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,02.04 Blast furnace gas,10.714398
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,03 Peat,2.247349
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,04 Peat products,0.085746
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,06 Crude oil & NGL,19.00803
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,06.01 Crude oil,19.00803
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,07 Petroleum products,89.951807
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,07.03 Naphtha,0.814542
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,07.07 Gas/diesel oil,7.014648
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,07.08 Fuel oil,71.85562
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,07.09 LPG,0.866793
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,07.17 Other products,9.400204
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,08 Gas,1459.092138
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,08.01 Natural gas,1459.092138
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,15 Solid biomass,17.835684
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,15.05 Other biomass,17.835684
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,16 Others,481.322692
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,16.01 Biogas,1.026017
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,16.02 Industrial waste,79.522237
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,16.03 Municipal solid waste (renewable),3.734081
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,16.04 Municipal solid waste (non-renewable),5.179323
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,16.09 Other sources,391.861034
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,17 Electricity,12.156416
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,19 Total,2530.484001
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,20 Total Renewables,22.595783
+esto_missing,esto_flow,esto_product,19.04 AP heat plants,21 Modern renewables,22.595783
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_01_01_diesel_engine,07_07_gas_diesel_oil,0.0794110371970687
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_01_01_diesel_engine,16_06_biodiesel,0.002325284295251974
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_01_01_diesel_engine,x,0.08173632149232067
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_01_02_gasoline_engine,16_x_efuel,37.297055372447474
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_01_02_gasoline_engine,x,122194.66960276432
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_01_03_battery_ev,x,36215.3564363608
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_01_diesel_engine,16_x_efuel,87.91573448630788
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_01_diesel_engine,x,34617.46274721221
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_02_gasoline_engine,16_x_efuel,647.2635116355384
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_02_gasoline_engine,x,1016463.7636519488
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_03_battery_ev,x,107903.1830126914
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_04_compressed_natual_gas,08_01_natural_gas,4597.105911503639
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_04_compressed_natual_gas,08_03_gas_works_gas,113.42160710095
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_04_compressed_natual_gas,16_01_biogas,54.95446694667
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_04_compressed_natual_gas,x,4765.481985551258
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_05_plugin_hybrid_ev_gasoline,16_x_efuel,214.96517658093128
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_05_plugin_hybrid_ev_gasoline,x,45769.61282758016
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_06_plugin_hybrid_ev_diesel,07_07_gas_diesel_oil,8.051509186071533
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_06_plugin_hybrid_ev_diesel,16_06_biodiesel,0.40758154026972554
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_06_plugin_hybrid_ev_diesel,x,18.280348879391738
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_07_liquified_petroleum_gas,07_09_lpg,2535.4460249521744
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_07_liquified_petroleum_gas,x,2535.4460249521744
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_08_fuel_cell_ev,16_x_hydrogen,1521.9836443962515
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_02_08_fuel_cell_ev,x,1521.9836443962515
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_01_diesel_engine,16_x_efuel,18.333258288456136
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_01_diesel_engine,x,76851.28602359307
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_02_gasoline_engine,16_x_efuel,70.07229103900471
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_02_gasoline_engine,x,354901.42480772996
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_03_battery_ev,x,38027.851201733996
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_04_compressed_natual_gas,08_01_natural_gas,3722.459900073063
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_04_compressed_natual_gas,08_03_gas_works_gas,128.86346522648597
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_04_compressed_natual_gas,16_01_biogas,62.44737700996
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_04_compressed_natual_gas,x,3913.770742309509
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_05_plugin_hybrid_ev_gasoline,16_x_efuel,26.97699791015693
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_05_plugin_hybrid_ev_gasoline,x,26327.277742111935
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_06_plugin_hybrid_ev_diesel,07_07_gas_diesel_oil,45.89412263938562
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_06_plugin_hybrid_ev_diesel,16_06_biodiesel,2.0016883448161575
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_06_plugin_hybrid_ev_diesel,x,111.60430183550017
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_07_liquified_petroleum_gas,x,2917.2168944957343
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_08_fuel_cell_ev,16_x_hydrogen,220.3590922116282
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_03_08_fuel_cell_ev,x,220.3590922116282
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_01_diesel_engine,16_x_efuel,5.585858143662
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_01_diesel_engine,x,44247.5670810272
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_02_gasoline_engine,16_x_efuel,33.533900341461965
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_02_gasoline_engine,x,67070.07610761453
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_03_battery_ev,x,12084.661929492895
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_04_compressed_natual_gas,08_01_natural_gas,4583.328346095748
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_04_compressed_natual_gas,08_03_gas_works_gas,172.66469808967003
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_04_compressed_natual_gas,16_01_biogas,83.17287448077201
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_04_compressed_natual_gas,x,4839.165918666188
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_05_plugin_hybrid_ev_gasoline,16_x_efuel,12.780701946777016
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_05_plugin_hybrid_ev_gasoline,x,4411.006046412391
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_06_plugin_hybrid_ev_diesel,07_07_gas_diesel_oil,190.9778737244583
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_06_plugin_hybrid_ev_diesel,16_06_biodiesel,8.216422374074321
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_06_plugin_hybrid_ev_diesel,x,467.58140958506795
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_07_liquified_petroleum_gas,x,2240.633481240891
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_08_fuel_cell_ev,16_x_hydrogen,90.06004390462796
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_04_08_fuel_cell_ev,x,90.06004390462796
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_01_diesel_engine,16_x_efuel,540.4505952370374
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_01_diesel_engine,x,125962.91477021409
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_02_gasoline_engine,16_x_efuel,13.71415778495484
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_02_gasoline_engine,x,16303.133829295868
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_03_battery_ev,x,50398.52107975593
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_04_compressed_natual_gas,08_01_natural_gas,19048.972153974315
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_04_compressed_natual_gas,08_03_gas_works_gas,628.671517869
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_04_compressed_natual_gas,16_01_biogas,319.36900888
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_04_compressed_natual_gas,x,19997.01268072332
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_05_plugin_hybrid_ev_gasoline,07_01_motor_gasoline,36.570071676999994
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_05_plugin_hybrid_ev_gasoline,16_05_biogasoline,1.131033098
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_05_plugin_hybrid_ev_gasoline,x,79.621295518
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_06_plugin_hybrid_ev_diesel,07_07_gas_diesel_oil,532.3630289238793
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_06_plugin_hybrid_ev_diesel,16_06_biodiesel,170.10698547039402
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_06_plugin_hybrid_ev_diesel,16_x_efuel,58.71071316100768
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_06_plugin_hybrid_ev_diesel,x,1811.152794772639
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_07_liquified_petroleum_gas,x,2131.5410062516657
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_08_fuel_cell_ev,16_x_hydrogen,974.5316228482318
+ninth_missing,ninth_sector,ninth_fuel,15_02_01_05_08_fuel_cell_ev,x,974.5316228482318
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_01_diesel_engine,07_07_gas_diesel_oil,106138.71760327388
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_01_diesel_engine,16_06_biodiesel,8065.979282009886
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_01_diesel_engine,16_x_efuel,292.74426258104853
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_01_diesel_engine,x,114497.44114786481
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_02_gasoline_engine,07_01_motor_gasoline,144932.92682368952
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_02_gasoline_engine,16_05_biogasoline,11913.728329867756
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_02_gasoline_engine,16_x_efuel,444.32790759230835
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_02_gasoline_engine,x,157290.9830611496
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_03_battery_ev,x,50158.46158617701
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_04_compressed_natual_gas,08_01_natural_gas,20188.231641560746
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_04_compressed_natual_gas,08_03_gas_works_gas,647.168497118
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_04_compressed_natual_gas,16_01_biogas,374.9700712859999
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_04_compressed_natual_gas,x,21210.370209964745
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_05_plugin_hybrid_ev_gasoline,07_01_motor_gasoline,19.77412497820145
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_05_plugin_hybrid_ev_gasoline,16_05_biogasoline,2.0340109144475145
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_05_plugin_hybrid_ev_gasoline,x,51.715360266951535
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_06_plugin_hybrid_ev_diesel,07_07_gas_diesel_oil,2071.7131036635906
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_06_plugin_hybrid_ev_diesel,16_06_biodiesel,357.39469585993515
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_06_plugin_hybrid_ev_diesel,16_x_efuel,71.63162361736359
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_06_plugin_hybrid_ev_diesel,x,5467.734529415481
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_07_liquified_petroleum_gas,07_09_lpg,3642.168147390318
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_02_07_liquified_petroleum_gas,x,3642.168147390318
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_01_diesel_engine,07_07_gas_diesel_oil,218432.43488710796
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_01_diesel_engine,16_06_biodiesel,26086.96785225548
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_01_diesel_engine,16_x_efuel,1350.6803260832132
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_01_diesel_engine,x,245870.08306544664
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_02_gasoline_engine,07_01_motor_gasoline,6469.817582383842
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_02_gasoline_engine,16_05_biogasoline,489.7932768988823
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_02_gasoline_engine,16_x_efuel,27.571133580376856
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_02_gasoline_engine,x,6987.1819928631
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_03_battery_ev,x,16362.914594430978
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_04_compressed_natual_gas,08_01_natural_gas,17151.978558326355
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_04_compressed_natual_gas,08_03_gas_works_gas,729.076175618
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_04_compressed_natual_gas,16_01_biogas,433.40427722799996
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_04_compressed_natual_gas,x,18314.45901117236
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_06_plugin_hybrid_ev_diesel,07_07_gas_diesel_oil,376.1216696302736
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_06_plugin_hybrid_ev_diesel,16_06_biodiesel,180.72738049301861
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_06_plugin_hybrid_ev_diesel,16_x_efuel,75.8812458248895
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_06_plugin_hybrid_ev_diesel,x,1538.2563096549686
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_07_liquified_petroleum_gas,07_09_lpg,1647.687227250197
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_07_liquified_petroleum_gas,x,1647.687227250197
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_08_fuel_cell_ev,x,9708.859414142957
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_09_lng,08_02_lng,9205.802228622002
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_03_09_lng,x,9205.802228622002
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_01_diesel_engine,16_x_efuel,1280.9862165348022
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_01_diesel_engine,x,477534.8806782491
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_02_gasoline_engine,16_x_efuel,1073.5109291071658
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_02_gasoline_engine,x,64093.813758603974
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_03_battery_ev,x,30279.392917271587
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_04_compressed_natual_gas,08_01_natural_gas,23600.716803415573
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_04_compressed_natual_gas,08_03_gas_works_gas,996.6949857090002
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_04_compressed_natual_gas,16_01_biogas,653.5819847089999
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_04_compressed_natual_gas,x,25250.993773833572
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_06_plugin_hybrid_ev_diesel,07_07_gas_diesel_oil,625.0042955356531
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_06_plugin_hybrid_ev_diesel,16_06_biodiesel,259.31227284283705
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_06_plugin_hybrid_ev_diesel,16_x_efuel,311.90794433330245
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_06_plugin_hybrid_ev_diesel,x,2958.715271525208
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_07_liquified_petroleum_gas,x,6632.957407681151
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_08_fuel_cell_ev,x,21185.55379842386
+ninth_missing,ninth_sector,ninth_fuel,15_02_02_04_09_lng,x,19123.552407182997
+ninth_missing,ninth_sector,ninth_fuel,x,01_01_coking_coal,1928792.6610621067
+ninth_missing,ninth_sector,ninth_fuel,x,01_05_lignite,564147.6369970163
+ninth_missing,ninth_sector,ninth_fuel,x,01_coal_unallocated,367227745.72754395
+ninth_missing,ninth_sector,ninth_fuel,x,01_x_thermal_coal,87200150.37197155
+ninth_missing,ninth_sector,ninth_fuel,x,06_01_crude_oil,34532940.242161915
+ninth_missing,ninth_sector,ninth_fuel,x,06_02_natural_gas_liquids,2184237.300300075
+ninth_missing,ninth_sector,ninth_fuel,x,06_crude_oil_and_ngl_unallocated,26836.48913405845
+ninth_missing,ninth_sector,ninth_fuel,x,06_x_other_hydrocarbons,1454574.2546700924
+ninth_missing,ninth_sector,ninth_fuel,x,07_01_motor_gasoline,15557326.33457163
+ninth_missing,ninth_sector,ninth_fuel,x,07_02_aviation_gasoline,17309.339755811805
+ninth_missing,ninth_sector,ninth_fuel,x,07_03_naphtha,3079959.888012684
+ninth_missing,ninth_sector,ninth_fuel,x,07_06_kerosene,307226.88385826955
+ninth_missing,ninth_sector,ninth_fuel,x,07_07_gas_diesel_oil,15356574.450992808
+ninth_missing,ninth_sector,ninth_fuel,x,07_08_fuel_oil,1980275.9565713594
+ninth_missing,ninth_sector,ninth_fuel,x,07_09_lpg,4559934.561098918
+ninth_missing,ninth_sector,ninth_fuel,x,07_10_refinery_gas_not_liquefied,1076345.7308740949
+ninth_missing,ninth_sector,ninth_fuel,x,07_11_ethane,884786.0612156752
+ninth_missing,ninth_sector,ninth_fuel,x,07_petroleum_products_unallocated,1263816.9664138448
+ninth_missing,ninth_sector,ninth_fuel,x,07_x_jet_fuel,4369749.921796939
+ninth_missing,ninth_sector,ninth_fuel,x,07_x_other_petroleum_products,4536252.998906547
+ninth_missing,ninth_sector,ninth_fuel,x,08_01_natural_gas,55064235.78491447
+ninth_missing,ninth_sector,ninth_fuel,x,08_02_lng,9978560.292918148
+ninth_missing,ninth_sector,ninth_fuel,x,08_03_gas_works_gas,569068.766846649
+ninth_missing,ninth_sector,ninth_fuel,x,08_gas_unallocated,460890444.502676
+ninth_missing,ninth_sector,ninth_fuel,x,12_01_of_which_photovoltaics,1086765877.1920173
+ninth_missing,ninth_sector,ninth_fuel,x,12_solar_unallocated,422.48852862388503
+ninth_missing,ninth_sector,ninth_fuel,x,12_x_other_solar,2467955.9489382235
+ninth_missing,ninth_sector,ninth_fuel,x,15_01_fuelwood_and_woodwaste,452144.5776221016
+ninth_missing,ninth_sector,ninth_fuel,x,15_02_bagasse,128848.04153420444
+ninth_missing,ninth_sector,ninth_fuel,x,15_03_charcoal,39704.59495656805
+ninth_missing,ninth_sector,ninth_fuel,x,15_04_black_liquor,25899.51489940369
+ninth_missing,ninth_sector,ninth_fuel,x,15_05_other_biomass,3495995.299185111
+ninth_missing,ninth_sector,ninth_fuel,x,15_solid_biomass_unallocated,31587885.35974996
+ninth_missing,ninth_sector,ninth_fuel,x,16_01_biogas,418570.15303973097
+ninth_missing,ninth_sector,ninth_fuel,x,16_02_industrial_waste,917377.8129792234
+ninth_missing,ninth_sector,ninth_fuel,x,16_03_municipal_solid_waste_renewable,16229.293561818939
+ninth_missing,ninth_sector,ninth_fuel,x,16_04_municipal_solid_waste_nonrenewable,14715.464519315508
+ninth_missing,ninth_sector,ninth_fuel,x,16_05_biogasoline,997930.4674194643
+ninth_missing,ninth_sector,ninth_fuel,x,16_06_biodiesel,1098974.1089698984
+ninth_missing,ninth_sector,ninth_fuel,x,16_07_bio_jet_kerosene,338300.7487099732
+ninth_missing,ninth_sector,ninth_fuel,x,16_08_other_liquid_biofuels,1497.6165643923423
+ninth_missing,ninth_sector,ninth_fuel,x,16_others_unallocated,13692421.557495644
+ninth_missing,ninth_sector,ninth_fuel,x,16_x_ammonia,7029575.184879438
+ninth_missing,ninth_sector,ninth_fuel,x,16_x_efuel,298292.7766657834
+ninth_missing,ninth_sector,ninth_fuel,x,16_x_hydrogen,39163285.904649474
+ninth_missing,ninth_sector,ninth_fuel,x,x,6254580754.05742

@@ -6,6 +6,7 @@ from typing import Literal
 
 import pandas as pd
 
+from codebase.utilities.master_config import read_config_table
 from codebase.functions.leap_excel_io import read_export_sheet, save_export_files
 from codebase.functions.leap_series_adapter import (
     SeriesFormat,
@@ -23,7 +24,12 @@ from codebase.functions.ninth_projection_mapping import (
     filter_ninth_projection_rows,
     normalize_economy_key,
 )
-from codebase.scrapbook.utilities import apply_matt_subtotal_mapping, filter_matt_subtotals
+from codebase.scrapbook.utilities import (
+    apply_matt_subtotal_mapping,
+    filter_matt_subtotals,
+    load_augmented_reference_tables,
+)
+from codebase.utilities.workflow_common import archive_config_dir_once_per_day
 
 
 DEFAULT_ESTO_INDUSTRY_FLOW = "14 Industry sector"
@@ -55,10 +61,18 @@ def _normalize_year_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _load_esto_data(path: Path, subtotal_mapping_path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path)
+    archive_config_dir_once_per_day()
+    df, _ = load_augmented_reference_tables(
+        esto_path=path,
+        ninth_path=Path("data/merged_file_energy_ALL_20251106.csv"),
+        subtotal_mapping_path=subtotal_mapping_path,
+        synthetic_rules_path=Path("config/synthetic_reference_rows.csv"),
+        cache_dir=Path("data/.cache/industry_reference_tables"),
+        apply_esto_subtotal_map=True,
+        filter_esto_subtotals_flag=True,
+        filter_ninth_subtotals_flag=False,
+    )
     df = _normalize_year_columns(df)
-    df = apply_matt_subtotal_mapping(df, subtotal_mapping_path)
-    df = filter_matt_subtotals(df)
     df["economy_key"] = df["economy"].apply(normalize_economy_key)
     df["flows"] = df["flows"].astype(str).str.strip()
     df["products"] = df["products"].astype(str).str.strip()
@@ -117,7 +131,7 @@ def _compute_hydrogen_shares(
 
 
 def _load_mapping(mapping_path: Path) -> dict[str, MappingRow]:
-    df = pd.read_csv(mapping_path).fillna("")
+    df = read_config_table(mapping_path).fillna("")
     rows = {}
     for _, row in df.iterrows():
         industry_fuel = str(row.get("industry_fuel", "")).strip()
@@ -146,6 +160,37 @@ def _load_mapping(mapping_path: Path) -> dict[str, MappingRow]:
             notes=notes,
         )
     return rows
+
+
+def _load_subtotal_products_for_flow(
+    subtotal_mapping_path: Path,
+    flow_name: str,
+) -> set[str]:
+    """Return subtotal products flagged for a specific ESTO flow."""
+    try:
+        mapping = read_config_table(subtotal_mapping_path, dtype=str)
+    except Exception:
+        return set()
+
+    mapping = mapping.rename(columns={col: str(col).strip().lower() for col in mapping.columns})
+    if {"flows", "products", "is_subtotal"}.issubset(mapping.columns):
+        mapping = mapping.rename(columns={"flows": "flow", "products": "product"})
+    if not {"flow", "product", "is_subtotal"}.issubset(mapping.columns):
+        return set()
+
+    mapping["flow"] = mapping["flow"].astype(str).str.strip()
+    mapping["product"] = mapping["product"].astype(str).str.strip()
+    mapping["is_subtotal"] = (
+        mapping["is_subtotal"]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+        .isin(["true", "1", "yes"])
+    )
+    subset = mapping[
+        (mapping["flow"] == str(flow_name).strip()) & mapping["is_subtotal"]
+    ]
+    return set(subset["product"].dropna().astype(str).str.strip().tolist())
 
 
 def _resolve_mapping(mapping_by_fuel: dict[str, MappingRow], fuel: str) -> MappingRow | None:
@@ -635,6 +680,11 @@ def remap_industry_export_fuels(
     input_series_format = detect_series_format(df)
     input_year_cols = collect_available_years(df, input_series_format)
     mapping_by_fuel = _load_mapping(mapping_csv_path)
+    issues: dict[str, object] = {
+        "unmapped_fuels": [],
+        "extra_others_products": [],
+        "subtotal_targets_removed": [],
+    }
 
     level_cols = [col for col in columns if col.startswith("Level ")]
     id_cols = [col for col in ["BranchID", "VariableID", "ScenarioID", "RegionID"] if col in columns]
@@ -646,6 +696,39 @@ def remap_industry_export_fuels(
 
     if hydrogen_subfuels is None:
         hydrogen_subfuels = DEFAULT_HYDROGEN_SUBFUELS
+
+    subtotal_products = _load_subtotal_products_for_flow(
+        subtotal_mapping_path=subtotal_mapping_path,
+        flow_name=esto_industry_flow,
+    )
+    if subtotal_products:
+        filtered_mapping: dict[str, MappingRow] = {}
+        removed_rows: list[dict[str, str]] = []
+        for fuel_key, mapping_row in mapping_by_fuel.items():
+            original_targets = list(mapping_row.target_fuels)
+            is_others_bucket = str(mapping_row.industry_fuel).strip().lower() == "others"
+            if is_others_bucket and mapping_row.mapping_mode in {"direct", "split_base_year"}:
+                filtered_targets = [t for t in original_targets if t not in subtotal_products]
+            else:
+                filtered_targets = original_targets
+            removed_targets = [t for t in original_targets if t not in filtered_targets]
+            for removed in removed_targets:
+                removed_rows.append(
+                    {
+                        "industry_fuel": fuel_key,
+                        "removed_target": removed,
+                        "reason": "subtotal_product",
+                    }
+                )
+            filtered_mapping[fuel_key] = MappingRow(
+                industry_fuel=mapping_row.industry_fuel,
+                canonical_industry_fuel=mapping_row.canonical_industry_fuel,
+                mapping_mode=mapping_row.mapping_mode,
+                target_fuels=filtered_targets,
+                notes=mapping_row.notes,
+            )
+        mapping_by_fuel = filtered_mapping
+        issues["subtotal_targets_removed"] = removed_rows
 
     hydrogen_shares = _compute_hydrogen_shares(
         ninth_df,
@@ -672,7 +755,6 @@ def remap_industry_export_fuels(
         return shares
 
     # Detect extra products for Others.
-    issues: dict[str, object] = {"unmapped_fuels": [], "extra_others_products": []}
     mapped_products = set()
     for mapping in mapping_by_fuel.values():
         if mapping.mapping_mode in {"direct", "split_base_year"}:
@@ -713,7 +795,11 @@ def remap_industry_export_fuels(
             continue
 
         if mapping_row.mapping_mode == "direct":
-            targets = mapping_row.target_fuels or [mapping_row.canonical_industry_fuel]
+            targets = list(mapping_row.target_fuels)
+            if not targets:
+                issues["unmapped_fuels"].append(f"{fuel} (no non-subtotal targets)")
+                new_rows.append(row)
+                continue
             shares = {target: 1.0 for target in targets}
             for target in targets:
                 updated = _update_branch_path(row, level_cols, fuel_idx, target)
@@ -730,6 +816,10 @@ def remap_industry_export_fuels(
             continue
 
         if mapping_row.mapping_mode == "split_base_year":
+            if not mapping_row.target_fuels:
+                issues["unmapped_fuels"].append(f"{fuel} (no non-subtotal targets)")
+                new_rows.append(row)
+                continue
             shares = _get_base_year_shares(mapping_row)
             fallback_share = None
             if shares:
@@ -898,6 +988,14 @@ def remap_industry_export_fuels(
                     "issue_type": "extra_others_product",
                     "detail": product,
                     "suggestion": "Consider adding to Others target_fuels.",
+                }
+            )
+        for item in issues.get("subtotal_targets_removed", []):
+            report_rows.append(
+                {
+                    "issue_type": "subtotal_target_removed",
+                    "detail": f"{item.get('industry_fuel', '')} -> {item.get('removed_target', '')}",
+                    "suggestion": "Removed automatically using ESTO subtotal mapping.",
                 }
             )
         if report_rows:

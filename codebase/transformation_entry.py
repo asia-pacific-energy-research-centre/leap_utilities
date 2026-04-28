@@ -1,4 +1,13 @@
 #%%
+"""
+Provide notebook-friendly entry points for transformation workbook exports.
+
+This module wraps `transformation_workflow` with smaller helper functions that
+are convenient to call from notebooks or ad hoc scripts. Use it when you want a
+quick transformation export/import without stepping through the full workflow
+module configuration.
+"""
+
 # Simplified transformation workflow for notebooks: exports the LEAP workbook and optionally runs the LEAP import.
 # Most user-editable settings live in `codebase/workflow_config.py`.
 from __future__ import annotations

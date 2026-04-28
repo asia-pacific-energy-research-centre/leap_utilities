@@ -7,10 +7,14 @@ from pathlib import Path
 
 import pandas as pd
 
+from codebase.utilities.master_config import read_config_table
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+from codebase.mappings.canonical_mapping import build_code_match_method, normalize_match_method
 
 
 DEFAULT_CANONICAL_PAIRS = Path("config/ninth_pairs_to_esto_pairs.xlsx")
@@ -50,9 +54,7 @@ def _expected_code_method(ninth_sector: object, esto_flow: object) -> str:
         return ""
     if ninth_parts[: len(flow_parts)] != flow_parts:
         return ""
-    if len(flow_parts) == len(ninth_parts):
-        return "code_exact"
-    return f"code_ancestor_{len(ninth_parts) - len(flow_parts)}"
+    return build_code_match_method(len(ninth_parts) - len(flow_parts))
 
 
 def build_report(
@@ -64,12 +66,14 @@ def build_report(
     out_dir = _resolve(output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    pairs = pd.read_excel(pairs_path)
+    pairs = read_config_table(pairs_path)
     pairs.columns = [str(col).strip().lower() for col in pairs.columns]
     for col in ["9th_sector", "9th_fuel", "esto_flow", "esto_product", "sector_match_method", "fuel_match_method", "mapping_note"]:
         if col not in pairs.columns:
             pairs[col] = ""
         pairs[col] = pairs[col].fillna("").astype(str).str.strip()
+    for col in ["sector_match_method", "fuel_match_method"]:
+        pairs[col] = pairs[col].map(normalize_match_method)
 
     pairs["expected_sector_match_method"] = pairs.apply(
         lambda row: _expected_code_method(row.get("9th_sector", ""), row.get("esto_flow", "")),
@@ -77,20 +81,26 @@ def build_report(
     )
 
     exact_to_ancestor = pairs[
-        pairs["sector_match_method"].str.lower().eq("code_exact")
-        & pairs["expected_sector_match_method"].str.startswith("code_ancestor_")
+        pairs["sector_match_method"].eq("direct_code_match")
+        & pairs["expected_sector_match_method"].str.startswith("parent_code_match_")
     ].copy()
     if not exact_to_ancestor.empty:
-        exact_to_ancestor["issue_type"] = "code_exact_should_be_code_ancestor"
+        exact_to_ancestor["issue_type"] = "direct_code_match_should_be_parent_code_match"
 
     broader_exact_like = pairs[
-        pairs["sector_match_method"].str.lower().isin({"code_exact", "independent_exact", "independent_exact_x"})
-        & pairs["expected_sector_match_method"].str.startswith("code_ancestor_")
+        pairs["sector_match_method"].isin(
+            {
+                "direct_code_match",
+                "independent_table_direct_match",
+                "independent_table_direct_match_x_category",
+            }
+        )
+        & pairs["expected_sector_match_method"].str.startswith("parent_code_match_")
     ].copy()
     if not broader_exact_like.empty:
         broader_exact_like["issue_type"] = "exact_like_method_uses_parent_flow"
 
-    exact_path = out_dir / "sector_match_method_code_exact_to_ancestor.csv"
+    exact_path = out_dir / "sector_match_method_direct_to_parent.csv"
     broader_path = out_dir / "sector_match_method_exact_like_parent_flow.csv"
     exact_to_ancestor.to_csv(exact_path, index=False)
     broader_exact_like.to_csv(broader_path, index=False)
@@ -99,5 +109,5 @@ def build_report(
 
 if __name__ == "__main__":
     exact_path, broader_path = build_report()
-    print(f"[INFO] Wrote strict code_exact mismatch report: {exact_path}")
+    print(f"[INFO] Wrote strict direct-code mismatch report: {exact_path}")
     print(f"[INFO] Wrote broader exact-like parent-flow report: {broader_path}")

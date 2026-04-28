@@ -1,10 +1,21 @@
 #%%
+"""
+Build and optionally import LEAP refining branches from export data.
+
+This workflow prepares the refining export workbook, optionally remaps
+transformation fuels, and imports branch structure and time-series values into
+LEAP. Some refining variables are intentionally skipped in code and should be
+reviewed manually where needed.
+"""
+
 # Refining mapping workflow using code to create and fill branches from an export file.
 import sys
 from pathlib import Path
 from typing import Sequence
 
 import pandas as pd
+
+from codebase.utilities.master_config import config_table_exists, read_config_table
 
 # Allow repo root on sys.path so code imports resolve without install
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -20,15 +31,22 @@ from codebase.functions.leap_core import (
     create_branches_from_export_file,
     connect_to_leap,
 )
+from codebase.functions.analysis_input_write_dispatcher import (
+    dispatch_analysis_input_write,
+    get_analysis_input_write_mode,
+)
 from codebase.functions.leap_exports import list_scenarios as list_export_scenarios
 from codebase.functions.leap_excel_io import (
     read_export_sheet,
     write_export_sheet,
 )
 from codebase.functions.transformation_fuel_remap import remap_transformation_export_fuels
+from codebase.utilities.output_paths import STANDALONE_LEAP_EXPORTS_ROOT
 
-# Connect to LEAP
-L = connect_to_leap()
+WRITE_MODE = get_analysis_input_write_mode()
+L = None
+if WRITE_MODE == "api":
+    L = connect_to_leap()
 
 CREATE_BRANCHES_FROM_EXPORT_FILE = True
 
@@ -187,9 +205,7 @@ REMAP_FUELS = True
 MAPPING_CSV_PATH = "../config/refining_fuel_mapping.csv"
 NINTH_TO_ESTO_PAIRS_PATH = "../config/ninth_pairs_to_esto_pairs.xlsx"
 REMAP_OUTPUT_PATH = (
-    REPO_ROOT
-    / "outputs"
-    / "leap_exports"
+    STANDALONE_LEAP_EXPORTS_ROOT
     / f"refining_export_remapped_{_safe_filename_segment(ECONOMY)}_{_safe_filename_segment('all_scenarios' if FILL_ALL_SCENARIOS else SCENARIO)}.xlsx"
 )
 REMAP_REPORT_PATH = "../intermediate_data/refining_fuel_remap_report.csv"
@@ -223,7 +239,17 @@ if configured_fill_scenarios:
     )
 
 #%%
-if CREATE_BRANCHES_FROM_EXPORT_FILE:
+if WRITE_MODE == "workbook" and (CREATE_BRANCHES_FROM_EXPORT_FILE or FILL_BRANCHES_FROM_EXPORT_FILE):
+    dispatch_analysis_input_write(
+        export_path=Path(leap_export_filename),
+        sheet_name=sheet_name,
+        scenario=configured_fill_scenarios[0] if configured_fill_scenarios else None,
+        region=REGION,
+        context_label="refining_workflow",
+    )
+
+#%%
+if CREATE_BRANCHES_FROM_EXPORT_FILE and WRITE_MODE == "api":
     create_scenarios = _discover_fill_scenarios(
         leap_export_filename,
         sheet_name,
@@ -263,7 +289,7 @@ SKIP_VARIABLES = {
     "Dispatch Rule",
     "First Simulation Year",
 }
-if FILL_BRANCHES_FROM_EXPORT_FILE:
+if FILL_BRANCHES_FROM_EXPORT_FILE and WRITE_MODE == "api":
     scenarios_to_fill = _discover_fill_scenarios(
         leap_export_filename,
         sheet_name,
@@ -290,3 +316,14 @@ if FILL_BRANCHES_FROM_EXPORT_FILE:
             SKIP_VARIABLES=SKIP_VARIABLES,
         )
 #%%
+
+
+try:
+    from codebase.utilities.workflow_common import emit_completion_beep as _emit_completion_beep
+except Exception:  # pragma: no cover
+    def _emit_completion_beep(*, success: bool = True) -> None:  # noqa: ARG001
+        return
+
+
+if __name__ == "__main__":  # pragma: no cover
+    _emit_completion_beep(success=True, style="chime")

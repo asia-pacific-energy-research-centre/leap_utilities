@@ -2,6 +2,8 @@
 # Summary: Clean independent product/flow mappings and write to outputs.
 import os
 import pandas as pd
+
+from codebase.utilities.master_config import read_config_table
 #%%
 
 #%%
@@ -44,10 +46,9 @@ def try_debug_breakpoint():
 def load_workbook_sheets(workbook_path):
     """Load every sheet into a dict of dataframes."""
     try:
-        xls = pd.ExcelFile(workbook_path)
         return {
-            sheet_name: pd.read_excel(workbook_path, sheet_name=sheet_name, dtype=str)
-            for sheet_name in xls.sheet_names
+            sheet_name: read_config_table(workbook_path, sheet_name=sheet_name, dtype=str)
+            for sheet_name in ["product", "flow"]
         }
     except Exception as exc:
         print(f"Failed to read workbook {workbook_path}: {exc}")
@@ -67,8 +68,8 @@ def _normalize_series(series, drop_x=False):
 def collect_reference_labels(workbook_path):
     """Collect reference labels from the sector_fuel_codes_to_names workbook."""
     try:
-        ninth_df = pd.read_excel(workbook_path, sheet_name="9th", dtype=str)
-        esto_df = pd.read_excel(workbook_path, sheet_name="ESTO", dtype=str)
+        ninth_df = read_config_table(workbook_path, sheet_name="9th", dtype=str)
+        esto_df = read_config_table(workbook_path, sheet_name="ESTO", dtype=str)
 
         ninth_sectors = pd.concat(
             [_normalize_series(ninth_df[col], drop_x=True) for col in NINTH_SECTOR_COLUMNS if col in ninth_df],

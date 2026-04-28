@@ -221,6 +221,89 @@ class TestMinorDemandWorkflow(unittest.TestCase):
         )
         self.assertEqual(share_activity, {2023: 0.3, 2024: 0.25})
 
+    def test_build_allocated_projection_table_uses_passed_mapping_scope(self) -> None:
+        ninth_data = pd.DataFrame(
+            [
+                {
+                    "economy": "20_USA",
+                    "economy_key": "20USA",
+                    "scenarios": "reference",
+                    "sectors": "s1",
+                    "fuels": "f1",
+                    2023: 100.0,
+                }
+            ]
+        )
+        esto_data = pd.DataFrame(
+            [
+                {
+                    "economy": "20_USA",
+                    "economy_key": "20USA",
+                    "flows": "Flow A",
+                    "products": "Fuel A",
+                    2022: 60.0,
+                },
+                {
+                    "economy": "20_USA",
+                    "economy_key": "20USA",
+                    "flows": "Flow B",
+                    "products": "Fuel B",
+                    2022: 40.0,
+                },
+            ]
+        )
+        mapping = pd.DataFrame(
+            [
+                {
+                    "9th_sector": "s1",
+                    "9th_fuel": "f1",
+                    "esto_flow": "Flow A",
+                    "esto_product": "Fuel A",
+                }
+            ]
+        )
+
+        allocated = mdw.build_allocated_projection_table(
+            ninth_data=ninth_data,
+            esto_data=esto_data,
+            projection_years=[2023],
+            scenario="reference",
+            mapping=mapping,
+        )
+
+        self.assertEqual(float(allocated[2023].sum()), 100.0)
+        self.assertEqual(allocated["esto_flow"].tolist(), ["Flow A"])
+
+    def test_add_base_year_to_fuel_activity_uses_esto_share_for_sector_share_mode(self) -> None:
+        esto_data = pd.DataFrame(
+            [
+                {
+                    "economy_key": "20USA",
+                    "flows": "16.03 Agriculture",
+                    "products": "Coal",
+                    2022: 30.0,
+                },
+                {
+                    "economy_key": "20USA",
+                    "flows": "16.03 Agriculture",
+                    "products": "Oil",
+                    2022: 70.0,
+                },
+            ]
+        )
+
+        updated = mdw.add_base_year_to_fuel_activity(
+            fuel_activity_series={2023: 0.4},
+            esto_data=esto_data,
+            flow="16.03 Agriculture",
+            esto_product="Coal",
+            economy_key="20USA",
+            base_year=2022,
+            mode="sector_share",
+        )
+
+        self.assertEqual(updated, {2023: 0.4, 2022: 0.3})
+
 
 if __name__ == "__main__":
     unittest.main()

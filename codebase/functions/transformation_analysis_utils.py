@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from codebase.utilities.master_config import config_table_exists, read_config_table
+
 # Allow the repository root to be importable regardless of the working directory.
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CURRENT_DIR = Path.cwd()
@@ -38,6 +40,7 @@ from codebase.functions.leap_core import (
 from codebase.scrapbook.utilities import (
     apply_matt_subtotal_mapping,
     filter_matt_subtotals,
+    load_augmented_reference_tables,
     save_subtotal_labeled_data,
 )
 from codebase.functions.leap_excel_io import finalise_export_df, save_export_files
@@ -64,8 +67,9 @@ CODE_TO_NAME_PATHS = [
 
 YEAR_START_FOR_ANALYSIS = BASE_YEAR
 PROJECTION_START_YEAR = 2023
-PROJECTION_END_YEAR = 2061
+PROJECTION_END_YEAR = 2060
 PROJECTION_YEAR_RANGE = list(range(PROJECTION_START_YEAR, PROJECTION_END_YEAR + 1))
+REFERENCE_CACHE_DIR = REPO_ROOT / "data" / ".cache" / "transformation_reference_tables"
 # Projection split policy for transformation workflows:
 # - PROJECTION_SIGN_STABLE_MODE controls allocation behavior:
 #   - "all": apply sign-stable routing to every mapped ESTO flow.
@@ -154,6 +158,8 @@ MAJOR_SECTOR_CONFIG = {
     "lng": {
         "dataset_key": "ninth",
         "title": "NG Liquefaction",
+        "liquefaction_title": "NG Liquefaction",
+        "regasification_title": "NG Regasification",
         "transformation_sub1": "09_06_gas_processing_plants",
         "transformation_sub2": ["09_06_02_liquefaction_regasification_plants"],
         "loss_sub2": ["10_01_03_liquefaction_regasification_plants"],
@@ -161,6 +167,15 @@ MAJOR_SECTOR_CONFIG = {
     "gas_works": {
         "dataset_key": "esto",
         "title": "Gas works plants",
+        "transformation_sub2": [
+            "09_06_01_gas_works_plants",
+            "09_06_03_natural_gas_blending_plants",
+        ],
+        "flow_code_gas_works": "09.06.01 Gas works plants",
+        "flow_code_blending": "09.06.03 Natural gas blending plants",
+        "product_code_natural_gas": "08.01 Natural gas",
+        "product_code_gas_works_gas": "08.03 Gas works gas",
+        "product_code_lignite": "01.05 Lignite",
         "transformation_flow_codes": ["09.06.01 Gas works plants"],
         "loss_flow_codes": ["10.01.02 Gas works plants"],
     },
@@ -198,6 +213,30 @@ MAJOR_SECTOR_CONFIG = {
         "dataset_key": "esto",
         "title": "Liquefaction (coal to oil)",
         "transformation_flow_codes": ["09.08.05 Liquefaction (coal to oil)"],
+        "loss_flow_codes": [],
+    },
+    "electric_boilers": {
+        "dataset_key": "esto",
+        "title": "Electric boilers",
+        "transformation_flow_codes": ["09.04 Electric boilers"],
+        "loss_flow_codes": [],
+    },
+    "chemical_heat_for_electricity_production": {
+        "dataset_key": "esto",
+        "title": "Chemical heat for electricity production",
+        "transformation_flow_codes": ["09.05 Chemical heat for electricity production"],
+        "loss_flow_codes": [],
+    },
+    "petrochemical_industry": {
+        "dataset_key": "esto",
+        "title": "Petrochemical industry",
+        "transformation_flow_codes": ["09.09 Petrochemical industry"],
+        "loss_flow_codes": [],
+    },
+    "biofuels_processing": {
+        "dataset_key": "esto",
+        "title": "Biofuels processing",
+        "transformation_flow_codes": ["09.10 Biofuels processing"],
         "loss_flow_codes": [],
     },
     "coal_mines": {
@@ -341,7 +380,7 @@ def try_debug_breakpoint():
 def load_csv_data(path, label):
     """Load a CSV file and return a pandas DataFrame."""
     try:
-        df = pd.read_csv(path)
+        df = read_config_table(path)
         print(f"Loaded {label}: {df.shape[0]} rows, {df.shape[1]} columns")
         return df
     except Exception as exc:
@@ -908,6 +947,7 @@ def build_est_output_target_dict(
     base_year,
     final_year,
     output_series=None,
+    cap_to_output=False,
 ):
     """Build a per-year dictionary of import/export totals for a fuel."""
     try:
@@ -933,6 +973,12 @@ def build_est_output_target_dict(
                         continue
                     if full_series.get(year, 0.0) == 0 and output_series.get(year, 0.0) != 0:
                         full_series[year] = output_series.get(year, 0.0) * share
+            if cap_to_output:
+                for year in range(base_year, final_year + 1):
+                    export_value = float(full_series.get(year, 0.0))
+                    output_value = max(float(output_series.get(year, 0.0)), 0.0)
+                    if export_value > output_value:
+                        full_series[year] = output_value
         return series_to_year_dict(full_series, base_year, final_year)
     except Exception as exc:
         print(f"Failed to build import/export target dict for {fuel_label}: {exc}")
@@ -978,6 +1024,7 @@ def gather_output_target_dicts(economy, output_labels, base_year, final_year, ou
                     base_year,
                     final_year,
                     output_series=output_series,
+                    cap_to_output=True,
                 )
                 if export_dict:
                     export_targets[label] = export_dict
@@ -1052,15 +1099,18 @@ def build_auxiliary_ratios_by_year(negative_timeseries, auxiliary_fuels, output_
         raise
 
 
-def build_auxiliary_from_losses_by_year(loss_values_by_year, output_series):
-    """Return auxiliary fuels and ratios by year derived from losses."""
+def build_auxiliary_from_losses_by_year(loss_values_by_year, output_series, feedstock_labels=None):
+    """Return auxiliary fuels and ratios by year derived from losses, excluding feedstock fuels."""
     try:
         if not loss_values_by_year:
             return [], {}
+        exclude = {str(label) for label in (feedstock_labels or [])}
         output_series_pos = to_output_only_series(output_series)
         fuels = []
         ratios = {}
         for label, series in loss_values_by_year.items():
+            if str(label) in exclude:
+                continue
             fuels.append(label)
             ratio_series = safe_divide_series(pd.Series(series).abs(), output_series_pos)
             ratios[label] = ratio_series.to_dict()
@@ -1635,10 +1685,10 @@ def load_code_to_name_mapping(path_candidates):
     """Load the code-to-name mapping from the first available workbook."""
     try:
         for path in path_candidates:
-            if not os.path.exists(path):
+            if not config_table_exists(path, sheet_name="code_to_name"):
                 continue
             try:
-                mapping_df = pd.read_excel(path, sheet_name="code_to_name")
+                mapping_df = read_config_table(path, sheet_name="code_to_name")
             except Exception as exc:
                 print(f"Failed to read code-to-name mapping from {path}: {exc}")
                 continue
@@ -2175,8 +2225,107 @@ def normalize_feedstock_shares_for_export(feedstock_shares, base_year, final_yea
         raise
 
 
-def normalize_process_efficiency_to_percent(value_by_year):
-    """Convert 0-1 efficiency values to 0-100 percent and enforce >0 for LEAP."""
+def _build_feedstock_label_universe(process_records):
+    """Return per-process feedstock label sets discovered in records."""
+    try:
+        label_lookup = {}
+        for record in process_records or []:
+            key = (
+                str(record.get("sector_title") or "").strip(),
+                str(record.get("process_name") or "").strip(),
+            )
+            if not key[0] or not key[1]:
+                continue
+            labels = []
+            for source in (record.get("feedstock_values"), record.get("feedstock_shares")):
+                if isinstance(source, dict):
+                    labels.extend(str(label).strip() for label in source.keys() if str(label).strip())
+            if not labels:
+                continue
+            bucket = label_lookup.setdefault(key, [])
+            for label in labels:
+                if label not in bucket:
+                    bucket.append(label)
+        return label_lookup
+    except Exception as exc:
+        print(f"Failed to build feedstock label universe: {exc}")
+        try_debug_breakpoint()
+        raise
+
+
+def prepare_feedstock_shares_for_export(
+    feedstock_shares,
+    feedstock_values,
+    process_feedstock_labels,
+    base_year,
+    final_year,
+):
+    """Return normalized feedstock shares with zero-use safeguards for LEAP export."""
+    try:
+        labels = []
+        for source in (process_feedstock_labels, feedstock_values, feedstock_shares):
+            if isinstance(source, dict):
+                values = source.keys()
+            elif isinstance(source, list):
+                values = source
+            else:
+                values = []
+            for raw in values:
+                label = str(raw).strip()
+                if label and label not in labels:
+                    labels.append(label)
+        if not labels:
+            return {}
+
+        start = int(base_year)
+        end = int(final_year)
+        years = list(range(start, end + 1))
+        prepared_shares = {}
+        usage_totals = {}
+
+        for label in labels:
+            share_map = {}
+            if isinstance(feedstock_shares, dict) and label in feedstock_shares:
+                share_map = coerce_value_by_year(feedstock_shares.get(label), start, end)
+                share_map = clip_value_by_year_range(share_map, start, end)
+                share_map = normalize_feedstock_share_to_percent(share_map)
+            prepared_shares[label] = {
+                int(year): float(share_map.get(year, 0.0))
+                for year in years
+            }
+
+            usage_map = {}
+            if isinstance(feedstock_values, dict) and label in feedstock_values:
+                usage_map = coerce_value_by_year(feedstock_values.get(label), start, end)
+                usage_map = clip_value_by_year_range(usage_map, start, end)
+            usage_totals[label] = sum(abs(float(usage_map.get(year, 0.0))) for year in years)
+
+        # Fuels not used in the current economy/process stay at zero share in all years.
+        usage_tolerance = 1e-12
+        for label, usage_total in usage_totals.items():
+            if usage_total <= usage_tolerance:
+                prepared_shares[label] = {year: 0.0 for year in years}
+
+        process_used = any(usage_total > usage_tolerance for usage_total in usage_totals.values())
+        if not process_used:
+            # Process branch exists but is unused: spread 100% equally to avoid LEAP share errors.
+            equal_share = 100.0 / float(len(labels))
+            for label in labels:
+                prepared_shares[label] = {year: equal_share for year in years}
+            anchor_label = labels[0]
+            for year in years:
+                residual = 100.0 - sum(prepared_shares[label][year] for label in labels)
+                prepared_shares[anchor_label][year] += residual
+
+        return normalize_feedstock_shares_for_export(prepared_shares, start, end)
+    except Exception as exc:
+        print(f"Failed to prepare feedstock shares for export: {exc}")
+        try_debug_breakpoint()
+        raise
+
+
+def normalize_process_efficiency_to_percent(value_by_year, input_scale="ratio"):
+    """Normalize process efficiency to percent using explicit input-scale rules."""
     try:
         if not value_by_year:
             return value_by_year
@@ -2187,11 +2336,33 @@ def normalize_process_efficiency_to_percent(value_by_year):
         }
         if not cleaned:
             return value_by_year
-        values = [abs(v) for v in cleaned.values()]
-        if max(values) <= 1.000001:
+        scale_key = str(input_scale or "ratio").strip().lower()
+        if scale_key == "ratio":
             cleaned = {year: value * 100.0 for year, value in cleaned.items()}
-        # LEAP rejects non-positive process efficiencies.
-        cleaned = {year: (value if value > 0.0 else 1e-06) for year, value in cleaned.items()}
+        elif scale_key == "percent":
+            pass
+        else:
+            raise ValueError(
+                f"Unknown process efficiency input_scale={input_scale!r}. "
+                "Use 'ratio' or 'percent'."
+            )
+        # LEAP rejects non-positive process efficiencies. Prefer carrying forward
+        # the previous valid year to avoid artificial tiny values in exports.
+        years_sorted = sorted(cleaned.keys())
+        first_positive = next((cleaned[year] for year in years_sorted if cleaned[year] > 0.0), None)
+        fallback = float(first_positive) if first_positive is not None else 1.0
+        last_valid = None
+        normalized: dict[int, float] = {}
+        for year in years_sorted:
+            value = cleaned[year]
+            if value > 0.0:
+                normalized[year] = value
+                last_valid = value
+            elif last_valid is not None:
+                normalized[year] = last_valid
+            else:
+                normalized[year] = fallback
+        cleaned = normalized
         return cleaned
     except Exception as exc:
         print(f"Failed to normalize process efficiency to percent: {exc}")
@@ -2265,6 +2436,7 @@ def build_process_record(
     input_total=None,
     output_import_targets=None,
     output_export_targets=None,
+    efficiency_scale="ratio",
 ):
     """Return a standardized record for a transformation process."""
     try:
@@ -2276,6 +2448,7 @@ def build_process_record(
             "feedstock_values": dict(feedstock_values or {}),
             "feedstock_shares": dict(feedstock_shares or {}),
             "efficiency": efficiency,
+            "efficiency_scale": str(efficiency_scale or "ratio"),
             "auxiliary_ratios": dict(auxiliary_ratios or {}),
             "loss_values": dict(loss_values or {}),
             "loss_total": loss_total,
@@ -2432,7 +2605,10 @@ def build_transformation_detail_table(process_records, code_to_name_mapping):
             if TRANSFORMATION_OUTPUT_VARIABLES.get("process_efficiency") and record.get("efficiency") is not None:
                 efficiency_data = record.get("efficiency")
                 if isinstance(efficiency_data, dict):
-                    efficiency_data = normalize_process_efficiency_to_percent(efficiency_data)
+                    efficiency_data = normalize_process_efficiency_to_percent(
+                        efficiency_data,
+                        input_scale=record.get("efficiency_scale", "ratio"),
+                    )
                 efficiency_value = summarize_numeric_value(
                     efficiency_data, summary="mean"
                 )
@@ -2499,6 +2675,208 @@ def build_branch_path(parts):
         raise
 
 
+def _sum_series_map_by_year(value_map, years):
+    """Return year totals from a fuel->(year->value) mapping."""
+    try:
+        totals = {int(year): 0.0 for year in years}
+        if not isinstance(value_map, dict):
+            return totals
+        for raw_series in value_map.values():
+            if isinstance(raw_series, dict):
+                for year in years:
+                    raw_value = raw_series.get(year, raw_series.get(str(year), 0.0))
+                    if raw_value is None or pd.isna(raw_value):
+                        continue
+                    totals[int(year)] += abs(float(raw_value))
+                continue
+            if raw_series is None or pd.isna(raw_series):
+                continue
+            scalar_value = abs(float(raw_series))
+            for year in years:
+                totals[int(year)] += scalar_value
+        return totals
+    except Exception as exc:
+        print(f"Failed to sum series map by year: {exc}")
+        try_debug_breakpoint()
+        raise
+
+
+def _build_process_share_lookup(
+    process_records,
+    code_to_name_mapping,
+    base_year,
+    final_year,
+):
+    """Return per-process share percentages by economy/sector/year."""
+    try:
+        years = list(range(int(base_year), int(final_year) + 1))
+        process_sets = {}
+        process_activity = {}
+        for record in process_records or []:
+            economy = str(record.get("economy") or "").strip()
+            sector_title = map_code_label(record.get("sector_title"), code_to_name_mapping)
+            process_name = map_code_label(record.get("process_name"), code_to_name_mapping)
+            if not sector_title or not process_name:
+                continue
+            key = (economy, str(sector_title))
+            process_sets.setdefault(key, set()).add(str(process_name))
+            process_key = (economy, str(sector_title), str(process_name))
+            output_totals = _sum_series_map_by_year(record.get("output_values"), years)
+            feedstock_totals = _sum_series_map_by_year(record.get("feedstock_values"), years)
+            loss_totals = _sum_series_map_by_year(record.get("loss_values"), years)
+            totals = {}
+            for year in years:
+                # Use output-first activity as the main basis for Process Share.
+                output_value = float(output_totals.get(year, 0.0))
+                # Fallback to wider activity if output is unavailable in that year.
+                total_activity = (
+                    output_value
+                    + float(feedstock_totals.get(year, 0.0))
+                    + float(loss_totals.get(year, 0.0))
+                )
+                totals[int(year)] = (
+                    output_value
+                    if output_value > 0.0
+                    else total_activity
+                )
+            process_activity[process_key] = totals
+
+        share_lookup = {}
+        usage_tolerance = 1e-12
+        for (economy, sector_title), processes in process_sets.items():
+            process_list = sorted(processes)
+            if not process_list:
+                continue
+            for process_name in process_list:
+                share_lookup[(economy, sector_title, process_name)] = {
+                    int(year): 0.0 for year in years
+                }
+            for year in years:
+                active_processes = []
+                denominator = 0.0
+                for process_name in process_list:
+                    activity = process_activity.get(
+                        (economy, sector_title, process_name),
+                        {},
+                    ).get(year, 0.0)
+                    if float(activity) > usage_tolerance:
+                        activity_value = float(activity)
+                        active_processes.append((process_name, activity_value))
+                        denominator += activity_value
+                if not active_processes:
+                    continue
+                if denominator <= usage_tolerance:
+                    continue
+                for process_name, activity_value in active_processes:
+                    share_value = (activity_value / denominator) * 100.0
+                    share_lookup[(economy, sector_title, process_name)][int(year)] = share_value
+        return share_lookup
+    except Exception as exc:
+        print(f"Failed to build process share lookup: {exc}")
+        try_debug_breakpoint()
+        raise
+
+
+def _normalize_share_percentages(raw_share_by_label, rounding_decimals=6):
+    """Return rounded shares that sum to exactly 100.0."""
+    try:
+        if not raw_share_by_label:
+            return {}
+        ordered = sorted(raw_share_by_label.items(), key=lambda item: str(item[0]))
+        rounded = {
+            label: round(max(float(value), 0.0), int(rounding_decimals))
+            for label, value in ordered
+        }
+        rounded_sum = round(sum(rounded.values()), int(rounding_decimals))
+        residual = round(100.0 - rounded_sum, int(rounding_decimals))
+        if abs(residual) > 0.0:
+            target_label = sorted(
+                raw_share_by_label.items(),
+                key=lambda item: (-float(item[1]), str(item[0])),
+            )[0][0]
+            rounded[target_label] = round(
+                float(rounded.get(target_label, 0.0)) + residual,
+                int(rounding_decimals),
+            )
+        return rounded
+    except Exception as exc:
+        print(f"Failed to normalize share percentages: {exc}")
+        try_debug_breakpoint()
+        raise
+
+
+def _build_output_share_lookup(
+    process_records,
+    code_to_name_mapping,
+    base_year,
+    final_year,
+):
+    """Return output fuel share percentages by (economy, sector, fuel, year)."""
+    try:
+        years = list(range(int(base_year), int(final_year) + 1))
+        sector_fuels = {}
+        output_totals = {}
+        value_tolerance = 1e-12
+        for record in process_records or []:
+            economy = str(record.get("economy") or "").strip()
+            sector_title = map_code_label(record.get("sector_title"), code_to_name_mapping)
+            if not economy or not sector_title:
+                continue
+            sector_key = (economy, str(sector_title))
+            output_values = record.get("output_values") or {}
+            for label, value in output_values.items():
+                fuel_label = map_code_label(label, code_to_name_mapping)
+                if not fuel_label:
+                    continue
+                sector_fuels.setdefault(sector_key, set()).add(str(fuel_label))
+                value_by_year = coerce_value_by_year(value, base_year, final_year)
+                for year in years:
+                    year_value = float(value_by_year.get(year, value_by_year.get(str(year), 0.0)) or 0.0)
+                    year_value = max(year_value, 0.0)
+                    key = (economy, str(sector_title), str(fuel_label), int(year))
+                    output_totals[key] = output_totals.get(key, 0.0) + year_value
+
+        lookup = {}
+        for sector_key, fuel_set in sector_fuels.items():
+            fuel_labels = sorted(fuel_set)
+            if not fuel_labels:
+                continue
+            economy, sector_title = sector_key
+            sector_bucket = lookup.setdefault((economy, sector_title), {})
+            last_nonzero_share = None
+            for year in years:
+                fuel_totals = {
+                    fuel_label: float(
+                        output_totals.get((economy, sector_title, fuel_label, int(year)), 0.0)
+                    )
+                    for fuel_label in fuel_labels
+                }
+                sector_total = float(sum(fuel_totals.values()))
+                if sector_total > value_tolerance:
+                    raw_shares = {
+                        fuel_label: (fuel_totals[fuel_label] / sector_total) * 100.0
+                        for fuel_label in fuel_labels
+                    }
+                    share_by_label = _normalize_share_percentages(raw_shares)
+                    last_nonzero_share = dict(share_by_label)
+                elif last_nonzero_share is not None:
+                    share_by_label = dict(last_nonzero_share)
+                else:
+                    equal_share = 100.0 / float(len(fuel_labels))
+                    share_by_label = _normalize_share_percentages(
+                        {fuel_label: equal_share for fuel_label in fuel_labels}
+                    )
+                for fuel_label in fuel_labels:
+                    sector_bucket.setdefault(fuel_label, {})[int(year)] = float(
+                        share_by_label.get(fuel_label, 0.0)
+                    )
+        return lookup
+    except Exception as exc:
+        print(f"Failed to build output share lookup: {exc}")
+        try_debug_breakpoint()
+        raise
+
+
 def build_scenario_specific_rows(
     process_records,
     scenario,
@@ -2530,18 +2908,193 @@ def build_transformation_log_rows(
     """Return log-style rows for LEAP import from process records."""
     try:
         rows = []
+        process_feedstock_labels = _build_feedstock_label_universe(process_records)
+        process_share_lookup = _build_process_share_lookup(
+            process_records,
+            code_to_name_mapping,
+            base_year,
+            final_year,
+        )
+        output_share_lookup = _build_output_share_lookup(
+            process_records,
+            code_to_name_mapping,
+            base_year,
+            final_year,
+        )
+        emitted_output_share_sectors = set()
         scenario_base_year, scenario_final_year = resolve_scenario_year_range(
             base_year,
             final_year,
             scenario_config,
         )
         for record in process_records:
+            economy = str(record.get("economy") or "").strip()
             sector_title = map_code_label(record.get("sector_title"), code_to_name_mapping)
             process_name = map_code_label(record.get("process_name"), code_to_name_mapping)
             output_values = record.get("output_values", {})
             feedstock_shares = record.get("feedstock_shares", {})
             auxiliary_ratios = record.get("auxiliary_ratios", {})
             efficiency = record.get("efficiency")
+            sector_key = (economy, str(sector_title))
+            if sector_key not in emitted_output_share_sectors:
+                sector_output_shares = output_share_lookup.get(sector_key, {})
+                for fuel_label, value in sorted(sector_output_shares.items(), key=lambda item: str(item[0])):
+                    value_by_year = clip_value_by_year_range(
+                        value,
+                        scenario_base_year,
+                        scenario_final_year,
+                    )
+                    branch_path = build_branch_path(
+                        [
+                            "Transformation",
+                            sector_title,
+                            "Output Fuels",
+                            str(fuel_label),
+                        ]
+                    )
+                    rows.extend(
+                        build_year_rows(
+                            branch_path,
+                            "Output Share",
+                            scenario,
+                            value_by_year,
+                            "Share",
+                            "%",
+                            "",
+                        )
+                    )
+                emitted_output_share_sectors.add(sector_key)
+
+            scenario_process_share = record.get("process_share_by_year")
+            if isinstance(scenario_process_share, dict) and scenario_process_share:
+                process_share = scenario_process_share
+            else:
+                process_share = process_share_lookup.get(
+                    (economy, str(sector_title), str(process_name)),
+                    {},
+                )
+            if isinstance(process_share, dict):
+                process_share_by_year = clip_value_by_year_range(
+                    process_share,
+                    scenario_base_year,
+                    scenario_final_year,
+                )
+            else:
+                process_share_by_year = build_value_by_year(
+                    process_share,
+                    scenario_base_year,
+                    scenario_final_year,
+                )
+            process_branch_path = build_branch_path(
+                ["Transformation", sector_title, "Processes", str(process_name)]
+            )
+            rows.extend(
+                build_year_rows(
+                    process_branch_path,
+                    "Process Share",
+                    scenario,
+                    process_share_by_year,
+                    "Share",
+                    "%",
+                    "",
+                )
+            )
+
+            capacity_units = str(record.get("capacity_units") or "Petajoule/Year")
+            historical_production_by_year = record.get("historical_production_by_year")
+            if isinstance(historical_production_by_year, dict) and historical_production_by_year:
+                historical_values = clip_value_by_year_range(
+                    historical_production_by_year,
+                    scenario_base_year,
+                    scenario_final_year,
+                )
+                rows.extend(
+                    build_year_rows(
+                        process_branch_path,
+                        "Historical Production",
+                        scenario,
+                        historical_values,
+                        capacity_units,
+                        "",
+                        "",
+                    )
+                )
+
+            exogenous_capacity_by_year = record.get("exogenous_capacity_by_year")
+            if isinstance(exogenous_capacity_by_year, dict) and exogenous_capacity_by_year:
+                exogenous_values = clip_value_by_year_range(
+                    exogenous_capacity_by_year,
+                    scenario_base_year,
+                    scenario_final_year,
+                )
+                rows.extend(
+                    build_year_rows(
+                        process_branch_path,
+                        "Exogenous Capacity",
+                        scenario,
+                        exogenous_values,
+                        capacity_units,
+                        "",
+                        "",
+                    )
+                )
+
+            endogenous_capacity_by_year = record.get("endogenous_capacity_by_year")
+            if isinstance(endogenous_capacity_by_year, dict) and endogenous_capacity_by_year:
+                endogenous_values = clip_value_by_year_range(
+                    endogenous_capacity_by_year,
+                    scenario_base_year,
+                    scenario_final_year,
+                )
+                rows.extend(
+                    build_year_rows(
+                        process_branch_path,
+                        "Endogenous Capacity",
+                        scenario,
+                        endogenous_values,
+                        capacity_units,
+                        "",
+                        "",
+                    )
+                )
+
+            max_availability_by_year = record.get("maximum_availability_by_year")
+            if isinstance(max_availability_by_year, dict) and max_availability_by_year:
+                availability_values = clip_value_by_year_range(
+                    max_availability_by_year,
+                    scenario_base_year,
+                    scenario_final_year,
+                )
+                rows.extend(
+                    build_year_rows(
+                        process_branch_path,
+                        "Maximum Availability",
+                        scenario,
+                        availability_values,
+                        "Percent",
+                        "",
+                        "",
+                    )
+                )
+
+            capacity_credit_by_year = record.get("capacity_credit_by_year")
+            if isinstance(capacity_credit_by_year, dict) and capacity_credit_by_year:
+                credit_values = clip_value_by_year_range(
+                    capacity_credit_by_year,
+                    scenario_base_year,
+                    scenario_final_year,
+                )
+                rows.extend(
+                    build_year_rows(
+                        process_branch_path,
+                        "Capacity Credit",
+                        scenario,
+                        credit_values,
+                        "Percent",
+                        "",
+                        "",
+                    )
+                )
 
             if (
                 INCLUDE_OUTPUT_SERIES_IN_LEAP_EXPORT
@@ -2635,13 +3188,13 @@ def build_transformation_log_rows(
                     scenario_base_year,
                     scenario_final_year,
                 )
-                efficiency_by_year = normalize_process_efficiency_to_percent(efficiency_by_year)
-                branch_path = build_branch_path(
-                    ["Transformation", sector_title, "Processes", str(process_name)]
+                efficiency_by_year = normalize_process_efficiency_to_percent(
+                    efficiency_by_year,
+                    input_scale=record.get("efficiency_scale", "ratio"),
                 )
                 rows.extend(
                     build_year_rows(
-                        branch_path,
+                        process_branch_path,
                         "Process Efficiency",
                         scenario,
                         efficiency_by_year,
@@ -2652,8 +3205,14 @@ def build_transformation_log_rows(
                 )
 
             if TRANSFORMATION_OUTPUT_VARIABLES.get("feedstock_share"):
-                normalized_feedstock_shares = normalize_feedstock_shares_for_export(
+                process_key = (
+                    str(record.get("sector_title") or "").strip(),
+                    str(record.get("process_name") or "").strip(),
+                )
+                normalized_feedstock_shares = prepare_feedstock_shares_for_export(
                     feedstock_shares,
+                    record.get("feedstock_values", {}),
+                    process_feedstock_labels.get(process_key, []),
                     scenario_base_year,
                     scenario_final_year,
                 )
@@ -2887,6 +3446,63 @@ def consolidate_transformation_output_rows(
                 record["output_export_targets"] = {}
 
 
+def build_aux_fuel_zero_rows(
+    existing_rows,
+    full_branch_catalog_df,
+    scenarios,
+    base_year,
+    final_year,
+):
+    """
+    Return zero-value Auxiliary Fuel Use rows for any catalog branches not already set.
+
+    Scans existing_rows for (scenario, Branch_Path) pairs already written with variable
+    'Auxiliary Fuel Use'.  For every 'Auxiliary Fuels' branch in full_branch_catalog_df
+    that is not covered for a given scenario, generates rows with value 0 spanning
+    base_year..final_year.  This ensures stale aux-fuel values left in LEAP from
+    previous runs are explicitly cleared.
+    """
+    if full_branch_catalog_df is None or (
+        hasattr(full_branch_catalog_df, "empty") and full_branch_catalog_df.empty
+    ):
+        return []
+
+    # Collect (scenario, branch_path) pairs already written for Auxiliary Fuel Use.
+    existing: set[tuple[str, str]] = set()
+    for row in existing_rows:
+        if str(row.get("Measure", "")).strip() == "Auxiliary Fuel Use":
+            existing.add((str(row.get("Scenario", "")), str(row.get("Branch_Path", ""))))
+
+    aux_catalog = full_branch_catalog_df[
+        full_branch_catalog_df["fuel_group"].astype(str).str.strip() == "Auxiliary Fuels"
+    ]
+    if aux_catalog.empty:
+        return []
+
+    zero_rows = []
+    years = list(range(int(base_year), int(final_year) + 1))
+    for scenario in scenarios:
+        for _, catalog_row in aux_catalog.iterrows():
+            branch_path = str(catalog_row.get("branch_path", "")).strip()
+            if not branch_path:
+                continue
+            if (scenario, branch_path) not in existing:
+                for year in years:
+                    zero_rows.append(
+                        {
+                            "Branch_Path": branch_path,
+                            "Scenario": scenario,
+                            "Measure": "Auxiliary Fuel Use",
+                            "Units": DEFAULT_AUXILIARY_UNITS,
+                            "Scale": "",
+                            "Per...": DEFAULT_AUXILIARY_PER,
+                            "Date": year,
+                            "Value": 0.0,
+                        }
+                    )
+    return zero_rows
+
+
 def save_transformation_export(
     process_records,
     region,
@@ -2897,6 +3513,7 @@ def save_transformation_export(
     output_filename,
     model_name,
     scenarios,
+    full_branch_catalog_df=None,
 ):
     """Save a LEAP import file built from process records across scenarios."""
     try:
@@ -2928,6 +3545,16 @@ def save_transformation_export(
                     scenario_config=scenario_config,
                 )
             )
+        if full_branch_catalog_df is not None:
+            zero_rows = build_aux_fuel_zero_rows(
+                combined_rows,
+                full_branch_catalog_df,
+                scenarios,
+                combined_base_year,
+                combined_final_year,
+            )
+            if zero_rows:
+                combined_rows = zero_rows + combined_rows
         if not combined_rows:
             print("No log rows generated across scenarios; skipping export.")
             return None
@@ -3344,6 +3971,11 @@ def analyze_lng_liquefaction_regas(
         def _build_lng_process(process_name, output_label, output_series, input_series_by_label, loss_values_by_year):
             if output_series.sum() == 0 and not input_series_by_label:
                 return
+            sector_title = (
+                lng_config.get("regasification_title", "NG Regasification")
+                if str(process_name).strip().lower() == "regasification"
+                else lng_config.get("liquefaction_title", lng_config.get("title", "NG Liquefaction"))
+            )
             total_input_series = build_total_input_series(input_series_by_label, export_years)
             total_loss_by_year = sum_loss_values_by_year(loss_values_by_year, export_years)
             output_import_targets_total, output_export_targets_total = gather_output_target_dicts(
@@ -3376,6 +4008,7 @@ def analyze_lng_liquefaction_regas(
                     auxiliary_fuels, auxiliary_ratios = build_auxiliary_from_losses_by_year(
                         allocated_loss_values,
                         allocated_output_series,
+                        feedstock_labels=[feedstock_label],
                     )
                     output_import_targets = {
                         label: scale_year_dict_by_share(values, share_series)
@@ -3414,7 +4047,7 @@ def analyze_lng_liquefaction_regas(
                         process_records,
                         build_process_record(
                             economy,
-                            lng_config.get("title", "NG Liquefaction"),
+                            sector_title,
                             process_label,
                             {
                                 output_label: series_to_year_dict(
@@ -3448,6 +4081,7 @@ def analyze_lng_liquefaction_regas(
                 auxiliary_fuels, auxiliary_ratios = build_auxiliary_from_losses_by_year(
                     loss_values_by_year,
                     output_series,
+                    feedstock_labels=list(input_series_by_label.keys()),
                 )
                 efficiency_series = compute_efficiency_by_year(
                     output_series,
@@ -3489,7 +4123,7 @@ def analyze_lng_liquefaction_regas(
                     process_records,
                     build_process_record(
                         economy,
-                        lng_config.get("title", "NG Liquefaction"),
+                        sector_title,
                         process_name,
                         {
                             output_label: series_to_year_dict(
@@ -3543,7 +4177,7 @@ def analyze_lng_liquefaction_regas(
             )
             efficiency_series = compute_efficiency_by_year(
                 output_series,
-                input_series,
+                total_input_series,
                 total_loss_by_year,
             )
             print_leap_structure_block(
@@ -3570,7 +4204,7 @@ def analyze_lng_liquefaction_regas(
                 process_records,
                 build_process_record(
                     economy,
-                    lng_config.get("title", "NG Liquefaction"),
+                    sector_title,
                     process_name,
                     {
                         output_label: series_to_year_dict(
@@ -3594,7 +4228,7 @@ def analyze_lng_liquefaction_regas(
                         export_final_year,
                     ),
                     feedstock_shares={primary_input: 1.0},
-                    input_total=float(input_series.sum()),
+                    input_total=float(total_input_series.sum()),
                     output_import_targets=output_import_targets_total,
                     output_export_targets=output_export_targets_total,
                 ),
@@ -3669,6 +4303,7 @@ def analyze_gas_processing(
         export_years = list(range(export_base_year, export_final_year + 1))
 
         def _build_gas_process_records(
+            sector_title,
             process_name,
             output_label,
             process_rows,
@@ -3746,6 +4381,7 @@ def analyze_gas_processing(
                     auxiliary_fuels, auxiliary_ratios = build_auxiliary_from_losses_by_year(
                         allocated_loss_values,
                         allocated_output_series,
+                        feedstock_labels=[feedstock_label],
                     )
                     output_import_targets = {
                         label: scale_year_dict_by_share(values, share_series)
@@ -3782,7 +4418,7 @@ def analyze_gas_processing(
                     )
                     record = build_process_record(
                         economy,
-                        gas_config.get("title", process_name),
+                        sector_title,
                         process_label,
                         {output_label: series_to_year_dict(allocated_output_series, export_base_year, export_final_year)},
                         {feedstock_label: series_to_year_dict(input_series, export_base_year, export_final_year)},
@@ -3805,6 +4441,7 @@ def analyze_gas_processing(
                 auxiliary_fuels, auxiliary_ratios = build_auxiliary_from_losses_by_year(
                     loss_values_by_year,
                     output_series,
+                    feedstock_labels=list(input_series_map.keys()),
                 )
                 efficiency_series = compute_efficiency_by_year(
                     output_series,
@@ -3844,7 +4481,7 @@ def analyze_gas_processing(
                 )
                 record = build_process_record(
                     economy,
-                    gas_config.get("title", process_name),
+                    sector_title,
                     process_name,
                     {output_label: series_to_year_dict(output_series, export_base_year, export_final_year)},
                     feedstock_values,
@@ -3885,7 +4522,7 @@ def analyze_gas_processing(
                 )
                 efficiency_series = compute_efficiency_by_year(
                     output_series,
-                    input_series,
+                    total_input_series,
                     total_loss_by_year,
                 )
                 print_leap_structure_block(
@@ -3910,7 +4547,7 @@ def analyze_gas_processing(
                 )
                 record = build_process_record(
                     economy,
-                    gas_config.get("title", process_name),
+                    sector_title,
                     process_name,
                     {output_label: series_to_year_dict(output_series, export_base_year, export_final_year)},
                     {primary_input: series_to_year_dict(input_series, export_base_year, export_final_year)},
@@ -3924,7 +4561,7 @@ def analyze_gas_processing(
                         export_final_year,
                     ),
                     feedstock_shares={primary_input: 1.0},
-                    input_total=float(input_series.sum()),
+                    input_total=float(total_input_series.sum()),
                     output_import_targets=output_import_targets_total,
                     output_export_targets=output_export_targets_total,
                 )
@@ -3983,8 +4620,12 @@ def analyze_gas_processing(
         output_label = fuel_codes["gas_works_gas"]
         if "products" in esto_data.columns:
             output_label = product_code_gas_works_gas
+        gas_works_sector_title = str(
+            gas_config.get("title", "Gas works plants")
+        ).strip() or "Gas works plants"
         _build_gas_process_records(
-            "Gas works",
+            gas_works_sector_title,
+            "Gas works plants",
             output_label,
             gas_works_rows,
             gas_works_output,
@@ -4048,8 +4689,15 @@ def analyze_gas_processing(
         output_label = fuel_codes["natural_gas"]
         if "products" in esto_data.columns:
             output_label = product_code_natural_gas
+        blending_sector_title = str(
+            MAJOR_SECTOR_CONFIG.get("gas_blending", {}).get(
+                "title",
+                "Natural gas blending plants",
+            )
+        ).strip() or "Natural gas blending plants"
         _build_gas_process_records(
-            "Natural gas blending",
+            blending_sector_title,
+            "Natural gas blending plants",
             output_label,
             blending_rows,
             blending_output,
@@ -4205,6 +4853,7 @@ def summarize_transformation_flows(
                     auxiliary_fuels, auxiliary_ratios = build_auxiliary_from_losses_by_year(
                         allocated_loss_values,
                         allocated_output_series,
+                        feedstock_labels=[feedstock_label],
                     )
                     output_import_targets = {
                         label: scale_year_dict_by_share(values, share_series)
@@ -4282,6 +4931,7 @@ def summarize_transformation_flows(
                 auxiliary_fuels, auxiliary_ratios = build_auxiliary_from_losses_by_year(
                     loss_values_by_year,
                     output_series,
+                    feedstock_labels=list(input_series_map.keys()),
                 )
                 loss_total_for_eff = total_loss_by_year
                 efficiency_series = compute_efficiency_by_year(
@@ -4361,9 +5011,11 @@ def summarize_transformation_flows(
                     print(f"{flow_code}: primary input series missing after normalization")
                     continue
                 loss_total_for_eff = total_loss_by_year
+                # Compute efficiency from total process input so auxiliary
+                # feedstocks are included in the denominator.
                 efficiency_series = compute_efficiency_by_year(
                     output_series,
-                    input_series,
+                    total_input_series,
                     loss_total_for_eff,
                 )
                 print_leap_structure_block(
@@ -4402,7 +5054,7 @@ def summarize_transformation_flows(
                         export_final_year,
                     ),
                     feedstock_shares={primary_input: 1.0},
-                    input_total=float(input_series.sum()),
+                    input_total=float(total_input_series.sum()),
                     output_import_targets=output_import_targets_total,
                     output_export_targets=output_export_targets_total,
                 )
@@ -4767,6 +5419,7 @@ def analyze_hydrogen_transformation(
                         auxiliary_fuels, auxiliary_ratios = build_auxiliary_from_losses_by_year(
                             allocated_loss_values,
                             allocated_output_total,
+                            feedstock_labels=[feedstock_label],
                         )
                         output_import_targets = {
                             label: scale_year_dict_by_share(values, feedstock_share_series)
@@ -4843,6 +5496,7 @@ def analyze_hydrogen_transformation(
                     auxiliary_fuels, auxiliary_ratios = build_auxiliary_from_losses_by_year(
                         loss_values_by_year,
                         total_output_series,
+                        feedstock_labels=list(input_series_by_label.keys()),
                     )
                     efficiency_series = compute_efficiency_by_year(
                         total_output_series,
@@ -4935,9 +5589,11 @@ def analyze_hydrogen_transformation(
                         total_output_series,
                         primary_input,
                     )
+                    # Use total process input for efficiency so years where the
+                    # chosen primary fuel is zero do not inflate efficiency.
                     efficiency_series = compute_efficiency_by_year(
                         total_output_series,
-                        input_series,
+                        input_total_series,
                         total_loss_by_year,
                     )
                     output_values = {
@@ -5163,6 +5819,7 @@ def run_hydrogen_transformation_analysis(
 RUN_LNG_ANALYSIS = workflow_cfg.TRANSFORMATION_RUN_LNG_ANALYSIS
 RUN_GAS_PROCESSING_ANALYSIS = workflow_cfg.TRANSFORMATION_RUN_GAS_PROCESSING_ANALYSIS
 RUN_COAL_TRANSFORMATION_ANALYSIS = workflow_cfg.TRANSFORMATION_RUN_COAL_TRANSFORMATION_ANALYSIS
+RUN_OTHER_TRANSFORMATION_ANALYSIS = workflow_cfg.TRANSFORMATION_RUN_OTHER_TRANSFORMATION_ANALYSIS
 RUN_CHARCOAL_PROCESSING_ANALYSIS = workflow_cfg.TRANSFORMATION_RUN_CHARCOAL_PROCESSING_ANALYSIS
 RUN_NONSPECIFIED_TRANSFORMATION_ANALYSIS = (
     workflow_cfg.TRANSFORMATION_RUN_NONSPECIFIED_TRANSFORMATION_ANALYSIS
@@ -5245,8 +5902,23 @@ def compute_combined_year_range(base_year, final_year, scenario_configs):
 #%%
 ######### LOAD DATA #########
 ensure_repo_root()
-ninth_data_raw = load_csv_data(ESTO_DATA_PATH, "ESTO data (9th)")
-esto_data_raw = load_csv_data(MATT_DATA_PATH, "Matt data")
+workflow_common.archive_config_dir_once_per_day()
+esto_data_raw, ninth_data_raw = load_augmented_reference_tables(
+    esto_path=MATT_DATA_PATH,
+    ninth_path=ESTO_DATA_PATH,
+    subtotal_mapping_path=SUBTOTAL_MAPPING_PATH,
+    synthetic_rules_path=CONFIG_DIR / "synthetic_reference_rows.csv",
+    cache_dir=REFERENCE_CACHE_DIR,
+    apply_esto_subtotal_map=True,
+    filter_esto_subtotals_flag=False,
+    filter_ninth_subtotals_flag=False,
+)
+print(
+    f"Loaded ESTO data (augmented): {esto_data_raw.shape[0]} rows, {esto_data_raw.shape[1]} columns"
+)
+print(
+    f"Loaded 9th data (augmented): {ninth_data_raw.shape[0]} rows, {ninth_data_raw.shape[1]} columns"
+)
  # Note: matt data lacks sub-sector columns; keep available for dataset_key="matt" only.
 
 ninth_data_raw, ninth_year_cols = normalize_year_columns(ninth_data_raw)

@@ -7,6 +7,8 @@ from typing import Any
 
 import pandas as pd
 
+from codebase.utilities.master_config import config_table_exists, read_config_table
+
 from codebase.functions.leap_excel_io import read_export_sheet
 from codebase.functions.leap_expressions import expression_to_series
 from codebase.functions.leap_labels import clean_fuel_label_for_leap
@@ -14,7 +16,11 @@ from codebase.functions.ninth_projection_mapping import (
     build_esto_projection_table,
     normalize_economy_key,
 )
-from codebase.scrapbook.utilities import apply_matt_subtotal_mapping, filter_matt_subtotals
+from codebase.scrapbook.utilities import (
+    apply_matt_subtotal_mapping,
+    filter_matt_subtotals,
+    load_augmented_reference_tables,
+)
 
 FUEL_GROUP_LABELS = ("Output Fuels", "Feedstock Fuels", "Auxiliary Fuels")
 REQUIRED_MAPPING_COLUMNS = [
@@ -69,7 +75,7 @@ class ComparisonRunConfig:
     ninth_to_esto_mapping_path: str | Path
     base_year: int = 2022
     projection_start_year: int = 2023
-    projection_end_year: int = 2061
+    projection_end_year: int = 2060
     output_dir: str | Path = Path("outputs") / "series_comparison"
 
 
@@ -89,10 +95,8 @@ class TransportResultsComparisonConfig:
     economy: str
     scenario: str
     region: str
-    branch_sector_mapping_csv: str | Path = (
-        Path("config") / "leap_transport_branch_to_ninth_sector_map.csv"
-    )
-    fuel_aliases_csv: str | Path = Path("config") / "leap_transport_fuel_aliases.csv"
+    branch_sector_mapping_csv: str | Path = Path()
+    fuel_aliases_csv: str | Path = Path()
     code_to_name_path: str | Path = Path("config") / "sector_fuel_codes_to_names.xlsx"
     code_to_name_sheet: str = "code_to_name"
     esto_data_path: str | Path = Path("data") / "00APEC_2024_low.csv"
@@ -105,7 +109,7 @@ class TransportResultsComparisonConfig:
     )
     base_year: int = 2022
     projection_start_year: int = 2023
-    projection_end_year: int = 2061
+    projection_end_year: int = 2060
     share_year_offset: int = 1
     ninth_scenario: str = "reference"
     output_dir: str | Path = (
@@ -182,7 +186,7 @@ def _extract_fuel_label_from_branch_path(branch_path: str) -> str:
 
 def _read_leap_table(path: Path, sheet_name: str) -> pd.DataFrame:
     if path.suffix.lower() == ".csv":
-        return pd.read_csv(path)
+        return read_config_table(path)
 
     try:
         _, data, _ = read_export_sheet(path, sheet_name=sheet_name)
@@ -191,9 +195,9 @@ def _read_leap_table(path: Path, sheet_name: str) -> pd.DataFrame:
         pass
 
     try:
-        return pd.read_excel(path, sheet_name=sheet_name, header=2)
+        return read_config_table(path, sheet_name=sheet_name, header=2)
     except Exception:
-        return pd.read_excel(path, sheet_name=sheet_name)
+        return read_config_table(path, sheet_name=sheet_name)
 
 
 def _load_and_normalize_leap_rows(
@@ -288,7 +292,7 @@ def _load_and_normalize_leap_rows(
 
 
 def _load_mapping(mapping_csv: Path) -> pd.DataFrame:
-    mapping = pd.read_csv(mapping_csv).fillna("")
+    mapping = read_config_table(mapping_csv).fillna("")
     missing = [col for col in REQUIRED_MAPPING_COLUMNS if col not in mapping.columns]
     if missing:
         raise ValueError(
@@ -306,10 +310,17 @@ def _load_esto_data(
     esto_data_path: Path,
     subtotal_mapping_path: Path,
 ) -> pd.DataFrame:
-    df = pd.read_csv(esto_data_path)
+    df, _ = load_augmented_reference_tables(
+        esto_path=esto_data_path,
+        ninth_path=Path("data/merged_file_energy_ALL_20251106.csv"),
+        subtotal_mapping_path=subtotal_mapping_path,
+        synthetic_rules_path=Path("config/synthetic_reference_rows.csv"),
+        cache_dir=Path("data/.cache/leap_series_comparison_reference_tables"),
+        apply_esto_subtotal_map=True,
+        filter_esto_subtotals_flag=True,
+        filter_ninth_subtotals_flag=False,
+    )
     df, _ = _normalize_year_columns(df)
-    df = apply_matt_subtotal_mapping(df, subtotal_mapping_path)
-    df = filter_matt_subtotals(df)
     df["flows"] = df["flows"].astype(str).str.strip()
     df["products"] = df["products"].astype(str).str.strip()
     df["economy_key"] = df["economy"].apply(normalize_economy_key)
@@ -317,16 +328,24 @@ def _load_esto_data(
 
 
 def _load_ninth_data(ninth_data_path: Path) -> pd.DataFrame:
-    df = pd.read_csv(ninth_data_path)
+    _, df = load_augmented_reference_tables(
+        esto_path=Path("data/00APEC_2025_low_with_subtotals.csv"),
+        ninth_path=ninth_data_path,
+        synthetic_rules_path=Path("config/synthetic_reference_rows.csv"),
+        cache_dir=Path("data/.cache/leap_series_comparison_reference_tables"),
+        apply_esto_subtotal_map=False,
+        filter_esto_subtotals_flag=False,
+        filter_ninth_subtotals_flag=False,
+    )
     df, _ = _normalize_year_columns(df)
     return df
 
 
 def _load_mapping_pairs(mapping_path: Path) -> pd.DataFrame:
     if mapping_path.suffix.lower() in {".xlsx", ".xls"}:
-        df = pd.read_excel(mapping_path, dtype=str).fillna("")
+        df = read_config_table(mapping_path, dtype=str).fillna("")
     else:
-        df = pd.read_csv(mapping_path, dtype=str).fillna("")
+        df = read_config_table(mapping_path, dtype=str).fillna("")
     for col in ["9th_sector", "9th_fuel", "esto_flow", "esto_product"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
@@ -1049,7 +1068,7 @@ def _load_transport_results_tables(
 
 
 def _load_transport_branch_mapping(path: Path) -> pd.DataFrame:
-    mapping = pd.read_csv(path).fillna("")
+    mapping = read_config_table(path).fillna("")
     missing = [
         col
         for col in TRANSPORT_BRANCH_MAPPING_COLUMNS
@@ -1074,7 +1093,7 @@ def _load_transport_branch_mapping(path: Path) -> pd.DataFrame:
 
 
 def _load_transport_fuel_aliases(path: Path) -> pd.DataFrame:
-    aliases = pd.read_csv(path).fillna("")
+    aliases = read_config_table(path).fillna("")
     missing = [col for col in TRANSPORT_FUEL_ALIAS_COLUMNS if col not in aliases.columns]
     if missing:
         raise ValueError(
@@ -1093,7 +1112,7 @@ def _load_transport_fuel_aliases(path: Path) -> pd.DataFrame:
 
 
 def _load_code_to_name(path: Path, sheet_name: str) -> pd.DataFrame:
-    codebook = pd.read_excel(path, sheet_name=sheet_name, dtype=str).fillna("")
+    codebook = read_config_table(path, sheet_name=sheet_name, dtype=str).fillna("")
     required = {"9th_label", "9th_column", "esto_label", "esto_column", "name"}
     missing = required - set(codebook.columns)
     if missing:
@@ -1483,6 +1502,11 @@ def _write_transport_comparison_charts(
 def run_transport_results_table_comparison(
     config: TransportResultsComparisonConfig,
 ) -> ComparisonArtifacts:
+    raise RuntimeError(
+        "The transport results-table comparison workflow has been removed. "
+        "Use codebase/leap_results_dashboard_workflow.py instead."
+    )
+
     leap_results_file = Path(config.leap_results_file)
     branch_sector_mapping_csv = Path(config.branch_sector_mapping_csv)
     fuel_aliases_csv = Path(config.fuel_aliases_csv)
@@ -2215,8 +2239,6 @@ def run_transport_results_table_comparison(
 
 __all__ = [
     "ComparisonRunConfig",
-    "TransportResultsComparisonConfig",
     "ComparisonArtifacts",
     "run_leap_series_comparison",
-    "run_transport_results_table_comparison",
 ]

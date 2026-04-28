@@ -9,6 +9,8 @@ import re
 
 import pandas as pd
 
+from codebase.utilities.master_config import read_config_table
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 WORKBOOK_PATH = REPO_ROOT / "config" / "sector_fuel_codes_to_names.xlsx"
@@ -31,7 +33,7 @@ ESTO_CODE_PATTERN = re.compile(r"^\d+(?:\.\d+)*")
 
 
 def _read_sheet(workbook_path: Path, sheet_name: str) -> pd.DataFrame:
-    return pd.read_excel(workbook_path, sheet_name=sheet_name, dtype=str).fillna("")
+    return read_config_table(workbook_path, sheet_name=sheet_name, dtype=str).fillna("")
 
 
 def _extract_ninth_code(label: str) -> str:
@@ -104,7 +106,10 @@ def _find_code_matches(
     for i in range(len(segments), 0, -1):
         candidate = ".".join(segments[:i])
         if candidate in esto_code_index:
-            method = "code_exact" if i == len(segments) else f"code_ancestor_{len(segments) - i}"
+            if i == len(segments):
+                method = "direct_code_match"
+            else:
+                method = f"parent_code_match_{len(segments) - i}_levels_up"
             labels = esto_code_index[candidate]
             if allowed_esto_columns:
                 labels = [

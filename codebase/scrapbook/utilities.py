@@ -1,7 +1,23 @@
 #%%
 # Summary: Label and optionally export subtotal rows in the ESTO (Matt) dataset.
 import os
+import json
+import hashlib
+from pathlib import Path
 import pandas as pd
+
+from codebase.utilities.master_config import config_table_exists, read_config_table
+
+from codebase.mappings.canonical_mapping import load_canonical_pairs
+from codebase.utilities.leap_results_dashboard_utils import (
+    apply_explicit_sector_reassignments,
+    load_explicit_sector_fuel_mappings,
+    load_explicit_sector_reassignments,
+)
+from codebase.utilities.leap_results_dashboard_v2.reference_loader import (
+    append_synthetic_reference_rows,
+    load_synthetic_reference_rows_config,
+)
 #%%
 
 #%%
@@ -44,7 +60,19 @@ def apply_matt_subtotal_mapping(df, mapping_path):
         Reads from disk.
     """
     try:
-        mapping = pd.read_excel(mapping_path, dtype=str)
+        if "is_subtotal" in df.columns:
+            matt = df.copy()
+            matt["is_subtotal"] = (
+                matt["is_subtotal"]
+                .fillna(False)
+                .astype(str)
+                .str.strip()
+                .str.lower()
+                .isin(["true", "1", "yes"])
+            )
+            return matt
+
+        mapping = read_config_table(mapping_path, dtype=str)
         normalized_cols = {col: str(col).strip().lower() for col in mapping.columns}
         mapping = mapping.rename(columns=normalized_cols)
 
@@ -173,6 +201,140 @@ def save_subtotal_labeled_data(df, output_path, label):
         print(f"Failed to save {label} to {output_path}: {exc}")
         try_debug_breakpoint()
         raise
+
+
+def _file_signature(path):
+    path = Path(path)
+    if not path.exists():
+        return {"path": str(path), "exists": False}
+    stat = path.stat()
+    return {
+        "path": str(path.resolve()),
+        "exists": True,
+        "size": int(stat.st_size),
+        "mtime_ns": int(stat.st_mtime_ns),
+    }
+
+
+def _build_reference_cache_key(payload):
+    blob = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(blob).hexdigest()[:16]
+
+
+def load_augmented_reference_tables(
+    *,
+    esto_path,
+    ninth_path,
+    subtotal_mapping_path=None,
+    explicit_reassignments_path=None,
+    explicit_mappings_path=None,
+    canonical_pairs_path=None,
+    synthetic_rules_path="config/synthetic_reference_rows.csv",
+    cache_dir="data/.cache/augmented_reference_tables",
+    apply_esto_subtotal_map=False,
+    filter_esto_subtotals_flag=False,
+    filter_ninth_subtotals_flag=False,
+):
+    """Load ESTO + 9th tables with optional subtotal cleanup, explicit reassignments,
+    and synthetic-row augmentation, then cache the augmented result on disk.
+
+    The cache is invalidated automatically when any source/config file or option changes.
+    """
+    ensure_repo_root()
+    esto_path = Path(esto_path)
+    ninth_path = Path(ninth_path)
+    subtotal_mapping_path = Path(subtotal_mapping_path) if subtotal_mapping_path else None
+    explicit_reassignments_path = (
+        Path(explicit_reassignments_path) if explicit_reassignments_path else None
+    )
+    explicit_mappings_path = Path(explicit_mappings_path) if explicit_mappings_path else None
+    canonical_pairs_path = Path(canonical_pairs_path) if canonical_pairs_path else None
+    synthetic_rules_path = Path(synthetic_rules_path) if synthetic_rules_path else None
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    cache_payload = {
+        "esto": _file_signature(esto_path),
+        "ninth": _file_signature(ninth_path),
+        "subtotal_mapping": _file_signature(subtotal_mapping_path) if subtotal_mapping_path else {},
+        "explicit_reassignments": _file_signature(explicit_reassignments_path) if explicit_reassignments_path else {},
+        "explicit_mappings": _file_signature(explicit_mappings_path) if explicit_mappings_path else {},
+        "canonical_pairs": _file_signature(canonical_pairs_path) if canonical_pairs_path else {},
+        "synthetic_rules": _file_signature(synthetic_rules_path) if synthetic_rules_path else {},
+        "options": {
+            "apply_esto_subtotal_map": bool(apply_esto_subtotal_map),
+            "filter_esto_subtotals_flag": bool(filter_esto_subtotals_flag),
+            "filter_ninth_subtotals_flag": bool(filter_ninth_subtotals_flag),
+        },
+    }
+    cache_key = _build_reference_cache_key(cache_payload)
+    esto_cache = cache_dir / f"{cache_key}_esto.csv"
+    ninth_cache = cache_dir / f"{cache_key}_ninth.csv"
+    meta_cache = cache_dir / f"{cache_key}_meta.json"
+
+    if esto_cache.exists() and ninth_cache.exists() and meta_cache.exists():
+        return read_config_table(esto_cache), read_config_table(ninth_cache)
+
+    esto_df = read_config_table(esto_path)
+    ninth_df = read_config_table(ninth_path, low_memory=False)
+
+    if apply_esto_subtotal_map and subtotal_mapping_path:
+        esto_df = apply_matt_subtotal_mapping(esto_df, subtotal_mapping_path)
+    if filter_esto_subtotals_flag:
+        esto_df = filter_matt_subtotals(esto_df)
+    if filter_ninth_subtotals_flag:
+        for subtotal_col in ["subtotal_results", "subtotal_layout"]:
+            if subtotal_col in ninth_df.columns:
+                mask = (
+                    ninth_df[subtotal_col]
+                    .fillna(False)
+                    .astype(str)
+                    .str.strip()
+                    .str.lower()
+                    .isin({"true", "1", "yes"})
+                )
+                ninth_df = ninth_df.loc[~mask].copy()
+
+    explicit_reassignments = (
+        load_explicit_sector_reassignments(explicit_reassignments_path)
+        if explicit_reassignments_path and config_table_exists(explicit_reassignments_path)
+        else pd.DataFrame()
+    )
+    if not explicit_reassignments.empty:
+        esto_df, ninth_df, _ = apply_explicit_sector_reassignments(
+            esto_df,
+            ninth_df,
+            explicit_reassignments,
+        )
+
+    explicit_mappings = (
+        load_explicit_sector_fuel_mappings(explicit_mappings_path)
+        if explicit_mappings_path and explicit_mappings_path.exists()
+        else pd.DataFrame()
+    )
+    canonical_pairs = (
+        load_canonical_pairs(canonical_pairs_path, strict=False)[0]
+        if canonical_pairs_path and config_table_exists(canonical_pairs_path)
+        else pd.DataFrame()
+    )
+    synthetic_rules = (
+        load_synthetic_reference_rows_config(synthetic_rules_path)
+        if synthetic_rules_path and config_table_exists(synthetic_rules_path)
+        else pd.DataFrame()
+    )
+    if not synthetic_rules.empty:
+        esto_df, ninth_df, _ = append_synthetic_reference_rows(
+            esto_df=esto_df,
+            ninth_df=ninth_df,
+            rules=synthetic_rules,
+            explicit_mappings=explicit_mappings,
+            canonical_pairs=canonical_pairs,
+        )
+
+    esto_df.to_csv(esto_cache, index=False)
+    ninth_df.to_csv(ninth_cache, index=False)
+    meta_cache.write_text(json.dumps(cache_payload, indent=2))
+    return esto_df, ninth_df
 #%%
 
 #%%
@@ -189,7 +351,7 @@ ESTO_SUBTOTAL_LABELED_OUTPUT_PATH = "data/00APEC_2024_low_with_subtotals.csv"
 if RUN_LABEL_SUBTOTALS:
     try:
         ensure_repo_root()
-        raw_df = pd.read_csv(ESTO_DATA_PATH)
+        raw_df = read_config_table(ESTO_DATA_PATH)
         labeled = apply_matt_subtotal_mapping(raw_df, SUBTOTAL_MAPPING_PATH)
         if SAVE_ESTO_SUBTOTAL_LABELED:
             save_subtotal_labeled_data(

@@ -1,0 +1,9 @@
+merged_rows=29322
+pair_lookup_rows=9871
+grouped_rows=10844
+missing_pairs_input=8809
+missing_joined_rows=9728
+missing_filtered_subtotal_false_rows=8722
+missing_nonzero_rows=142
+aggregation_csv=/mnt/c/Users/Work/github/leap_utilities/outputs/mappings/mapping_checks/merged_20251106_with_pairs_grouped_by_subtotal_results.csv
+final_csv=/mnt/c/Users/Work/github/leap_utilities/outputs/mappings/mapping_checks/missing_pairs_joined_20251106_years_gt_2022_subtotal_false_nonzero.csv

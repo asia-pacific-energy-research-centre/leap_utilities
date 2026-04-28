@@ -1,5 +1,11 @@
 # Full Model Workflow Post-Run Guide
 
+Note: this guide explains the manual LEAP checks and follow-up actions to run
+after `codebase/full_model_workflow_notebook.py` completes. It records checks
+that are expected to happen in the LEAP GUI or by inspecting generated import
+workbooks. Use it to catch skipped imports, unit-scale issues, and known manual
+settings before treating a full model run as complete.
+
 Companion guide for `codebase/full_model_workflow_notebook.py`.
 Use this after running `run_all_workflows()` to capture manual LEAP steps that are expected or commonly required.
 
@@ -16,7 +22,7 @@ Use this after running `run_all_workflows()` to capture manual LEAP steps that a
 - [ ] Confirm LEAP API was available during run.
 - [ ] If you saw messages like `LEAP API unavailable ... skipping branch creation/fill`, import the generated workbook(s) manually in LEAP.
 
-Typical output files are in `outputs/leap_exports/`.
+Typical output files are in `outputs/leap_exports/standalone/`, `outputs/leap_exports/results_supply_link/`, and `outputs/leap_exports/combined/`.
 
 ### 2) Industry share/saturation scale fix (known issue)
 

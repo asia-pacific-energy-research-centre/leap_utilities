@@ -865,7 +865,7 @@ NINTH_SUB4SECTORS = [
 # 16_x_efuel	subfuels			Other E-fuel
 # 09_01_11_otherfuel	sub2sectors			Other fuel power
 # 18_01_11_otherfuel	sub2sectors			Other fuel power (electricity output)
-# 09_x_02_gas	sub2sectors			Other gas
+# 09_x_02_gas	sub2sectors			Other gas processing
 # 19_02_05_others	sub2sectors			Other heat plants (heat output)
 # 09_x_heat_plants	sub1sectors			Other heat plants 1
 # 09_x_05_others	sub2sectors			Other heat plants 2

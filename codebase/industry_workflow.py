@@ -1,4 +1,13 @@
 #%%
+"""
+Build and optionally import LEAP industry demand branches from export data.
+
+This workflow prepares the industry export workbook, applies optional fuel
+remapping, and fills LEAP demand branches for the configured economy/scenario.
+The detailed notes lower in the file document manual LEAP unit checks that may
+still be needed after import.
+"""
+
 #NOTES AT THE BOTTOM OF THE SCRIPT
 # Industry mapping example using code to create and fill branches from an export file. Useful for setting up industry models in LEAP using data from an Excel export which can be created manually or by exporting the model from another LEAP project.
 #%%
@@ -26,6 +35,10 @@ from codebase.functions.leap_core import (
     create_branches_from_export_file,
     connect_to_leap
 )
+from codebase.functions.analysis_input_write_dispatcher import (
+    dispatch_analysis_input_write,
+    get_analysis_input_write_mode,
+)
 from codebase.functions.leap_exports import list_scenarios as list_export_scenarios
 from codebase.functions.leap_excel_io import (
     copy_energy_spreadsheet_into_leap_import_file,
@@ -33,8 +46,12 @@ from codebase.functions.leap_excel_io import (
     write_export_sheet,
 )
 from codebase.functions.industry_fuel_remap import remap_industry_export_fuels
-# Connect to LEAP
-L = connect_to_leap()
+from codebase.utilities.output_paths import STANDALONE_LEAP_EXPORTS_ROOT
+# Connect to LEAP only when API write mode is active.
+WRITE_MODE = get_analysis_input_write_mode()
+L = None
+if WRITE_MODE == "api":
+    L = connect_to_leap()
 # leap_export_filename = '../outputs/leap_balances_export_file.xlsx'
 # sheet_name = "Energy_Balances"
 CREATE_BRANCHES_FROM_EXPORT_FILE = True
@@ -215,9 +232,7 @@ ESTO_DATA_PATH = '../data/00APEC_2024_low.csv'
 NINTH_DATA_PATH = '../data/merged_file_energy_ALL_20250814_pre_trump.csv'
 ESTO_SUBTOTAL_MAPPING_PATH = '../config/ESTO_subtotal_mapping.xlsx'
 REMAP_OUTPUT_PATH = (
-    REPO_ROOT
-    / 'outputs'
-    / 'leap_exports'
+    STANDALONE_LEAP_EXPORTS_ROOT
     / f"industry_export_remapped_{_safe_filename_segment(ECONOMY)}_{_safe_filename_segment('all_scenarios' if FILL_ALL_SCENARIOS else SCENARIO)}.xlsx"
 )
 REMAP_REPORT_PATH = '../intermediate_data/industry_fuel_remap_report.csv'
@@ -257,7 +272,16 @@ if configured_fill_scenarios:
         mirror_sheet_names=["FOR_VIEWING"] if sheet_name == "LEAP" else None,
     )
 #%%
-if CREATE_BRANCHES_FROM_EXPORT_FILE:
+if WRITE_MODE == "workbook" and (CREATE_BRANCHES_FROM_EXPORT_FILE or FILL_BRANCHES_FROM_EXPORT_FILE):
+    dispatch_analysis_input_write(
+        export_path=Path(leap_export_filename),
+        sheet_name=sheet_name,
+        scenario=configured_fill_scenarios[0] if configured_fill_scenarios else None,
+        region=REGION,
+        context_label="industry_workflow",
+    )
+#%%
+if CREATE_BRANCHES_FROM_EXPORT_FILE and WRITE_MODE == "api":
     create_scenarios = _discover_fill_scenarios(
         leap_export_filename,
         sheet_name,
@@ -288,7 +312,7 @@ if CREATE_BRANCHES_FROM_EXPORT_FILE:
 FILL_BRANCHES_FROM_EXPORT_FILE = True
 HANDLE_CURRENT_ACCOUNTS_TOO = True
 SET_UNITS = True
-if FILL_BRANCHES_FROM_EXPORT_FILE:
+if FILL_BRANCHES_FROM_EXPORT_FILE and WRITE_MODE == "api":
     scenarios_to_fill = _discover_fill_scenarios(
         leap_export_filename,
         sheet_name,
@@ -321,3 +345,14 @@ if FILL_BRANCHES_FROM_EXPORT_FILE:
 #There is a chance that the intensity unit may have a similar issue so check that as well> there arent many intensity variables which need a scale value to be set in the inudstry model so there arent many that need to be checked.
 #when you think you're done i recommend using the tables view in the results tab to verify that the values are correct.
 #%%
+
+
+try:
+    from codebase.utilities.workflow_common import emit_completion_beep as _emit_completion_beep
+except Exception:  # pragma: no cover
+    def _emit_completion_beep(*, success: bool = True) -> None:  # noqa: ARG001
+        return
+
+
+if __name__ == "__main__":  # pragma: no cover
+    _emit_completion_beep(success=True, style="chime")
