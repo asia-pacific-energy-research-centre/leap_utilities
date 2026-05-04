@@ -6,7 +6,7 @@ This workflow extracts REF/TGT LEAP balance workbooks into long-form mapped
 rows, then compares them against ESTO and 9th reference data using ESTO balance
 rows as the chart axis. It writes the comparison tables, mapping diagnostics,
 ledgers, and rendered dashboard outputs under the configured output directory.
-
+ 
 Why ESTO axis:
 - ESTO flow/product rows are a practical middle ground for balance-table
   comparison. They are usually less granular than the full 9th sector/fuel
@@ -20,8 +20,23 @@ Why ESTO axis:
   ESTO-axis rows where no LEAP-derived mapping lineage can be created; it
   reaches directly into the ESTO-to-9th canonical mapping and should not replace
   valid LEAP-derived lineage.
+- The dashboard target universe is built from the active
+  ESTO -> LEAP -> 9th crosswalk in config/leap_mappings.xlsx:
+  leap_combined_esto is joined to leap_combined_ninth on the LEAP sector/fuel
+  path before chart rows are generated. This means mapped 9th rows can still be
+  shown when the corresponding LEAP export row is zero or absent, as long as the
+  9th pair is nonzero in the requested projection slice.
+- LEAP-backed rows get priority when many ESTO products share the same 9th
+  sector/fuel pair. Workbook-only template rows fill gaps, but should not steal
+  shared 9th values from rows that have direct LEAP balance evidence.
+- Transformation charts split signed balance rows at render time: negative
+  values are inputs and displayed as positive magnitudes; positive values are
+  outputs.
 - Simple audit outputs are written for the key ESTO-axis inputs:
   LEAP-to-ESTO rows, 9th-to-ESTO rows, and the combined comparison table.
+- See docs/esto_axis_balance_dashboard_system.md for the full system guide,
+  including mapping expansion, subtotal rules, many-to-many behavior, and
+  debugging steps.
 """
 
 from __future__ import annotations
@@ -29,9 +44,13 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import sys
 from pathlib import Path
 from typing import Sequence
+
+import openpyxl
+from openpyxl import load_workbook
 
 import pandas as pd
 
@@ -218,6 +237,74 @@ def _load_ignored_unmapped_issue_keys(mapping_workbook_path: Path) -> set[tuple[
         if sector and fuel:
             keys.add((sector, fuel))
     return keys
+
+
+def _write_dashboard_about_supplements(
+    *,
+    dashboards_dir: Path,
+    mapping_workbook_path: Path,
+    master_config_path: Path,
+    template_json_path: Path,
+) -> None:
+    """Copy mapping sheets and JSON template into dashboards_dir, then patch about.html."""
+    xlsx_filename = "dashboard_mappings.xlsx"
+    json_filename = "dashboard_template.json"
+
+    # Build mappings xlsx with the three mapping sheets
+    sheets_to_copy = [
+        (mapping_workbook_path, "leap_combined_esto"),
+        (mapping_workbook_path, "leap_combined_ninth"),
+        (master_config_path, "ninth_pairs_to_esto_pairs"),
+    ]
+    out_wb = openpyxl.Workbook()
+    out_wb.remove(out_wb.active)
+    for src_path, sheet_name in sheets_to_copy:
+        if not src_path.exists():
+            continue
+        try:
+            src_wb = load_workbook(src_path, data_only=True, read_only=True)
+            if sheet_name not in src_wb.sheetnames:
+                src_wb.close()
+                continue
+            dst_ws = out_wb.create_sheet(title=sheet_name)
+            for row in src_wb[sheet_name].iter_rows(values_only=True):
+                dst_ws.append(list(row))
+            src_wb.close()
+        except Exception:
+            pass
+    out_wb.save(dashboards_dir / xlsx_filename)
+
+    # Copy JSON template
+    if template_json_path.exists():
+        shutil.copy2(template_json_path, dashboards_dir / json_filename)
+
+    # Patch about.html — inject reference files section and losses note
+    about_path = dashboards_dir / "about.html"
+    if not about_path.exists():
+        return
+    html = about_path.read_text(encoding="utf-8")
+    extra = (
+        '<section class="about-section"><h2>Reference files</h2>'
+        "<ul>"
+        f'<li><a href="{xlsx_filename}">dashboard_mappings.xlsx</a>'
+        " — mapping sheets used to build this dashboard:"
+        " leap_combined_esto, leap_combined_ninth, and ninth_pairs_to_esto_pairs (ESTO-to-9th canonical mapping).</li>"
+        f'<li><a href="{json_filename}">dashboard_template.json</a>'
+        " — the chart navigation template that defines the ESTO-axis structure and dashboard sections.</li>"
+        "</ul>"
+        "</section>"
+        '<section class="about-section"><h2>Note on LEAP values and losses</h2>'
+        "<p>LEAP does not extract losses as a separate line item."
+        " Instead, losses are deducted directly from the value shown for the affected fuel,"
+        " so the fuel figure already has losses subtracted from it."
+        " This means transformation output values can be lower than the equivalent ESTO figure"
+        " — and in some cases can switch from positive to negative —"
+        " simply because the losses have been taken out of the fuel value rather than reported separately.</p>"
+        "</section>"
+    )
+    if "</article>" in html:
+        html = html.replace("</article>", extra + "</article>", 1)
+        about_path.write_text(html, encoding="utf-8")
 
 
 def _issue_source_key(row: pd.Series) -> tuple[str, str]:
@@ -547,6 +634,7 @@ def run_workflow() -> dict[str, object]:
             esto_table_path=BASE_TABLE_PATH,
             projection_table_path=PROJECTION_TABLE_PATH,
             chart_navigation_guide_path=CHART_NAVIGATION_GUIDE_PATH,
+            balance_mapping_workbook_path=_mapping_workbook(LEAP_TO_ESTO_MAPPING),
             known_issues=known_issues,
         )
         comparison_long = comparison["comparison_long"].copy()
@@ -683,6 +771,12 @@ def run_workflow() -> dict[str, object]:
             chart_backend=CHART_BACKEND,
             hide_leap_only_charts=HIDE_LEAP_ONLY_CHARTS,
             chart_navigation_guide_path=CHART_NAVIGATION_GUIDE_PATH,
+        )
+        _write_dashboard_about_supplements(
+            dashboards_dir=Path(str(dashboard_paths["dashboards_dir"])),
+            mapping_workbook_path=_mapping_workbook(LEAP_TO_ESTO_MAPPING),
+            master_config_path=NINTH_TO_ESTO_MAPPING[0],
+            template_json_path=CHART_NAVIGATION_GUIDE_PATH,
         )
         timer.lap("render dashboards")
         chart_line_mapping_ledger = attach_chart_groups_to_dashboard_exposure(

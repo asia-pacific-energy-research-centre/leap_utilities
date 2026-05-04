@@ -14,16 +14,26 @@ import os
 import re
 import shutil
 import sys
+import zipfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Sequence
 
 import pandas as pd
+import openpyxl
 from openpyxl import load_workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
+
+from codebase.utilities.leap_balance_export_resolver import resolve_balance_export_workbook  # noqa: E402
+from codebase.utilities.energy_balance_template_extractor import (  # noqa: E402
+    TemplateBalanceExtractor,
+    _parse_unit_factor_to_petajoule,
+)
+from codebase.utilities.leap_results_dashboard_balance import _list_balance_sheets, _pick_template_sheet  # noqa: E402
 
 
 #%%
@@ -41,6 +51,7 @@ def _resolve(path: Path | str) -> Path:
 
 
 MAPPING_WORKBOOK_PATH = _resolve("config/leap_mappings.xlsx")
+CODEBOOK_PATH = _resolve("config/sector_fuel_codes_to_names.xlsx")
 ESTO_TABLE_PATH = _resolve("data/00APEC_2025_low_with_subtotals.csv")
 NINTH_TABLE_PATH = _resolve("data/merged_file_energy_ALL_20251106.csv")
 OUTPUT_DIR = _resolve("outputs/mappings/mapping_checks")
@@ -64,6 +75,10 @@ NINTH_SHEET = "leap_combined_ninth"
 BASE_YEAR = 2022
 PROJECTION_YEARS: Sequence[int] = tuple(range(2023, 2061))
 PROJECTION_SCENARIOS: Sequence[str] = ("reference", "target")
+BALANCE_EXPORT_ECONOMY = "20_USA"
+REF_BALANCE_EXPORT_DATE_ID: str | None = None
+TGT_BALANCE_EXPORT_DATE_ID: str | None = None
+BALANCE_TEMPLATE_SHEET = "EBal|2060"
 
 
 #%%
@@ -499,6 +514,66 @@ def _active_pairs(frame: pd.DataFrame, col_a: str, col_b: str) -> set[tuple[str,
     return {(av, bv) for av, bv in zip(a, b) if av and bv}
 
 
+def _active_leap_source_pairs(frame: pd.DataFrame) -> set[tuple[str, str]]:
+    """Return active LEAP sector/fuel source pairs from a mapping sheet."""
+    active = frame[_active_mask(frame)].copy()
+    for col in ["leap_sector_name_full_path", "raw_leap_fuel_name"]:
+        if col not in active.columns:
+            active[col] = ""
+        active[col] = active[col].fillna("").astype(str).str.strip()
+    return {
+        (_path_key(sector), _norm_text(fuel))
+        for sector, fuel in zip(active["leap_sector_name_full_path"], active["raw_leap_fuel_name"])
+        if _path_key(sector) and _norm_text(fuel)
+    }
+
+
+def _leap_source_pair_presence_lookup(frame: pd.DataFrame) -> dict[tuple[str, str], dict[str, object]]:
+    """Return active/removed presence counts for LEAP source pairs in a mapping sheet."""
+    work = frame.copy()
+    for col in ["leap_sector_name_full_path", "raw_leap_fuel_name", "remove_row", "duplicate_to_remove"]:
+        if col not in work.columns:
+            work[col] = ""
+    work["leap_sector_name_full_path"] = work["leap_sector_name_full_path"].fillna("").astype(str).str.strip()
+    work["raw_leap_fuel_name"] = work["raw_leap_fuel_name"].fillna("").astype(str).str.strip()
+    work["_source_key"] = list(zip(
+        work["leap_sector_name_full_path"].map(_path_key),
+        work["raw_leap_fuel_name"].map(_norm_text),
+    ))
+    work = work[work["_source_key"].map(lambda key: bool(key[0] and key[1]))].copy()
+    if work.empty:
+        return {}
+
+    work["_is_removed"] = work["remove_row"].map(_truthy)
+    work["_is_duplicate_removed"] = work["duplicate_to_remove"].map(_truthy)
+    work["_is_active"] = ~(work["_is_removed"] | work["_is_duplicate_removed"])
+
+    lookup: dict[tuple[str, str], dict[str, object]] = {}
+    for source_key, group in work.groupby("_source_key", dropna=False):
+        active_count = int(group["_is_active"].sum())
+        removed_count = int(group["_is_removed"].sum())
+        duplicate_removed_count = int(group["_is_duplicate_removed"].sum())
+        total_count = int(len(group))
+        if active_count:
+            state = "active"
+        elif removed_count and duplicate_removed_count:
+            state = "removed_or_duplicate_removed_only"
+        elif removed_count:
+            state = "removed_only"
+        elif duplicate_removed_count:
+            state = "duplicate_removed_only"
+        else:
+            state = "present_but_inactive"
+        lookup[source_key] = {
+            "state": state,
+            "detail": (
+                f"active={active_count}; removed={removed_count}; "
+                f"duplicate_removed={duplicate_removed_count}; total={total_count}"
+            ),
+        }
+    return lookup
+
+
 def _build_duplicate_mappings(frame: pd.DataFrame, *, sheet_name: str, target_a: str, target_b: str) -> pd.DataFrame:
     """Return exact active duplicate source/target rows for one mapping sheet."""
     work = frame.copy().fillna("")
@@ -751,23 +826,209 @@ def _build_trio_presence_check(esto_sheet: pd.DataFrame, ninth_sheet: pd.DataFra
     ).reset_index(drop=True)
 
 
+def _resolve_balance_workbook_for_mapping_check(*, scenario: str, date_id: str | None) -> Path:
+    return resolve_balance_export_workbook(
+        economy=BALANCE_EXPORT_ECONOMY,
+        scenario=scenario,
+        date_id=date_id,
+    )
+
+
+def _extract_raw_balance_workbook(workbook_path: Path) -> pd.DataFrame:
+    """
+    Extract raw nonzero LEAP balance rows without loading or applying mappings.
+
+    The mapping workbook may be incomplete or temporarily invalid while this
+    maintenance workflow is being used to find gaps, so this raw extraction must
+    not depend on mapping rows being valid.
+    """
+    chosen_template = _pick_template_sheet(workbook_path, BALANCE_TEMPLATE_SHEET)
+    extractor = TemplateBalanceExtractor(
+        template_sheet=chosen_template,
+        mapping_pairs_path=MAPPING_WORKBOOK_PATH,
+        codebook_path=CODEBOOK_PATH,
+        reinterpret_fuel_rows_as_parent_sector=False,
+        explicit_pair_mappings_only=True,
+    )
+    workbook = openpyxl.load_workbook(workbook_path, data_only=True, read_only=False)
+    if chosen_template not in workbook.sheetnames:
+        raise ValueError(f"Template sheet {chosen_template!r} not found in workbook: {workbook_path}")
+
+    template_layout = extractor._extract_layout(workbook[chosen_template])
+    selected_sheets = _list_balance_sheets(workbook_path)
+    if not selected_sheets:
+        raise ValueError(f"No balance sheets found in workbook: {workbook_path}")
+
+    frames: list[pd.DataFrame] = []
+    for sheet_name in selected_sheets:
+        worksheet = workbook[sheet_name]
+        meta = extractor._extract_metadata(worksheet)
+        try:
+            sheet_layout = extractor._extract_layout(worksheet)
+        except ValueError:
+            sheet_layout = template_layout
+        extracted = extractor._extract_sheet_matrix(worksheet, template=sheet_layout)
+        if extracted.empty:
+            continue
+        extracted.insert(0, "source_sheet", sheet_name)
+        extracted.insert(1, "source_workbook", str(workbook_path))
+        extracted["area"] = str(meta.get("area", ""))
+        extracted["scenario"] = str(meta.get("scenario", ""))
+        extracted["year"] = meta.get("year")
+        extracted["units"] = str(meta.get("units", ""))
+        factor, parse_status, prefix_label, base_label = _parse_unit_factor_to_petajoule(
+            str(meta.get("units", ""))
+        )
+        extracted["value_original"] = extracted["value"]
+        extracted["units_original"] = extracted["units"]
+        extracted["unit_to_petajoule_factor"] = factor
+        extracted["unit_parse_status"] = parse_status
+        extracted["unit_prefix"] = prefix_label
+        extracted["unit_base"] = base_label
+        if factor is not None:
+            extracted["value_petajoule"] = pd.to_numeric(extracted["value"], errors="coerce") * float(factor)
+        else:
+            extracted["value_petajoule"] = pd.NA
+        extracted["units_petajoule"] = "Petajoule"
+        extracted = extracted[
+            pd.to_numeric(extracted.get("value_petajoule", pd.Series(index=extracted.index)), errors="coerce")
+            .fillna(0.0)
+            .ne(0.0)
+        ].copy()
+        if not extracted.empty:
+            frames.append(extracted)
+
+    if not frames:
+        return pd.DataFrame()
+    raw_long = pd.concat(frames, ignore_index=True, sort=False)
+    dedupe_cols = [
+        "source_sheet",
+        "leap_sector_name",
+        "leap_sector_name_original",
+        "leap_sector_name_full_path",
+        "leap_fuel_name",
+        "value",
+    ]
+    dedupe_cols_present = [col for col in dedupe_cols if col in raw_long.columns]
+    if dedupe_cols_present:
+        raw_long = raw_long.drop_duplicates(subset=dedupe_cols_present).reset_index(drop=True)
+    return raw_long
+
+
+def _load_raw_leap_balance_lookup() -> pd.DataFrame:
+    """
+    Return nonzero raw LEAP balance sector/fuel pairs from REF and TGT exports.
+
+    This intentionally uses raw extractor output rather than mapped rows, so it
+    can find LEAP source pairs that are absent from both mapping sheets.
+    """
+    workbooks = [
+        ("Reference", _resolve_balance_workbook_for_mapping_check(scenario="REF", date_id=REF_BALANCE_EXPORT_DATE_ID)),
+        ("Target", _resolve_balance_workbook_for_mapping_check(scenario="TGT", date_id=TGT_BALANCE_EXPORT_DATE_ID)),
+    ]
+    frames: list[pd.DataFrame] = []
+    for scenario_label, workbook_path in workbooks:
+        raw = _extract_raw_balance_workbook(workbook_path)
+        if raw.empty:
+            continue
+        raw["scenario"] = raw.get("scenario", "").fillna("").astype(str).str.strip()
+        raw.loc[raw["scenario"].eq(""), "scenario"] = scenario_label
+        if "raw_leap_fuel_name" not in raw.columns:
+            raw["raw_leap_fuel_name"] = raw.get("leap_fuel_name", "")
+        for col in ["source_sheet", "leap_sector_name_full_path", "raw_leap_fuel_name"]:
+            if col not in raw.columns:
+                raw[col] = ""
+            raw[col] = raw[col].fillna("").astype(str).str.strip()
+        if "year" not in raw.columns:
+            raw["year"] = pd.NA
+        raw["year"] = pd.to_numeric(raw["year"], errors="coerce")
+        raw["value_petajoule"] = pd.to_numeric(
+            raw.get("value_petajoule", raw.get("value", pd.NA)),
+            errors="coerce",
+        ).fillna(0.0)
+        raw = raw[
+            raw["leap_sector_name_full_path"].ne("")
+            & raw["raw_leap_fuel_name"].ne("")
+            & raw["value_petajoule"].ne(0)
+        ].copy()
+        if raw.empty:
+            continue
+        frames.append(
+            raw[
+                [
+                    "source_sheet",
+                    "scenario",
+                    "year",
+                    "leap_sector_name_full_path",
+                    "raw_leap_fuel_name",
+                    "value_petajoule",
+                ]
+            ]
+        )
+
+    columns = [
+        "leap_sector_name_full_path",
+        "raw_leap_fuel_name",
+        "leap_pair_is_subtotal",
+        "leap_pair_abs_sum",
+        "raw_leap_row_count",
+        "raw_leap_source_sheet_count",
+        "raw_leap_scenarios",
+        "raw_leap_year_min",
+        "raw_leap_year_max",
+    ]
+    if not frames:
+        return pd.DataFrame(columns=columns)
+
+    combined = pd.concat(frames, ignore_index=True, sort=False)
+    combined["_value_abs"] = pd.to_numeric(combined["value_petajoule"], errors="coerce").fillna(0.0).abs()
+    combined = combined[combined["_value_abs"].gt(0)].copy()
+    if combined.empty:
+        return pd.DataFrame(columns=columns)
+    subtotal_frame = _compute_leap_subtotals(
+        combined[
+            ["leap_sector_name_full_path", "raw_leap_fuel_name"]
+        ].assign(remove_row=False, duplicate_to_remove=False)
+    )
+    combined["leap_pair_is_subtotal"] = subtotal_frame["leap_is_subtotal"].fillna(False).astype(bool)
+
+    grouped = (
+        combined.groupby(["leap_sector_name_full_path", "raw_leap_fuel_name"], as_index=False)
+        .agg(
+            leap_pair_is_subtotal=("leap_pair_is_subtotal", "max"),
+            leap_pair_abs_sum=("_value_abs", "sum"),
+            raw_leap_row_count=("_value_abs", "size"),
+            raw_leap_source_sheet_count=("source_sheet", lambda values: int(values.astype(str).str.strip().nunique())),
+            raw_leap_scenarios=("scenario", lambda values: "|".join(sorted({str(value).strip() for value in values if str(value).strip()}))),
+            raw_leap_year_min=("year", "min"),
+            raw_leap_year_max=("year", "max"),
+        )
+        .reset_index(drop=True)
+    )
+    return grouped[columns]
+
+
 def _build_coverage_gaps(
     esto_sheet: pd.DataFrame,
     ninth_sheet: pd.DataFrame,
     esto_lookup: pd.DataFrame,
     ninth_lookup: pd.DataFrame,
+    raw_leap_lookup: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """
     Return a DataFrame of all coverage gaps: pairs with abs values > 0 that are
     missing from the active mapping rows.
 
     Columns: gap_type, sheet_name, original_dataset, original_pair_is_subtotal,
-    key_col_1, key_col_2, pair_1, pair_2, abs_sum
+    key_col_1, key_col_2, pair_1, pair_2, abs_sum, mapping_presence_state,
+    mapping_presence_detail
       gap_type values:
         "esto_missing"   - esto data pair not in any active esto mapping row
         "ninth_missing"  - 9th data pair not in any active ninth mapping row
         "leap_unmapped_esto"  - LEAP pair with value > 0 but no esto target in esto sheet
         "leap_unmapped_ninth" - LEAP pair with value > 0 but no ninth target in ninth sheet
+        "raw_leap_missing_esto_mapping" - raw LEAP export pair not present in active esto mapping rows
+        "raw_leap_missing_ninth_mapping" - raw LEAP export pair not present in active ninth mapping rows
     """
     records: list[dict] = []
 
@@ -813,6 +1074,8 @@ def _build_coverage_gaps(
                 "pair_1": flow,
                 "pair_2": product,
                 "abs_sum": abs_sum,
+                "mapping_presence_state": "target_pair_missing_from_active_mappings",
+                "mapping_presence_detail": "",
             }
         )
 
@@ -850,6 +1113,8 @@ def _build_coverage_gaps(
                 "pair_1": sector,
                 "pair_2": fuel,
                 "abs_sum": abs_sum,
+                "mapping_presence_state": "target_pair_missing_from_active_mappings",
+                "mapping_presence_detail": "",
             }
         )
 
@@ -882,8 +1147,64 @@ def _build_coverage_gaps(
                     "pair_1": sector,
                     "pair_2": fuel,
                     "abs_sum": abs_sum,
+                    "mapping_presence_state": "active_source_row_missing_target",
+                    "mapping_presence_detail": "",
                 }
             )
+
+    # --- 4. Raw LEAP export pairs absent from the mapping sheets entirely ---
+    if raw_leap_lookup is not None and not raw_leap_lookup.empty:
+        raw = raw_leap_lookup.copy()
+        for col in ["leap_sector_name_full_path", "raw_leap_fuel_name"]:
+            if col not in raw.columns:
+                raw[col] = ""
+            raw[col] = raw[col].fillna("").astype(str).str.strip()
+        if "leap_pair_abs_sum" not in raw.columns:
+            raw["leap_pair_abs_sum"] = 0.0
+        raw["leap_pair_abs_sum"] = pd.to_numeric(raw["leap_pair_abs_sum"], errors="coerce").fillna(0.0)
+        raw = raw[
+            raw["leap_sector_name_full_path"].ne("")
+            & raw["raw_leap_fuel_name"].ne("")
+            & raw["leap_pair_abs_sum"].gt(0)
+        ].copy()
+
+        active_source_pairs = {
+            "raw_leap_missing_esto_mapping": (
+                ESTO_SHEET,
+                _active_leap_source_pairs(esto_sheet),
+                _leap_source_pair_presence_lookup(esto_sheet),
+            ),
+            "raw_leap_missing_ninth_mapping": (
+                NINTH_SHEET,
+                _active_leap_source_pairs(ninth_sheet),
+                _leap_source_pair_presence_lookup(ninth_sheet),
+            ),
+        }
+        for gap_type, (sheet_name, mapped_source_pairs, presence_lookup) in active_source_pairs.items():
+            for row in raw.itertuples(index=False):
+                sector = str(getattr(row, "leap_sector_name_full_path", "")).strip()
+                fuel = str(getattr(row, "raw_leap_fuel_name", "")).strip()
+                if not sector or not fuel:
+                    continue
+                source_key = (_path_key(sector), _norm_text(fuel))
+                if source_key in mapped_source_pairs:
+                    continue
+                presence = presence_lookup.get(source_key, {})
+                records.append(
+                    {
+                        "gap_type": gap_type,
+                        "sheet_name": sheet_name,
+                        "original_dataset": "leap_balance_export",
+                        "original_pair_is_subtotal": bool(getattr(row, "leap_pair_is_subtotal", False)),
+                        "key_col_1": "leap_sector_name_full_path",
+                        "key_col_2": "raw_leap_fuel_name",
+                        "pair_1": sector,
+                        "pair_2": fuel,
+                        "abs_sum": float(getattr(row, "leap_pair_abs_sum", 0.0) or 0.0),
+                        "mapping_presence_state": str(presence.get("state", "actually_missing")),
+                        "mapping_presence_detail": str(presence.get("detail", "")),
+                    }
+                )
 
     return pd.DataFrame(
         records,
@@ -897,6 +1218,8 @@ def _build_coverage_gaps(
             "pair_1",
             "pair_2",
             "abs_sum",
+            "mapping_presence_state",
+            "mapping_presence_detail",
         ],
     )
 
@@ -990,7 +1313,14 @@ def _assert_not_open(path: Path) -> None:
 
 def _replace_sheet_with_dataframe(workbook_path: Path, sheet_name: str, frame: pd.DataFrame) -> None:
     """Replace one sheet in-place while preserving every other sheet in the workbook."""
-    workbook = load_workbook(workbook_path)
+    try:
+        workbook = load_workbook(workbook_path)
+    except IndexError as exc:
+        raise RuntimeError(
+            f"{workbook_path.name} can be read in streaming mode but openpyxl cannot "
+            "load it in editable mode. Close and re-save the workbook in Excel, or "
+            "restore a recent copy from config/archive, then re-run this workflow."
+        ) from exc
     if sheet_name in workbook.sheetnames:
         sheet_index = workbook.sheetnames.index(sheet_name)
         del workbook[sheet_name]
@@ -1002,7 +1332,89 @@ def _replace_sheet_with_dataframe(workbook_path: Path, sheet_name: str, frame: p
     workbook.save(workbook_path)
 
 
-def run_workflow(*, error_on_gaps: bool = True) -> dict[str, object]:
+def _read_mapping_sheet(sheet_name: str) -> pd.DataFrame:
+    """Read a mapping workbook sheet, falling back to openpyxl read-only mode."""
+    try:
+        return pd.read_excel(MAPPING_WORKBOOK_PATH, sheet_name=sheet_name, dtype=object).fillna("")
+    except IndexError:
+        try:
+            workbook = load_workbook(MAPPING_WORKBOOK_PATH, read_only=True, data_only=False)
+            if sheet_name not in workbook.sheetnames:
+                raise ValueError(f"Sheet {sheet_name!r} not found in {MAPPING_WORKBOOK_PATH}")
+            rows = list(workbook[sheet_name].iter_rows(values_only=True))
+        except IndexError:
+            rows = _read_xlsx_sheet_values_xml(MAPPING_WORKBOOK_PATH, sheet_name)
+        if not rows:
+            return pd.DataFrame()
+        headers = [str(value or "").strip() for value in rows[0]]
+        data = list(rows[1:])
+        width = len(headers)
+        padded = [tuple(list(row[:width]) + [""] * max(0, width - len(row))) for row in data]
+        return pd.DataFrame(padded, columns=headers).fillna("")
+
+
+def _read_xlsx_sheet_values_xml(workbook_path: Path, sheet_name: str) -> list[tuple[object, ...]]:
+    """Read one XLSX sheet directly from XML, ignoring styles that can break openpyxl."""
+    ns = {
+        "main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+        "rel": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+        "pkgrel": "http://schemas.openxmlformats.org/package/2006/relationships",
+    }
+
+    def _col_index(cell_ref: str) -> int:
+        letters = "".join(ch for ch in str(cell_ref) if ch.isalpha()).upper()
+        value = 0
+        for letter in letters:
+            value = value * 26 + (ord(letter) - ord("A") + 1)
+        return max(value - 1, 0)
+
+    with zipfile.ZipFile(workbook_path) as archive:
+        shared_strings: list[str] = []
+        if "xl/sharedStrings.xml" in archive.namelist():
+            shared_root = ET.fromstring(archive.read("xl/sharedStrings.xml"))
+            for si in shared_root.findall("main:si", ns):
+                shared_strings.append("".join(t.text or "" for t in si.findall(".//main:t", ns)))
+
+        workbook_root = ET.fromstring(archive.read("xl/workbook.xml"))
+        rel_root = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
+        rel_targets = {
+            rel.attrib.get("Id", ""): rel.attrib.get("Target", "")
+            for rel in rel_root.findall("pkgrel:Relationship", ns)
+        }
+        target = ""
+        for sheet in workbook_root.findall(".//main:sheet", ns):
+            if sheet.attrib.get("name", "") == sheet_name:
+                target = rel_targets.get(sheet.attrib.get(f"{{{ns['rel']}}}id", ""), "")
+                break
+        if not target:
+            raise ValueError(f"Sheet {sheet_name!r} not found in {workbook_path}")
+        sheet_path = target.lstrip("/")
+        if not sheet_path.startswith("xl/"):
+            sheet_path = f"xl/{sheet_path}"
+
+        sheet_root = ET.fromstring(archive.read(sheet_path))
+        rows: list[tuple[object, ...]] = []
+        for row in sheet_root.findall(".//main:sheetData/main:row", ns):
+            values: list[object] = []
+            for cell in row.findall("main:c", ns):
+                col_idx = _col_index(cell.attrib.get("r", ""))
+                while len(values) <= col_idx:
+                    values.append("")
+                cell_type = cell.attrib.get("t", "")
+                raw_value = cell.findtext("main:v", default="", namespaces=ns)
+                if cell_type == "s" and str(raw_value).strip().isdigit():
+                    shared_idx = int(raw_value)
+                    value = shared_strings[shared_idx] if shared_idx < len(shared_strings) else ""
+                elif cell_type == "inlineStr":
+                    value = "".join(t.text or "" for t in cell.findall(".//main:t", ns))
+                else:
+                    value = raw_value
+                values[col_idx] = value
+            rows.append(tuple(values))
+        return rows
+
+
+def run_workflow(*, error_on_gaps: bool = True, check_raw_leap_coverage: bool = True) -> dict[str, object]:
     """
     Refresh mapping maintenance columns.
 
@@ -1012,14 +1424,18 @@ def run_workflow(*, error_on_gaps: bool = True) -> dict[str, object]:
         If True (default), raise a ValueError when coverage gaps are found.
         If False, emit a warning and continue; gaps are still written to
         outputs/mappings/mapping_checks/leap_mapping_missing_pairs.csv.
+    check_raw_leap_coverage:
+        If True (default), read the latest REF/TGT LEAP balance exports and
+        report nonzero raw LEAP sector/fuel pairs missing from the mapping
+        workbook.
     """
     if not MAPPING_WORKBOOK_PATH.exists():
         raise FileNotFoundError(f"Missing mapping workbook: {MAPPING_WORKBOOK_PATH}")
     _assert_not_open(MAPPING_WORKBOOK_PATH)
     backup_path = _backup_workbook(MAPPING_WORKBOOK_PATH)
 
-    esto_sheet = pd.read_excel(MAPPING_WORKBOOK_PATH, sheet_name=ESTO_SHEET, dtype=object).fillna("")
-    ninth_sheet = pd.read_excel(MAPPING_WORKBOOK_PATH, sheet_name=NINTH_SHEET, dtype=object).fillna("")
+    esto_sheet = _read_mapping_sheet(ESTO_SHEET)
+    ninth_sheet = _read_mapping_sheet(NINTH_SHEET)
 
     esto_lookup = _load_esto_lookup()
     ninth_lookup = _load_ninth_lookup()
@@ -1044,7 +1460,8 @@ def run_workflow(*, error_on_gaps: bool = True) -> dict[str, object]:
 
     warnings.warn(auto_remove_summary, stacklevel=3)
 
-    gaps = _build_coverage_gaps(refreshed_esto, refreshed_ninth, esto_lookup, ninth_lookup)
+    raw_leap_lookup = _load_raw_leap_balance_lookup() if check_raw_leap_coverage else pd.DataFrame()
+    gaps = _build_coverage_gaps(refreshed_esto, refreshed_ninth, esto_lookup, ninth_lookup, raw_leap_lookup)
     _report_coverage_gaps(gaps, error_on_gaps=error_on_gaps)
 
     duplicate_esto = _build_duplicate_mappings(
@@ -1065,6 +1482,17 @@ def run_workflow(*, error_on_gaps: bool = True) -> dict[str, object]:
     trio_presence = _build_trio_presence_check(refreshed_esto, refreshed_ninth)
     _write_trio_presence_csv(trio_presence)
 
+    refreshed_esto = refreshed_esto.sort_values(
+        ["leap_sector_name_full_path", "raw_leap_fuel_name", "esto_flow", "esto_product"],
+        key=lambda col: col.fillna("").astype(str).str.lower(),
+        na_position="last",
+    ).reset_index(drop=True)
+    refreshed_ninth = refreshed_ninth.sort_values(
+        ["leap_sector_name_full_path", "raw_leap_fuel_name", "ninth_sector", "ninth_fuel"],
+        key=lambda col: col.fillna("").astype(str).str.lower(),
+        na_position="last",
+    ).reset_index(drop=True)
+
     _replace_sheet_with_dataframe(MAPPING_WORKBOOK_PATH, ESTO_SHEET, refreshed_esto)
     _replace_sheet_with_dataframe(MAPPING_WORKBOOK_PATH, NINTH_SHEET, refreshed_ninth)
 
@@ -1073,6 +1501,12 @@ def run_workflow(*, error_on_gaps: bool = True) -> dict[str, object]:
         "backup_workbook": str(backup_path),
         "coverage_gaps_csv": str(COVERAGE_GAPS_PATH),
         "coverage_gaps_count": int(len(gaps)),
+        "raw_leap_source_pairs_checked": int(len(raw_leap_lookup)),
+        "raw_leap_missing_mapping_count": int(
+            gaps["gap_type"].isin(
+                {"raw_leap_missing_esto_mapping", "raw_leap_missing_ninth_mapping"}
+            ).sum()
+        ) if "gap_type" in gaps.columns else 0,
         "duplicate_mappings_csv": str(DUPLICATE_MAPPINGS_CSV_PATH),
         "duplicate_mappings_count": int(len(duplicate_mappings)),
         "trio_presence_csv": str(TRIO_PRESENCE_CSV_PATH),
@@ -1094,7 +1528,7 @@ RUN_WORKFLOW = True
 ERROR_ON_GAPS = False
 
 WORKFLOW_RESULT: dict[str, object] | None = None
-if RUN_WORKFLOW:
+if __name__ == "__main__" and RUN_WORKFLOW:
     WORKFLOW_RESULT = run_workflow(error_on_gaps=ERROR_ON_GAPS)
     print("[OK] Mapping maintenance columns refreshed.")
     for key, value in WORKFLOW_RESULT.items():

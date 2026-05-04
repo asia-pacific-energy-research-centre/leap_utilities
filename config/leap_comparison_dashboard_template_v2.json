@@ -2,6 +2,53 @@
   "defaults": {
     "measure": "Energy balance (PJ)"
   },
+  "Notes": {
+    "Note": "Any template key that starts with note or Note is ignored by the dashboard code and can be used for human-facing comments."
+  },
+  "about_page": {
+    "title": "About this dashboard",
+    "intro": "This dashboard compares LEAP balance exports, ESTO base-year balance data, and 9th edition projection data on a common ESTO balance-axis structure. It is designed for mapping audit as much as for chart review: every charted value should be traceable back to the mapping rows and comparator pairs that created it.",
+    "sections": [
+      {
+        "title": "What this dashboard is for",
+        "body": [
+          "Use this dashboard to inspect where LEAP balance exports agree or disagree with ESTO base-year data and 9th edition projection data after all three are placed on a common ESTO balance-axis structure."
+        ]
+      },
+      {
+        "title": "What the lines mean",
+        "bullets": [
+          "LEAP lines come from the mapped LEAP balance export after LEAP sector and fuel names are converted to ESTO flow/product rows.",
+          "ESTO lines are base-year values read directly from the ESTO balance table for the same ESTO flow/product pair.",
+          "9th lines are projection values read from the 9th edition sector/fuel table using mapped 9th sector/fuel targets for the same ESTO flow/product pair."
+        ]
+      },
+      {
+        "title": "How rows are matched",
+        "body": [
+          "The main mapping path is LEAP-derived: active leap_combined_esto rows connect LEAP sector/fuel paths to ESTO flow/product pairs, and active leap_combined_ninth rows connect the same LEAP paths to 9th sector/fuel pairs.",
+          "Direct ESTO-to-9th canonical mappings are only a fallback for template sections that explicitly opt in. They are not the default mapping source."
+        ]
+      },
+      {
+        "title": "Transformation charts",
+        "bullets": [
+          "Transformation rows are split into Inputs and Outputs for display.",
+          "Negative transformation values are inputs and are displayed as positive magnitudes in input charts.",
+          "Positive transformation values are outputs and should appear in output charts."
+        ]
+      },
+      {
+        "title": "Where to audit details",
+        "bullets": [
+          "Use mapping_lineage_audit.csv for row-level mapping lineage at audit years.",
+          "Use chart_line_mapping_ledger.csv to inspect the values actually exposed to rendered charts.",
+          "Use mapping_status.xlsx and dashboard_comparator_pair_coverage.xlsx to inspect missing, duplicated, and fallback mappings.",
+          "Use docs/esto_axis_balance_dashboard_system.md for the detailed systems guide."
+        ]
+      }
+    ]
+  },
   "Buildings": {
     "aggregate_graphs": {
       "fuels": "Total",
@@ -569,7 +616,7 @@
         "products": "All"
       }
     },
-    "'Refinery own use'": {
+    "Refinery own use": {
       "aggregate_graphs": {
         "fuels": "Total",
         "esto_flows": [
@@ -625,58 +672,19 @@
       "aggregate_graphs": {
         "fuels": "Total",
         "esto_flows": [
-          "09.08.01 Coke ovens",
-          "09.08.02 Blast furnaces",
-          "09.08.03 Patent fuel plants",
-          "09.08.04 BKB/PB plants",
-          "09.08.05 Liquefaction (coal to oil)"
+            "09.08 Coal transformation"
+        ],
+        "Note": [
+          "Coal transformation cannot be split into its subsectors in the 9th data since even though those sectors exist they were not projected, instead 09_08_coal_transformation (the parent) was used.",
+          "So to compare to that we need to use that sector from ESTO instead.",
+          "ESTO sub-flows for coal transformation are listed here for reference but not used in the aggregate graph: 09.08.01 Coke ovens, 09.08.02 Blast furnaces, 09.08.03 Patent fuel plants, 09.08.04 BKB/PB plants, 09.08.05 Liquefaction (coal to oil)."
         ],
         "measures": [
           "Inputs (PJ)",
           "Outputs (PJ)"
         ]
       },
-      "Blast furnaces": {
-        "by_fuel_graphs": {
-          "esto_flows": [
-            "09.08.02 Blast furnaces"
-          ],
-          "products": "All"
-        }
-      },
-      "Coke ovens": {
-        "by_fuel_graphs": {
-          "esto_flows": [
-            "09.08.01 Coke ovens"
-          ],
-          "products": "All"
-        }
-      },
-        "Patent fuel plants": {
-            "by_fuel_graphs": {
-            "esto_flows": [
-                "09.08.03 Patent fuel plants"
-            ],
-            "products": "All"
-            }
-        },
-        "BKB/PB plants": {
-            "by_fuel_graphs": {
-            "esto_flows": [
-                "09.08.04 BKB/PB plants"
-            ],
-            "products": "All"
-            }
-        },
-        "Liquefaction (coal to oil)": {
-            "by_fuel_graphs": {
-            "esto_flows": [
-                "09.08.05 Liquefaction (coal to oil)"
-            ],
-            "products": "All"
-            }
-        },
-        "Coal processing own use": {
+        "Coal transformation own use": {
             "by_fuel_graphs": {
             "esto_flows": [
                 "10.01.05 Coke ovens",
@@ -697,6 +705,9 @@
         
           "09.06.04 Gas-to-liquids plants"
             
+        ],
+        "Note": [
+          "Gas processing doesnt exist for 09.06.03 Natural gas blending plants and 09.06.04 Gas-to-liquids plants subsectors in the 9th data. Even though those sectors exist in the 9th dataset they were not projected. Perhaps their total comes under another category but it is not specified. Nothing can really be done about it so we just have through the visualisations that those subsectors are missing from the 9th data and cannot be compared to ESTO or LEAP for now."
         ],
         "measures": [
           "Inputs (PJ)",
@@ -871,8 +882,7 @@
       "aggregate_graphs": {
         "fuels": "Total",
         "esto_flows": [
-          "09.12 Non-specified transformation",
-          "10.01.17 Non-specified own uses"
+          "09.12 Non-specified transformation"
         ],
         "measures": [
           "Inputs (PJ)",
@@ -881,8 +891,7 @@
       },
       "by_fuel_graphs": {
         "esto_flows": [
-          "09.12 Non-specified transformation",
-          "10.01.17 Non-specified own uses"
+          "09.12 Non-specified transformation"
         ],
         "products": "All"
       }

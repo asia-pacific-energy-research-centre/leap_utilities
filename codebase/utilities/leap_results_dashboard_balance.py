@@ -25,6 +25,7 @@ from codebase.utilities.master_config import config_table_exists, read_config_ta
 from codebase.utilities.energy_balance_template_extractor import TemplateBalanceExtractor
 from codebase.utilities.leap_results_dashboard_utils import (
     _aggregate_display_rows_to_total,
+    _prepare_ninth_projection_frame,
     _prepare_render_long,
     _safe_token,
     build_charts,
@@ -348,6 +349,163 @@ def _to_bool(value: object, default: bool = False) -> bool:
     if text in {"0", "false", "no", "n", "off", "f"}:
         return False
     return default
+
+
+def _load_active_balance_mapping_crosswalk(
+    mapping_workbook_path: Path | str | None,
+    *,
+    esto_sheet_name: str = "leap_combined_esto",
+    ninth_sheet_name: str = "leap_combined_ninth",
+) -> pd.DataFrame:
+    """Return active ESTO->LEAP->9th mapping rows from the balance mapping workbook."""
+    columns = [
+        "leap_sector_name_full_path",
+        "raw_leap_fuel_name",
+        "esto_flow",
+        "esto_product",
+        "ninth_sector",
+        "ninth_fuel",
+        "esto_pair_mapping_cardinality",
+        "ninth_pair_mapping_cardinality",
+        "esto_many_to_many_is_ok",
+        "ninth_many_to_many_is_ok",
+        "leap_is_subtotal",
+        "esto_pair_is_subtotal",
+        "ninth_pair_is_subtotal",
+    ]
+    if mapping_workbook_path is None:
+        return pd.DataFrame(columns=columns)
+    workbook = _resolve(mapping_workbook_path)
+    if not workbook.exists():
+        return pd.DataFrame(columns=columns)
+
+    def _read_active(sheet_name: str, target_cols: list[str]) -> pd.DataFrame:
+        try:
+            frame = pd.read_excel(workbook, sheet_name=sheet_name, dtype=str).fillna("")
+        except Exception:
+            return pd.DataFrame()
+        required_cols = [
+            "leap_sector_name_full_path",
+            "raw_leap_fuel_name",
+            "remove_row",
+            "duplicate_to_remove",
+            "pair_mapping_cardinality",
+            "many_to_many_is_ok",
+            "leap_is_subtotal",
+            *target_cols,
+        ]
+        for col in required_cols:
+            if col not in frame.columns:
+                frame[col] = ""
+            frame[col] = frame[col].fillna("").astype(str).str.strip()
+        active = ~frame["remove_row"].map(_to_bool) & ~frame["duplicate_to_remove"].map(_to_bool)
+        for col in target_cols:
+            active &= frame[col].ne("")
+        active &= frame["leap_sector_name_full_path"].ne("") & frame["raw_leap_fuel_name"].ne("")
+        frame = frame.loc[active].copy()
+        if frame.empty:
+            return frame
+        frame["_leap_sector_key"] = frame["leap_sector_name_full_path"].str.strip().str.lower()
+        frame["_leap_fuel_key"] = frame["raw_leap_fuel_name"].str.strip().str.lower()
+        return frame
+
+    esto = _read_active(esto_sheet_name, ["esto_flow", "esto_product"])
+    ninth = _read_active(ninth_sheet_name, ["ninth_sector", "ninth_fuel"])
+    if esto.empty or ninth.empty:
+        return pd.DataFrame(columns=columns)
+
+    for col in ["esto_pair_is_subtotal"]:
+        if col not in esto.columns:
+            esto[col] = ""
+    for col in ["ninth_pair_is_subtotal"]:
+        if col not in ninth.columns:
+            ninth[col] = ""
+
+    joined = esto.merge(
+        ninth,
+        on=["_leap_sector_key", "_leap_fuel_key"],
+        how="inner",
+        suffixes=("_esto", "_ninth"),
+    )
+    if joined.empty:
+        return pd.DataFrame(columns=columns)
+
+    out = pd.DataFrame(
+        {
+            "leap_sector_name_full_path": joined["leap_sector_name_full_path_esto"],
+            "raw_leap_fuel_name": joined["raw_leap_fuel_name_esto"],
+            "esto_flow": joined["esto_flow"],
+            "esto_product": joined["esto_product"],
+            "ninth_sector": joined["ninth_sector"],
+            "ninth_fuel": joined["ninth_fuel"],
+            "esto_pair_mapping_cardinality": joined["pair_mapping_cardinality_esto"],
+            "ninth_pair_mapping_cardinality": joined["pair_mapping_cardinality_ninth"],
+            "esto_many_to_many_is_ok": joined["many_to_many_is_ok_esto"].map(_to_bool),
+            "ninth_many_to_many_is_ok": joined["many_to_many_is_ok_ninth"].map(_to_bool),
+            "leap_is_subtotal": (
+                joined["leap_is_subtotal_esto"].map(_to_bool)
+                | joined["leap_is_subtotal_ninth"].map(_to_bool)
+            ),
+            "esto_pair_is_subtotal": joined["esto_pair_is_subtotal"].map(_to_bool),
+            "ninth_pair_is_subtotal": joined["ninth_pair_is_subtotal"].map(_to_bool),
+        }
+    )
+    for col in ["esto_flow", "esto_product", "ninth_sector", "ninth_fuel"]:
+        out[col] = out[col].fillna("").astype(str).str.strip()
+    out = out[
+        out["esto_flow"].ne("")
+        & out["esto_product"].ne("")
+        & out["ninth_sector"].ne("")
+        & out["ninth_fuel"].ne("")
+    ].copy()
+    return out[columns].drop_duplicates().reset_index(drop=True)
+
+
+def _nonzero_ninth_projection_pairs(
+    ninth_df: pd.DataFrame | None,
+    *,
+    projection_economy: str,
+    projection_scenarios: Iterable[str],
+    projection_years: Sequence[int],
+) -> set[tuple[str, str]]:
+    """Return deepest nonzero 9th sector/fuel pairs for the requested projection slice."""
+    if ninth_df is None or ninth_df.empty or not projection_years:
+        return set()
+    work = ninth_df.copy()
+    for col in ["economy", "scenarios", "sectors", "sub1sectors", "sub2sectors", "sub3sectors", "sub4sectors", "fuels", "subfuels"]:
+        if col not in work.columns:
+            work[col] = ""
+    year_cols = [str(year) for year in projection_years if str(year) in work.columns]
+    if not year_cols:
+        year_cols = [year for year in projection_years if year in work.columns]
+    if not year_cols:
+        return set()
+    scenario_values = {str(value).strip().lower() for value in projection_scenarios if str(value).strip()}
+    work = work[
+        work["economy"].fillna("").astype(str).str.strip().eq(str(projection_economy).strip())
+        & work["scenarios"].fillna("").astype(str).str.strip().str.lower().isin(scenario_values)
+    ].copy()
+    if work.empty:
+        return set()
+    values = work[year_cols].apply(pd.to_numeric, errors="coerce").fillna(0.0)
+    work = work.loc[values.abs().gt(1e-12).any(axis=1)].copy()
+    if work.empty:
+        return set()
+
+    def _deepest(row: pd.Series, cols: list[str]) -> str:
+        tokens = [_clean_token(row.get(col, "")) for col in cols]
+        tokens = [token for token in tokens if token and token.lower() != "x"]
+        return tokens[-1] if tokens else ""
+
+    sector_cols = ["sectors", "sub1sectors", "sub2sectors", "sub3sectors", "sub4sectors"]
+    fuel_cols = ["fuels", "subfuels"]
+    pairs: set[tuple[str, str]] = set()
+    for _, row in work.iterrows():
+        sector = _deepest(row, sector_cols)
+        fuel = _deepest(row, fuel_cols)
+        if sector and fuel:
+            pairs.add((sector, fuel))
+    return pairs
 
 
 def _load_json(path: Path | str) -> dict[str, Any]:
@@ -2017,7 +2175,7 @@ def write_dashboard_comparator_pair_coverage(
                             if _product_is_total(product_text):
                                 template_total_flows.add(flow_text)
             for key, child in node.items():
-                if key in TEMPLATE_RESERVED_KEYS or not isinstance(child, dict):
+                if _dashboard_template_is_reserved_key(key) or not isinstance(child, dict):
                     continue
                 _walk_template(child)
 
@@ -4558,6 +4716,7 @@ def _load_dashboard_template_allowlist(path: Path | str | None) -> dict[str, Any
 
 TEMPLATE_RESERVED_KEYS = {
     "defaults",
+    "about_page",
     "aggregate",
     "aggregate_graphs",
     "graphs",
@@ -4566,6 +4725,17 @@ TEMPLATE_RESERVED_KEYS = {
     "_comments",
     "comments",
 }
+
+
+def _dashboard_template_is_reserved_key(key: object) -> bool:
+    """Return True for template metadata keys that should not create pages."""
+    text = str(key or "").strip()
+    return text in TEMPLATE_RESERVED_KEYS or text.lower().startswith("note")
+
+
+def _dashboard_template_about_page(template: dict[str, Any]) -> dict[str, Any]:
+    about = template.get("about_page", {}) if isinstance(template, dict) else {}
+    return about if isinstance(about, dict) else {}
 
 
 def _as_clean_list(value: object) -> list[str]:
@@ -4638,8 +4808,6 @@ def _dashboard_template_aggregate_specs(
 
 
 def _validate_dashboard_template_allowlist(template: dict[str, Any], resolved: Path) -> None:
-    reserved = TEMPLATE_RESERVED_KEYS
-
     def _walk(node: dict[str, Any], path: tuple[str, ...] = ()) -> None:
         if "fuels" in node:
             label = " > ".join(path) or "<root>"
@@ -4660,7 +4828,7 @@ def _validate_dashboard_template_allowlist(template: dict[str, Any], resolved: P
             label = " > ".join(path) or "<root>"
             raise ValueError(f"Template 'by_fuel_graphs' must be an object at {label} in {resolved}")
         for key, child in node.items():
-            if key in reserved or not isinstance(child, dict):
+            if _dashboard_template_is_reserved_key(key) or not isinstance(child, dict):
                 continue
             _walk(child, (*path, str(key).strip()))
 
@@ -4753,7 +4921,6 @@ def build_esto_axis_structure_from_dashboard_template(
     if not template:
         return {"page_tree": [], "sheet_catalog": {}, "esto_flow_to_sheet": {}, "empty_page_notice": DEFAULT_EMPTY_PAGE_NOTICE}
 
-    reserved = TEMPLATE_RESERVED_KEYS
     top_label_inverse = {v: k for k, v in BALANCE_DASHBOARD_TOP_LABELS.items()}
     measure_default = str((template.get("defaults") or {}).get("measure", "")).strip() or "Energy balance (PJ)"
     page_paths: list[list[str]] = []
@@ -4805,17 +4972,21 @@ def build_esto_axis_structure_from_dashboard_template(
             for flow in list(spec.get("esto_flows", []) or [spec.get("esto_flow", "")]):
                 _remember_flow(flow, display_path)
         for key, child in node.items():
-            if key in reserved or not isinstance(child, dict):
+            if _dashboard_template_is_reserved_key(key) or not isinstance(child, dict):
                 continue
             label = str(key).strip()
             if label:
                 _walk(child, (*display_path, label))
 
     _walk(template)
-    unique_paths = sorted(
-        {tuple(path) for path in page_paths if path},
-        key=lambda path: (_esto_dashboard_path_sort_key(path, ""), tuple(part.lower() for part in path)),
-    )
+    unique_paths: list[tuple[str, ...]] = []
+    seen_paths: set[tuple[str, ...]] = set()
+    for path in page_paths:
+        clean_path = tuple(path)
+        if not clean_path or clean_path in seen_paths:
+            continue
+        seen_paths.add(clean_path)
+        unique_paths.append(clean_path)
     return {
         "page_tree": _build_page_tree_from_paths([list(path) for path in unique_paths]),
         "sheet_catalog": sheet_catalog,
@@ -4975,7 +5146,6 @@ def write_dashboard_graph_fuel_coverage(
         flow_products = {fn: sorted(products) for fn, products in by_flow.items()}
 
     rows: list[dict[str, Any]] = []
-    reserved = TEMPLATE_RESERVED_KEYS
     measure_default = (
         str((template.get("defaults") or {}).get("measure", default_measure)).strip()
         or default_measure
@@ -5039,7 +5209,7 @@ def write_dashboard_graph_fuel_coverage(
                 })
 
         for key, child in node.items():
-            if key in reserved or not isinstance(child, dict):
+            if _dashboard_template_is_reserved_key(key) or not isinstance(child, dict):
                 continue
             label = str(key).strip()
             if label:
@@ -5745,6 +5915,116 @@ def _build_page_html(
 """
 
 
+def _build_about_page_html(
+    *,
+    title: str,
+    top_links: list[tuple[str, str]],
+    current_file: str,
+    about_config: dict[str, Any],
+) -> str:
+    heading = _clean_token(about_config.get("title", "")) or "About This Dashboard"
+    intro = _clean_token(about_config.get("intro", ""))
+    sections = about_config.get("sections", [])
+    if not isinstance(sections, list):
+        sections = []
+
+    def _header_page_links_html() -> str:
+        chips: list[str] = []
+        separator_after = {"Others", "Other transformation"}
+        for label, href in top_links:
+            current = "true" if href == current_file else "false"
+            chips.append(f'<a href="{href}" class="header-chip" data-current="{current}">{label}</a>')
+            if label in separator_after:
+                chips.append('<span class="header-nav-separator" aria-hidden="true">|</span>')
+        return "".join(chips)
+
+    def _paragraph_html(text: object) -> str:
+        content = _clean_token(text)
+        if not content:
+            return ""
+        return f"<p>{content}</p>"
+
+    section_html: list[str] = []
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        section_title = _clean_token(section.get("title", ""))
+        body = section.get("body", [])
+        if isinstance(body, str):
+            body_items = [body]
+        elif isinstance(body, list):
+            body_items = body
+        else:
+            body_items = []
+        bullets = section.get("bullets", [])
+        bullet_items = bullets if isinstance(bullets, list) else []
+        paragraphs = "".join(_paragraph_html(item) for item in body_items)
+        bullet_html = ""
+        if bullet_items:
+            bullet_html = "<ul>" + "".join(
+                f"<li>{_clean_token(item)}</li>" for item in bullet_items if _clean_token(item)
+            ) + "</ul>"
+        if section_title or paragraphs or bullet_html:
+            section_html.append(
+                '<section class="about-section">'
+                + (f"<h2>{section_title}</h2>" if section_title else "")
+                + paragraphs
+                + bullet_html
+                + "</section>"
+            )
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{title}</title>
+  <style>{_V2_STYLE_CSS}
+.about-content {{
+  max-width: 980px;
+  background: #fff;
+  border: 1px solid #d6dde5;
+  border-radius: 8px;
+  padding: 20px;
+  box-sizing: border-box;
+}}
+.about-content p {{ margin: 0 0 12px 0; }}
+.about-content ul {{ margin: 0 0 12px 22px; padding: 0; }}
+.about-content li {{ margin: 5px 0; }}
+.about-section {{ margin-top: 18px; }}
+.about-section h2 {{ margin: 0 0 8px 0; font-size: var(--section-title-size); color: #23384d; }}
+  </style>
+</head>
+<body>
+  <div class="page-shell">
+    <header class="page-header" id="page-header">
+      <div class="header-collapsible">
+        <div class="header-main-row">
+          <div style="min-width:220px;flex:1 1 320px;">
+            <h1 style="margin:0;font-size:24px;line-height:1.15;"><a href="{current_file}" style="color:inherit;text-decoration:none;">{heading}</a></h1>
+          </div>
+          <div class="header-side-controls">
+            <div class="header-inline-controls">{_header_page_links_html()}</div>
+          </div>
+        </div>
+      </div>
+      <div class="header-toggle-row">
+        <button id="header-toggle" class="header-toggle" type="button" aria-expanded="true" aria-label="Collapse header">â–´</button>
+      </div>
+    </header>
+    <main class="page-body">
+      <article class="about-content">
+        {_paragraph_html(intro)}
+        {"".join(section_html)}
+      </article>
+    </main>
+  </div>
+  <script>{_HEADER_TOGGLE_SCRIPT}</script>
+</body>
+</html>
+"""
+
+
 def render_balance_dashboards(
     *,
     comparison_long: pd.DataFrame,
@@ -5780,7 +6060,6 @@ def render_balance_dashboards(
     def _template_flow_paths() -> dict[str, tuple[str, ...]]:
         if not template_allowlist:
             return {}
-        reserved = TEMPLATE_RESERVED_KEYS
         top_label_inverse = {v: k for k, v in BALANCE_DASHBOARD_TOP_LABELS.items()}
         flow_paths: dict[str, tuple[str, ...]] = {}
         measure_default = str((template_allowlist.get("defaults") or {}).get("measure", "")).strip()
@@ -5809,7 +6088,7 @@ def render_balance_dashboards(
                 for flow in list(spec.get("esto_flows", []) or [spec.get("esto_flow", "")]):
                     _remember_flow(flow, display_path)
             for key, child in node.items():
-                if key in reserved or not isinstance(child, dict):
+                if _dashboard_template_is_reserved_key(key) or not isinstance(child, dict):
                     continue
                 label = str(key).strip()
                 if label:
@@ -5978,7 +6257,6 @@ def render_balance_dashboards(
         )
         return mapping_lookup.get(blank_measure_key, {"esto_pairs": [], "esto_flows": [], "esto_products": []})
 
-    reserved_template_keys = TEMPLATE_RESERVED_KEYS
     allowed_template_paths: set[tuple[str, ...]] = set()
     allowed_template_nodes: dict[tuple[str, ...], dict[str, Any]] = {}
     allowed_template_graph_specs: dict[tuple[str, ...], list[dict[str, Any]]] = {}
@@ -5997,13 +6275,13 @@ def render_balance_dashboards(
             elif key in {"by_fuel_graphs", "graphs"} and isinstance(child, dict):
                 template_entry_order.setdefault((path, "direct"), order_idx)
                 order_idx += 1
-            elif key not in reserved_template_keys and isinstance(child, dict):
+            elif not _dashboard_template_is_reserved_key(key) and isinstance(child, dict):
                 order_idx += 1
         graph_specs = _dashboard_template_graph_specs(node, default_measure=template_measure_default)
         if graph_specs:
             allowed_template_graph_specs[path] = graph_specs
         for key, child in node.items():
-            if key in reserved_template_keys or not isinstance(child, dict):
+            if _dashboard_template_is_reserved_key(key) or not isinstance(child, dict):
                 continue
             label = str(key).strip()
             if label:
@@ -6150,6 +6428,16 @@ def render_balance_dashboards(
                 return display_path
             return (top_label_inverse.get(display_path[0], display_path[0]), *display_path[1:])
 
+        def _template_sheet_key(path: tuple[str, ...]) -> str:
+            token = "__".join(_safe_token(str(part).replace("\\", "_")) for part in path if str(part).strip())
+            return f"template__{token or 'root'}"
+
+        template_sheet_paths = {
+            _template_sheet_key(_raw_path(display_path)): _raw_path(display_path)
+            for display_path in allowed_template_graph_specs
+            if _raw_path(display_path)
+        }
+
         for display_path, graph_specs in allowed_template_graph_specs.items():
             if not graph_specs:
                 continue
@@ -6161,11 +6449,17 @@ def render_balance_dashboards(
                 chart_lookup.items(),
                 key=lambda item: (item[0][0], item[0][1], item[0][2]),
             ):
+                sheet_text = str(sheet)
+                if sheet_text.startswith("template__") and template_sheet_paths.get(sheet_text) != raw_path:
+                    continue
+                sheet_cfg = sheet_catalog.get(sheet_text, {}) or {}
+                display_sheet = _clean_token(sheet_cfg.get("display_label", "")) or _path_title(raw_path)
                 entry = {
-                    "sheet": str(sheet),
+                    "sheet": sheet_text,
                     "measure": str(measure),
                     "fuel": str(fuel_label),
                     "file": str(file_name),
+                    "display_sheet": display_sheet,
                     "path_label": _path_label(raw_path),
                     "entry_kind": "direct",
                     "template_order": str(_template_order_for_entry(raw_path, {"entry_kind": "direct"})),
@@ -6401,6 +6695,9 @@ def render_balance_dashboards(
     if not top_page_paths:
         top_page_paths = [(label,) for label in top_level]
     top_links = [(_display_balance_path_part(label, is_top=True), _page_filename_from_path((label,))) for label, in top_page_paths]
+    about_page_config = _dashboard_template_about_page(template_allowlist)
+    if about_page_config:
+        top_links = [("About", "about.html"), *top_links]
 
     path_to_filename = {path: _page_filename_from_path(path) for path in node_paths if path}
 
@@ -7058,6 +7355,15 @@ def render_balance_dashboards(
             fallback_note=fallback_note,
         )
         (dashboards_dir / filename).write_text(html, encoding="utf-8")
+
+    if about_page_config:
+        about_html = _build_about_page_html(
+            title=_clean_token(about_page_config.get("title", "")) or "About This Dashboard",
+            top_links=top_links,
+            current_file="about.html",
+            about_config=about_page_config,
+        )
+        (dashboards_dir / "about.html").write_text(about_html, encoding="utf-8")
 
     empty_pages_path = dashboards_dir / "empty_pages.csv"
     empty_pages_df = pd.DataFrame(empty_pages, columns=["path", "level"])
@@ -7820,7 +8126,6 @@ def _dashboard_template_esto_axis_records(
         return pd.DataFrame(columns=columns)
 
     rows: list[dict[str, str]] = []
-    reserved = TEMPLATE_RESERVED_KEYS
     measure_default = str((template.get("defaults") or {}).get("measure", default_measure)).strip() or default_measure
     scenarios = [_normalize_scenario(name) for name in scenario_names if _clean_token(name)]
     scenario_projection = dict(scenario_to_projection or {})
@@ -7970,7 +8275,7 @@ def _dashboard_template_esto_axis_records(
                             }
                         )
         for key, child in node.items():
-            if key in reserved or not isinstance(child, dict):
+            if _dashboard_template_is_reserved_key(key) or not isinstance(child, dict):
                 continue
             label = str(key).strip()
             if label:
@@ -8000,6 +8305,7 @@ def build_balance_comparison_esto_axis(
     esto_table_path: Path | str = DEFAULT_BASE_TABLE_PATH,
     projection_table_path: Path | str = DEFAULT_PROJECTION_TABLE_PATH,
     chart_navigation_guide_path: Path | str | None = None,
+    balance_mapping_workbook_path: Path | str | None = None,
     known_issues: dict[str, Any] | None = None,
     base_df: pd.DataFrame | None = None,
     ninth_df: pd.DataFrame | None = None,
@@ -8044,6 +8350,13 @@ def build_balance_comparison_esto_axis(
         for k, v in (scenario_map or {}).items()
         if _clean_token(k) and _clean_token(v)
     }
+    projection_scenario_values = sorted(set(scenario_to_projection.values()) or set(scenario_map.values() or []))
+    if ninth_df is not None and not ninth_df.empty:
+        ninth_df = _prepare_ninth_projection_frame(
+            ninth_df,
+            economy_code=projection_economy,
+            scenario_values={str(value).strip().lower() for value in projection_scenario_values if str(value).strip()},
+        )
 
     esto_to_ninth: dict[tuple[str, str], list[tuple[str, str]]] = {}
     def _add_esto_to_ninth_target(esto_flow: object, esto_product: object, ninth_sector: object, ninth_fuel: object) -> None:
@@ -8085,6 +8398,32 @@ def build_balance_comparison_esto_axis(
             for _s, _f in _iter_ninth_mapping_pairs(_row["sector_code_9th"], _row["ninth_fuel_code"]):
                 _add_esto_to_ninth_target(_row["esto_flow"], _row["esto_product"], _s, _f)
 
+    nonzero_ninth_pairs = _nonzero_ninth_projection_pairs(
+        ninth_df,
+        projection_economy=projection_economy,
+        projection_scenarios=projection_scenario_values,
+        projection_years=projection_years,
+    )
+    mapping_workbook_crosswalk = _load_active_balance_mapping_crosswalk(balance_mapping_workbook_path)
+    if not mapping_workbook_crosswalk.empty and nonzero_ninth_pairs:
+        mapping_workbook_crosswalk = mapping_workbook_crosswalk[
+            mapping_workbook_crosswalk.apply(
+                lambda row: (
+                    _clean_token(row.get("ninth_sector", "")),
+                    _clean_token(row.get("ninth_fuel", "")),
+                )
+                in nonzero_ninth_pairs,
+                axis=1,
+            )
+        ].copy()
+    elif not mapping_workbook_crosswalk.empty:
+        mapping_workbook_crosswalk = mapping_workbook_crosswalk.iloc[0:0].copy()
+    if not mapping_workbook_crosswalk.empty:
+        for _row in mapping_workbook_crosswalk[
+            ["esto_flow", "esto_product", "ninth_sector", "ninth_fuel"]
+        ].drop_duplicates().itertuples(index=False):
+            _add_esto_to_ninth_target(_row.esto_flow, _row.esto_product, _row.ninth_sector, _row.ninth_fuel)
+
     def _template_enabled_esto_to_ninth_pairs(canonical_pairs_frame: pd.DataFrame) -> pd.DataFrame:
         if chart_navigation_guide_path is None or canonical_pairs_frame.empty:
             return canonical_pairs_frame.iloc[0:0].copy()
@@ -8124,7 +8463,7 @@ def build_balance_comparison_esto_axis(
                             enabled_pairs.add((flow_norm, product_norm))
 
             for key, child in node.items():
-                if key in TEMPLATE_RESERVED_KEYS or not isinstance(child, dict):
+                if _dashboard_template_is_reserved_key(key) or not isinstance(child, dict):
                     continue
                 _walk_enabled_specs(child)
 
@@ -8450,6 +8789,36 @@ def build_balance_comparison_esto_axis(
             .drop_duplicates(subset=["scenario", "sheet", "measure", "fuel_label", "esto_flow", "esto_product"])
             .reset_index(drop=True)
         )
+    leap_backed_projection_keys = {
+        (
+            _normalize_scenario(row.scenario),
+            _clean_token(row.measure),
+            _clean_token(row.fuel_label),
+            _clean_token(row.esto_flow),
+            _clean_token(row.esto_product),
+        )
+        for row in leap_working[["scenario", "measure", "fuel_label", "esto_flow", "esto_product"]]
+        .drop_duplicates()
+        .itertuples(index=False)
+    }
+    if leap_backed_projection_keys:
+        groups["_projection_priority"] = groups.apply(
+            lambda row: 0
+            if (
+                _normalize_scenario(row.get("scenario", "")),
+                _clean_token(row.get("measure", "")),
+                _clean_token(row.get("fuel_label", "")),
+                _clean_token(row.get("esto_flow", "")),
+                _clean_token(row.get("esto_product", "")),
+            )
+            in leap_backed_projection_keys
+            else 1,
+            axis=1,
+        )
+        groups = groups.sort_values(
+            ["_projection_priority", "scenario", "sheet", "measure", "fuel_label", "esto_flow", "esto_product"],
+            kind="mergesort",
+        ).reset_index(drop=True)
     for _col in ("esto_is_subtotal", "ninth_is_subtotal"):
         if _col not in groups.columns:
             groups[_col] = False
