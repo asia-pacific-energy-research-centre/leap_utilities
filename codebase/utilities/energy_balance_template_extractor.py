@@ -117,6 +117,25 @@ def _sheet_is_balance_like(name: str) -> bool:
     )
 
 
+def _write_remove_row_conflict_preview(sheet_label: str, conflict_rows: pd.DataFrame) -> Path:
+    repo_root = Path(__file__).resolve().parents[2]
+    output_dir = repo_root / "outputs" / "mappings" / "mapping_checks"
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_label = re.sub(r"[^A-Za-z0-9._-]+", "_", str(sheet_label).strip()) or "mapping"
+    output_path = output_dir / f"{safe_label}_remove_row_conflicts.csv"
+    conflict_rows.to_csv(output_path, index=False)
+
+    try:
+        link = output_path.resolve().as_uri()
+    except ValueError:
+        link = str(output_path.resolve())
+
+    print(f"[WRITE] remove-row conflict preview written to: {output_path}")
+    print(f"[LINK] {link}")
+    return output_path
+
+
 def _normalize_unit_key(value: object) -> str:
     key = _normalize_text(value)
     key = key.replace("  ", " ")
@@ -257,6 +276,8 @@ class TemplateBalanceExtractor:
         self._balance_full_path_pair_to_esto: dict[tuple[str, str], list[dict[str, object]]] = {}
         self._balance_full_path_pair_to_ninth: dict[tuple[str, str], list[dict[str, object]]] = {}
         self._balance_full_path_pairs_to_remove: set[tuple[str, str]] = set()
+        self._balance_full_path_pairs_with_removed_rows: set[tuple[str, str]] = set()
+        self._balance_present_source_keys_by_sheet: dict[str, set[tuple[str, str]]] = {}
         self._balance_detail_mode: str = "detailed"
         self._balance_sheet_detail_modes: dict[str, str] = {}
         self._flow_code_cache: dict[str, list[str]] = {}
@@ -570,7 +591,13 @@ class TemplateBalanceExtractor:
                         f"Set leap_is_subtotal=True for these rows. Preview: {preview}"
                     )
 
-            valid = active & out[target_sector_col].ne("") & out[target_fuel_col].ne("")
+            valid = (
+                active
+                & out["leap_sector_name_full_path"].map(clean).ne("")
+                & out["raw_leap_fuel_name"].map(clean).ne("")
+                & out[target_sector_col].map(clean).ne("")
+                & out[target_fuel_col].map(clean).ne("")
+            )
             exact_duplicate_cols = [
                 "leap_sector_name_full_path",
                 "raw_leap_fuel_name",
@@ -587,57 +614,8 @@ class TemplateBalanceExtractor:
                     f"{sheet_label} contains exact duplicate active mappings. "
                     f"Each active LEAP source/target pair should appear once. Delete the duplicate rows, "
                     f"or mark them with duplicate_to_remove=True if you intentionally keep a non-suppressing "
-                    f"audit copy. Do not use remove_row=True for exact duplicates because remove_row suppresses "
-                    f"the whole source/fuel pair. Preview: {preview}"
+                    f"audit copy. Preview: {preview}"
                 )
-
-            if "remove_row" in out.columns:
-                source_cols = ["leap_sector_name_full_path", "raw_leap_fuel_name"]
-                removed_source_keys = set(
-                    zip(
-                        out.loc[out["remove_row"].map(truthy), "leap_sector_name_full_path"],
-                        out.loc[out["remove_row"].map(truthy), "raw_leap_fuel_name"],
-                    )
-                )
-                active_source_keys = set(
-                    zip(
-                        out.loc[valid, "leap_sector_name_full_path"],
-                        out.loc[valid, "raw_leap_fuel_name"],
-                    )
-                )
-                conflicting_removed_keys = removed_source_keys & active_source_keys
-                if conflicting_removed_keys:
-                    conflict_mask = out.apply(
-                        lambda row: (
-                            row["leap_sector_name_full_path"],
-                            row["raw_leap_fuel_name"],
-                        )
-                        in conflicting_removed_keys,
-                        axis=1,
-                    )
-                    conflict_rows = out.loc[conflict_mask].copy()
-                    conflict_rows["_mapping_row_number"] = conflict_rows.index + 2
-                    preview_cols = [
-                        "_mapping_row_number",
-                        "leap_sector_name_full_path",
-                        "raw_leap_fuel_name",
-                        target_sector_col,
-                        target_fuel_col,
-                        "remove_row",
-                        "remove_row_reason",
-                    ]
-                    preview_cols = [col for col in preview_cols if col in conflict_rows.columns]
-                    preview = (
-                        conflict_rows[preview_cols]
-                        .sort_values(["leap_sector_name_full_path", "raw_leap_fuel_name", "_mapping_row_number"])
-                        .head(30)
-                        .to_dict("records")
-                    )
-                    raise ValueError(
-                        f"{sheet_label} contains source/fuel keys with both active mappings and remove_row=True rows. "
-                        f"This is not allowed because remove_row suppresses the source/fuel pair. "
-                        f"Delete the remover row or keep only the intentional remove_row=True row. Preview: {preview}"
-                    )
 
             fuel_pairs = out.loc[valid, ["raw_leap_fuel_name", target_fuel_col]].drop_duplicates()
             fuel_source_count = fuel_pairs.groupby("raw_leap_fuel_name")[target_fuel_col].nunique()
@@ -796,7 +774,7 @@ class TemplateBalanceExtractor:
             source_fuel = str(row.get("raw_leap_fuel_name", "")).strip()
             remove_row = truthy(row.get("remove_row", row.get("remove_duplicate_row", False)))
             if source_path and source_fuel and remove_row:
-                self._balance_full_path_pairs_to_remove.add(
+                self._balance_full_path_pairs_with_removed_rows.add(
                     (path_key(source_path), self._canonicalize_label(source_fuel))
                 )
                 return
@@ -833,7 +811,7 @@ class TemplateBalanceExtractor:
             source_fuel = str(row.get("raw_leap_fuel_name", "")).strip()
             remove_row = truthy(row.get("remove_row", row.get("remove_duplicate_row", False)))
             if source_path and source_fuel and remove_row:
-                self._balance_full_path_pairs_to_remove.add(
+                self._balance_full_path_pairs_with_removed_rows.add(
                     (path_key(source_path), self._canonicalize_label(source_fuel))
                 )
                 return
@@ -923,6 +901,11 @@ class TemplateBalanceExtractor:
             ninth_fuel = str(row.get("ninth_fuel", "")).strip()
             if sector_name and fuel_name and ninth_sector and ninth_fuel:
                 self._balance_name_pair_to_ninth[(sector_name, fuel_name)] = (ninth_sector, ninth_fuel)
+
+        active_full_path_keys = set(self._balance_full_path_pair_to_esto) | set(self._balance_full_path_pair_to_ninth)
+        self._balance_full_path_pairs_to_remove = (
+            self._balance_full_path_pairs_with_removed_rows - active_full_path_keys
+        )
 
         for lookup in [
             self._flow_name_to_codes,
@@ -1098,16 +1081,14 @@ class TemplateBalanceExtractor:
                     section = "final"
                 row_info["leap_balance_section"] = section
 
-        def _dedupe_adjacent(parts: list[str]) -> list[str]:
-            deduped: list[str] = []
+        def _clean_path_parts(parts: list[str]) -> list[str]:
+            cleaned: list[str] = []
             for part in parts:
                 clean = str(part or "").strip()
                 if not clean:
                     continue
-                if deduped and self._canonicalize_label(deduped[-1]) == self._canonicalize_label(clean):
-                    continue
-                deduped.append(clean)
-            return deduped
+                cleaned.append(clean)
+            return cleaned
 
         def _assign_normal_paths(rows: list[dict[str, object]]) -> None:
             stack: list[dict[str, object]] = []
@@ -1115,7 +1096,7 @@ class TemplateBalanceExtractor:
                 indent = float(row_info["indent"])
                 while stack and float(stack[-1]["indent"]) >= indent:
                     stack.pop()
-                path_parts = _dedupe_adjacent([str(parent["name"]) for parent in stack] + [str(row_info["name"])])
+                path_parts = _clean_path_parts([str(parent["name"]) for parent in stack] + [str(row_info["name"])])
                 row_info["leap_sector_name_full_path"] = "/".join(path_parts)
                 stack.append(row_info)
 
@@ -1125,7 +1106,7 @@ class TemplateBalanceExtractor:
                 indent = float(row_info["indent"])
                 while stack and float(stack[-1]["indent"]) >= indent:
                     stack.pop()
-                path_parts = _dedupe_adjacent([str(parent["name"]) for parent in reversed(stack)] + [str(row_info["name"])])
+                path_parts = _clean_path_parts([str(parent["name"]) for parent in reversed(stack)] + [str(row_info["name"])])
                 row_info["leap_sector_name_full_path"] = "/".join(path_parts)
                 stack.append(row_info)
 
@@ -1170,42 +1151,48 @@ class TemplateBalanceExtractor:
             else:
                 flow_row["effective_sector_name"] = str(flow_row["name"])
 
-        flow_to_row = {str(flow["name"]): int(flow["row_idx"]) for flow in sheet_flows}
-        flow_to_effective_sector = {str(flow["name"]): str(flow["effective_sector_name"]) for flow in sheet_flows}
-        flow_to_full_path = {str(flow["name"]): str(flow.get("leap_sector_name_full_path", flow["name"])) for flow in sheet_flows}
-        flow_to_section = {str(flow["name"]): str(flow.get("leap_balance_section", "")) for flow in sheet_flows}
-        flow_to_kind = {str(flow["name"]): str(flow.get("kind", "")) for flow in sheet_flows}
-        flow_to_has_fuel_children = {
-            str(flow["name"]): bool(flow.get("has_fuel_children", False)) for flow in sheet_flows
-        }
-        flow_to_has_sector_children = {
-            str(flow["name"]): bool(flow.get("has_sector_children", False)) for flow in sheet_flows
-        }
+        flow_occurrences: dict[str, list[dict[str, object]]] = {}
+        for flow_info in sheet_flows:
+            flow_occurrences.setdefault(str(flow_info["name"]), []).append(flow_info)
+        flow_occurrence_index: dict[str, int] = {}
         fuel_to_col = {fuel: idx + 2 for idx, fuel in enumerate(sheet_fuels)}
 
         records: list[dict[str, object]] = []
         for flow in template.flows:
+            flow_text = str(flow)
+            occurrence_idx = flow_occurrence_index.get(flow_text, 0)
+            candidates = flow_occurrences.get(flow_text, [])
+            flow_info = candidates[occurrence_idx] if occurrence_idx < len(candidates) else None
+            flow_occurrence_index[flow_text] = occurrence_idx + 1
             for fuel in template.fuels:
-                row_idx = flow_to_row.get(flow)
+                row_idx = int(flow_info["row_idx"]) if flow_info is not None else None
                 col_idx = fuel_to_col.get(fuel)
                 value = None
                 if row_idx is not None and col_idx is not None:
                     value = _to_float(ws.cell(row_idx, col_idx).value)
-                effective_sector = flow_to_effective_sector.get(flow, flow)
+                effective_sector = str(flow_info.get("effective_sector_name", flow_text)) if flow_info is not None else flow_text
                 records.append(
                     {
-                        "leap_sector_name_raw": flow,
+                        "leap_sector_name_raw": flow_text,
                         "leap_sector_name": effective_sector,
-                        "leap_sector_name_original": flow,
-                        "leap_sector_name_full_path": flow_to_full_path.get(flow, flow),
+                        "leap_sector_name_original": flow_text,
+                        "leap_sector_name_full_path": (
+                            str(flow_info.get("leap_sector_name_full_path", flow_text)) if flow_info is not None else flow_text
+                        ),
                         "leap_fuel_name": fuel,
                         "leap_fuel_name_raw": fuel,
                         "value": value,
-                        "leap_balance_section": flow_to_section.get(flow, ""),
+                        "leap_balance_section": (
+                            str(flow_info.get("leap_balance_section", "")) if flow_info is not None else ""
+                        ),
                         "sector_name_reassigned": bool(effective_sector != flow),
-                        "leap_sector_row_kind": flow_to_kind.get(flow, ""),
-                        "leap_sector_row_has_fuel_children": flow_to_has_fuel_children.get(flow, False),
-                        "leap_sector_row_has_sector_children": flow_to_has_sector_children.get(flow, False),
+                        "leap_sector_row_kind": str(flow_info.get("kind", "")) if flow_info is not None else "",
+                        "leap_sector_row_has_fuel_children": (
+                            bool(flow_info.get("has_fuel_children", False)) if flow_info is not None else False
+                        ),
+                        "leap_sector_row_has_sector_children": (
+                            bool(flow_info.get("has_sector_children", False)) if flow_info is not None else False
+                        ),
                         "flow_present_in_sheet": row_idx is not None,
                         "fuel_present_in_sheet": col_idx is not None,
                     }
@@ -1240,6 +1227,7 @@ class TemplateBalanceExtractor:
         flow_label_key = self._canonicalize_label(flow_label)
         fuel_label_key = self._canonicalize_label(fuel_label)
         full_path_key = (self._canonicalize_path_key(full_path_label), fuel_label_key)
+        source_sheet_key = str(row.get("source_sheet", "") or "").strip()
 
         if self.explicit_pair_mappings_only:
             flow_codes: list[str] = []
@@ -1285,9 +1273,18 @@ class TemplateBalanceExtractor:
 
         descendant_esto = _descendant_records(self._balance_full_path_pair_to_esto)
         descendant_ninth = _descendant_records(self._balance_full_path_pair_to_ninth)
-        use_descendant_records = self._balance_detail_mode == "less_detail" and bool(
-            descendant_esto or descendant_ninth
+        present_source_keys = self._balance_present_source_keys_by_sheet.get(source_sheet_key, set())
+        descendant_source_present = any(
+            descendant_fuel_key == full_path_key[1]
+            and descendant_path_key.startswith(f"{full_path_key[0]}/")
+            for descendant_path_key, descendant_fuel_key in present_source_keys
         )
+        # Some LEAP balance exports expose a mapped child branch only as its parent
+        # row. Use descendant mappings only when that child row is absent from
+        # the current sheet, otherwise the parent would double-count the child.
+        use_descendant_records = bool(descendant_esto or descendant_ninth) and (
+            self._balance_detail_mode == "less_detail" or not full_path_esto
+        ) and not descendant_source_present
         if use_descendant_records:
             if descendant_esto:
                 full_path_esto = descendant_esto
@@ -1297,7 +1294,9 @@ class TemplateBalanceExtractor:
         # Detailed workbooks use remove_row markers to suppress duplicate parent rows.
         # Less-detail workbooks keep removable parent rows only when they can be
         # expanded across descendant child mappings.
-        remove_row = full_path_key in self._balance_full_path_pairs_to_remove and not use_descendant_records
+        remove_row = (
+            full_path_key in self._balance_full_path_pairs_to_remove and not use_descendant_records
+        ) or (descendant_source_present and not full_path_esto)
         full_path_meta = (full_path_esto[0] if full_path_esto else full_path_ninth[0]) if (full_path_esto or full_path_ninth) else {}
         mapped_sector_path = str(full_path_meta.get("candidate_leap_sector_name_full_path", "") or full_path_label)
         mapped_fuel_label = str(full_path_meta.get("candidate_leap_fuel_name", "") or fuel_label)
@@ -1308,8 +1307,17 @@ class TemplateBalanceExtractor:
         subtotal_mismatch_is_ok = bool(full_path_meta.get("subtotal_mismatch_is_ok", False))
 
         if full_path_ninth:
-            sector_code = str(full_path_ninth[0].get("ninth_sector", "")).strip()
-            fuel_code = str(full_path_ninth[0].get("ninth_fuel", "")).strip()
+            sector_codes: list[str] = []
+            fuel_codes_from_full_path: list[str] = []
+            for ninth_record in full_path_ninth:
+                ninth_sector = str(ninth_record.get("ninth_sector", "")).strip()
+                ninth_fuel = str(ninth_record.get("ninth_fuel", "")).strip()
+                if ninth_sector and ninth_sector not in sector_codes:
+                    sector_codes.append(ninth_sector)
+                if ninth_fuel and ninth_fuel not in fuel_codes_from_full_path:
+                    fuel_codes_from_full_path.append(ninth_fuel)
+            sector_code = "|".join(sector_codes)
+            fuel_code = "|".join(fuel_codes_from_full_path)
 
         canonical = (
             self._canonical_pair_to_esto.get((sector_code, fuel_code), [])
@@ -1411,6 +1419,7 @@ class TemplateBalanceExtractor:
             )
             records.append(
                 {
+                    "source_sheet": source_sheet_key,
                     "leap_sector_name": flow_label,
                     "mapped_leap_sector_name": mapped_sector_path,
                     "leap_sector_name_original": original_flow_label,
@@ -1438,7 +1447,10 @@ class TemplateBalanceExtractor:
                     "ninth_mapping_found": ninth_mapping_found,
                     "leap_is_subtotal": leap_is_subtotal,
                     "esto_is_subtotal": bool(matching_esto.get("esto_is_subtotal", False)),
-                    "ninth_is_subtotal": bool(full_path_ninth[0].get("ninth_is_subtotal", False)) if full_path_ninth else False,
+                    "ninth_is_subtotal": any(
+                        bool(record.get("ninth_is_subtotal", False))
+                        for record in full_path_ninth
+                    ) if full_path_ninth else False,
                     "leap_sector_candidates": "|".join(flow_codes),
                     "leap_fuel_candidates": "|".join(fuel_codes),
                     "esto_flow_candidates": (
@@ -1487,7 +1499,11 @@ class TemplateBalanceExtractor:
         for sheet_name in selected_sheets:
             ws = wb[sheet_name]
             meta = self._extract_metadata(ws)
-            extracted = self._extract_sheet_matrix(ws, template=template_layout)
+            try:
+                sheet_layout = self._extract_layout(ws)
+            except ValueError:
+                sheet_layout = template_layout
+            extracted = self._extract_sheet_matrix(ws, template=sheet_layout)
             extracted.insert(0, "source_sheet", sheet_name)
             extracted.insert(1, "source_workbook", str(workbook_path))
             extracted["area"] = str(meta.get("area", ""))
@@ -1533,13 +1549,13 @@ class TemplateBalanceExtractor:
             coverage_rows.append(
                 {
                     "source_sheet": sheet_name,
-                    "template_flow_count": len(template_layout.flows),
-                    "template_fuel_count": len(template_layout.fuels),
+                    "template_flow_count": len(sheet_layout.flows),
+                    "template_fuel_count": len(sheet_layout.fuels),
                     "matched_flow_count": int(
-                        extracted["flow_present_in_sheet"].sum() / max(len(template_layout.fuels), 1)
+                        extracted["flow_present_in_sheet"].sum() / max(len(sheet_layout.fuels), 1)
                     ),
                     "matched_fuel_count": int(
-                        extracted["fuel_present_in_sheet"].sum() / max(len(template_layout.flows), 1)
+                        extracted["fuel_present_in_sheet"].sum() / max(len(sheet_layout.flows), 1)
                     ),
                     "missing_flow_names": "|".join(sorted(set(missing_flows))),
                     "missing_fuel_names": "|".join(sorted(set(missing_fuels))),
@@ -1599,8 +1615,19 @@ class TemplateBalanceExtractor:
         )
         self._balance_detail_mode = workbook_detail_mode
         self._balance_sheet_detail_modes = sheet_detail_modes
+        present_source_keys_by_sheet: dict[str, set[tuple[str, str]]] = {}
+        for sheet_name, sheet_frame in extracted_long.groupby("source_sheet", dropna=False):
+            sheet_key = str(sheet_name or "").strip()
+            keys: set[tuple[str, str]] = set()
+            for _, source_row in sheet_frame.iterrows():
+                source_path = self._canonicalize_path_key(source_row.get("leap_sector_name_full_path", ""))
+                source_fuel = self._canonicalize_label(source_row.get("leap_fuel_name", ""))
+                if source_path and source_fuel:
+                    keys.add((source_path, source_fuel))
+            present_source_keys_by_sheet[sheet_key] = keys
+        self._balance_present_source_keys_by_sheet = present_source_keys_by_sheet
 
-        key_cols = ["leap_sector_name", "leap_sector_name_original", "leap_sector_name_full_path", "leap_fuel_name"]
+        key_cols = ["source_sheet", "leap_sector_name", "leap_sector_name_original", "leap_sector_name_full_path", "leap_fuel_name"]
         unique_keys = extracted_long[key_cols].drop_duplicates().reset_index(drop=True)
         mapped_records: list[dict[str, str]] = []
         for _, key_row in unique_keys.iterrows():

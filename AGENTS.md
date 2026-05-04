@@ -69,6 +69,11 @@ Apply this section only when editing dashboard mapping/comparison code
 - Always produce mapping diagnostics and line-level ledgers so each plotted value can be traced to mapping decisions.
 - Keep outputs that make aggregate composition auditable (for example, total-component ledgers and mapping-status artifacts).
 - Distinguish mapping differences from methodological differences in interpretation; mismatches are expected in some cases and should be explainable.
+- For ESTO-axis balance dashboards, do not rely only on `comparison_long.csv` for rendered chart semantics: transformation input/output splitting can happen in the render input. When debugging plotted values, check `supporting_files/charting/chart_line_mapping_ledger.csv` and the rendered chart exposure files.
+- Positive transformation values are outputs and must not appear as non-zero values in `Inputs (incl. losses & own-use) (PJ)` charts. Negative transformation values are inputs and are displayed as absolute values.
+- Multi-flow template charts, such as Power electricity plants combining `09.01.01` and `09.02.01`, can duplicate direct ESTO-sheet rows if not suppressed. Ensure template virtual rows and direct rows do not both expose the same comparator key in one chart group.
+- `mapping_lineage_audit.csv` can miss rows if lineage is filtered only to rendered chart groups. Keep unmatched lineage rows when chart metadata attachment fails, so missing chart exposure does not hide mappings.
+- For Power/Electricity spot checks: a large positive 9th `17 Electricity` value belongs in `Outputs (PJ)`, while the corresponding Inputs chart should have only a zero placeholder for that fuel if no negative electricity input exists.
 
 ### Validation Checklist
 
@@ -143,6 +148,7 @@ Keep this structure in mind when adding new transformations or debugging data is
 
 ## Python Environment
 
+- For dashboard chart rendering from Windows PowerShell, `C:\Users\Work\miniconda3\python.exe` may lack `plotly`/`matplotlib`. Use `C:\Users\Work\github\codex_notebook_testing_environment\env_leap\python.exe` or `C:\Users\Work\github\9th_edition_visualisation\env_9th_visualisation\python.exe` when chart HTML files need to be regenerated.
 - This repo's `.venv` is a WSL-created venv (`home = /usr/bin` in `pyvenv.cfg`) and cannot be used from Windows shells (PowerShell, cmd, or the Bash tool when running in a Git-Bash context on Windows).
 - Use `/c/Users/Work/miniconda3/python.exe` for all Python scripts run via the Bash tool (Git-Bash on Windows).
 - Do **not** attempt to activate `.venv/bin/activate` from the Bash tool — it will fail silently or error.

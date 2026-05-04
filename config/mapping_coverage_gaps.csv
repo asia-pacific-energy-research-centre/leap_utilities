@@ -256,17 +256,11 @@ esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,20 Total Renewab
 esto_missing,esto_flow,esto_product,09.01.01 Electricity plants,21 Modern renewables,20281.044111
 esto_missing,esto_flow,esto_product,09.01.02 CHP plants,01 Coal,2328.522684
 esto_missing,esto_flow,esto_product,09.01.02 CHP plants,02 Coal products,6.041008
-esto_missing,esto_flow,esto_product,09.01.02 CHP plants,02.04 Blast furnace gas,6.041008
-esto_missing,esto_flow,esto_product,09.01.02 CHP plants,03 Peat,5.311919
 esto_missing,esto_flow,esto_product,09.01.02 CHP plants,07 Petroleum products,63.267925
-esto_missing,esto_flow,esto_product,09.01.02 CHP plants,07.06 Kerosene,0.02106
 esto_missing,esto_flow,esto_product,09.01.02 CHP plants,07.07 Gas/diesel oil,1.639509
 esto_missing,esto_flow,esto_product,09.01.02 CHP plants,07.08 Fuel oil,38.521006
-esto_missing,esto_flow,esto_product,09.01.02 CHP plants,07.09 LPG,3.264574
 esto_missing,esto_flow,esto_product,09.01.02 CHP plants,07.16 Petroleum coke,19.470253
-esto_missing,esto_flow,esto_product,09.01.02 CHP plants,07.17 Other products,0.351524
 esto_missing,esto_flow,esto_product,09.01.02 CHP plants,08 Gas,7190.618282
-esto_missing,esto_flow,esto_product,09.01.02 CHP plants,09 Nuclear,14.595352
 esto_missing,esto_flow,esto_product,09.01.02 CHP plants,15 Solid biomass,72.736539
 esto_missing,esto_flow,esto_product,09.01.02 CHP plants,15.05 Other biomass,72.736539
 esto_missing,esto_flow,esto_product,09.01.02 CHP plants,16 Others,36.237840000000006
@@ -280,27 +274,11 @@ esto_missing,esto_flow,esto_product,09.01.02 CHP plants,20 Total Renewables,92.6
 esto_missing,esto_flow,esto_product,09.01.02 CHP plants,21 Modern renewables,92.695936
 esto_missing,esto_flow,esto_product,09.01.03 Heat plants,01 Coal,9228.97717
 esto_missing,esto_flow,esto_product,09.01.03 Heat plants,02 Coal products,336.488714
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,02.01 Coke oven coke,47.098845
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,02.03 Coke oven gas,107.662441
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,02.04 Blast furnace gas,143.650935
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,02.05 Other recovered gases,38.076493
 esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07 Petroleum products,283.512924
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07.06 Kerosene,0.2165
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07.07 Gas/diesel oil,1.43313
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07.08 Fuel oil,101.956177
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07.09 LPG,22.248627
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07.10 Refinery gas (not liquefied),85.416692
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07.16 Petroleum coke,65.976694
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,07.17 Other products,6.265106
 esto_missing,esto_flow,esto_product,09.01.03 Heat plants,08 Gas,894.1180889999999
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,08.03 Gas works gas,11.823287
 esto_missing,esto_flow,esto_product,09.01.03 Heat plants,15 Solid biomass,213.826929
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,15.05 Other biomass,213.826929
 esto_missing,esto_flow,esto_product,09.01.03 Heat plants,16 Others,168.678909
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,16.01 Biogas,4.327979
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,16.02 Industrial waste,159.231897
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,16.03 Municipal solid waste (renewable),2.967018
-esto_missing,esto_flow,esto_product,09.01.03 Heat plants,16.04 Municipal solid waste (non-renewable),2.152015
+esto_missing,esto_flow,esto_product,09.01.03 Heat plants,17 Electricity,0.57708
 esto_missing,esto_flow,esto_product,09.01.03 Heat plants,19 Total,1242.303386
 esto_missing,esto_flow,esto_product,09.01.03 Heat plants,20 Total Renewables,221.121926
 esto_missing,esto_flow,esto_product,09.01.03 Heat plants,21 Modern renewables,221.121926
@@ -368,49 +346,28 @@ esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,12 Solar,539.358
 esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,15 Solid biomass,451.680237
 esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,16 Others,267.983389
 esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,16.09 Other sources,1.011195
+esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,18 Heat,1509.814185
 esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,19 Total,3273.146361
 esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,20 Total Renewables,1359.1319330000001
 esto_missing,esto_flow,esto_product,09.02.01 Electricity plants,21 Modern renewables,1359.13185
 esto_missing,esto_flow,esto_product,09.02.02 CHP plants,01 Coal,631.604401
 esto_missing,esto_flow,esto_product,09.02.02 CHP plants,02 Coal products,169.28020600000002
-esto_missing,esto_flow,esto_product,09.02.02 CHP plants,02.03 Coke oven gas,73.086757
-esto_missing,esto_flow,esto_product,09.02.02 CHP plants,02.05 Other recovered gases,4.055395
 esto_missing,esto_flow,esto_product,09.02.02 CHP plants,06 Crude oil & NGL,2.6290810000000002
-esto_missing,esto_flow,esto_product,09.02.02 CHP plants,06.01 Crude oil,0.073185
-esto_missing,esto_flow,esto_product,09.02.02 CHP plants,06.03 Refinery feedstocks,2.555896
 esto_missing,esto_flow,esto_product,09.02.02 CHP plants,07 Petroleum products,167.787216
-esto_missing,esto_flow,esto_product,09.02.02 CHP plants,07.03 Naphtha,27.365469
-esto_missing,esto_flow,esto_product,09.02.02 CHP plants,07.09 LPG,0.171132
-esto_missing,esto_flow,esto_product,09.02.02 CHP plants,07.10 Refinery gas (not liquefied),55.213927
-esto_missing,esto_flow,esto_product,09.02.02 CHP plants,07.17 Other products,28.784703
 esto_missing,esto_flow,esto_product,09.02.02 CHP plants,08 Gas,1646.027511
-esto_missing,esto_flow,esto_product,09.02.02 CHP plants,11 Geothermal,1.249802
 esto_missing,esto_flow,esto_product,09.02.02 CHP plants,15 Solid biomass,370.64919299999997
 esto_missing,esto_flow,esto_product,09.02.02 CHP plants,15.01 Fuelwood & woodwaste,0.041578
-esto_missing,esto_flow,esto_product,09.02.02 CHP plants,15.02 Bagasse,0.008112
-esto_missing,esto_flow,esto_product,09.02.02 CHP plants,15.04 Black liqour,0.713601
 esto_missing,esto_flow,esto_product,09.02.02 CHP plants,16 Others,188.456071
-esto_missing,esto_flow,esto_product,09.02.02 CHP plants,16.08 Other liquid biofuels,1.750627
-esto_missing,esto_flow,esto_product,09.02.02 CHP plants,16.09 Other sources,3.116863
 esto_missing,esto_flow,esto_product,09.02.02 CHP plants,19 Total,1445.622985
 esto_missing,esto_flow,esto_product,09.02.02 CHP plants,20 Total Renewables,415.100194
 esto_missing,esto_flow,esto_product,09.02.02 CHP plants,21 Modern renewables,415.10011
 esto_missing,esto_flow,esto_product,09.02.03 Heat plants,01 Coal,562.156277
-esto_missing,esto_flow,esto_product,09.02.03 Heat plants,01.05 Lignite,103.935552
 esto_missing,esto_flow,esto_product,09.02.03 Heat plants,02 Coal products,21.461453
-esto_missing,esto_flow,esto_product,09.02.03 Heat plants,03 Peat,3.380506
-esto_missing,esto_flow,esto_product,09.02.03 Heat plants,04 Peat products,0.1022
 esto_missing,esto_flow,esto_product,09.02.03 Heat plants,06 Crude oil & NGL,22.424124
-esto_missing,esto_flow,esto_product,09.02.03 Heat plants,06.01 Crude oil,22.424124
 esto_missing,esto_flow,esto_product,09.02.03 Heat plants,07 Petroleum products,104.412219
-esto_missing,esto_flow,esto_product,09.02.03 Heat plants,07.03 Naphtha,0.884043
 esto_missing,esto_flow,esto_product,09.02.03 Heat plants,08 Gas,1829.929324
 esto_missing,esto_flow,esto_product,09.02.03 Heat plants,15 Solid biomass,20.447912
 esto_missing,esto_flow,esto_product,09.02.03 Heat plants,16 Others,102.528577
-esto_missing,esto_flow,esto_product,09.02.03 Heat plants,16.01 Biogas,1.899007
-esto_missing,esto_flow,esto_product,09.02.03 Heat plants,16.02 Industrial waste,90.909872
-esto_missing,esto_flow,esto_product,09.02.03 Heat plants,16.03 Municipal solid waste (renewable),4.056632
-esto_missing,esto_flow,esto_product,09.02.03 Heat plants,16.04 Municipal solid waste (non-renewable),5.663066
 esto_missing,esto_flow,esto_product,09.02.03 Heat plants,17 Electricity,0.57708
 esto_missing,esto_flow,esto_product,09.02.03 Heat plants,19 Total,147.937969
 esto_missing,esto_flow,esto_product,09.02.03 Heat plants,20 Total Renewables,26.403552

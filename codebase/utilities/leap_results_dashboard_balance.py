@@ -52,7 +52,7 @@ DEFAULT_TGT_WORKBOOK_PATH = resolve_balance_export_workbook(
     scenario="TGT",
     date_id=DEFAULT_TGT_BALANCE_EXPORT_DATE_ID,
 )
-DEFAULT_MAPPING_PAIRS_PATH = REPO_ROOT / "config/ninth_pairs_to_esto_pairs.xlsx"
+DEFAULT_MAPPING_PAIRS_PATH = (REPO_ROOT / "config/master_config.xlsx", "ninth_pairs_to_esto_pairs")
 DEFAULT_CODEBOOK_PATH = REPO_ROOT / "config/sector_fuel_codes_to_names.xlsx"
 
 DEFAULT_SHEET_MAP_PATH = REPO_ROOT / "config/leap_results_sheet_map.csv"
@@ -69,7 +69,7 @@ DEFAULT_EMPTY_PAGE_NOTICE = (
     "The page is kept to preserve the configured dashboard structure."
 )
 
-TRANSFORMATION_INPUT_MEASURE = "Inputs (incl. losses & own-use) (PJ)"
+TRANSFORMATION_INPUT_MEASURE = "Inputs (PJ)"
 TRANSFORMATION_OUTPUT_MEASURE = "Outputs (PJ)"
 TRANSFORMATION_DASHBOARD_TOP_GROUPS = {"Power", "Refining", "Other transformation"}
 
@@ -583,6 +583,18 @@ def _coalesce_unique(series: pd.Series) -> str:
     return unique[0]
 
 
+def _coalesce_pipe_tokens_unique(series: pd.Series) -> str:
+    """Join unique pipe-delimited mapping tokens without dropping later rows."""
+    tokens: list[str] = []
+    for value in series.fillna("").astype(str).tolist():
+        for token in str(value).split("|"):
+            token = token.strip()
+            if token:
+                tokens.append(token)
+    unique = sorted(set(tokens))
+    return "|".join(unique)
+
+
 def _series_or_default(frame: pd.DataFrame, column: str, default: object = "") -> pd.Series:
     if column in frame.columns:
         return frame[column]
@@ -636,7 +648,7 @@ def convert_leap_balances_to_esto_long_table(
     ref_workbook_path: Path | str = DEFAULT_REF_WORKBOOK_PATH,
     tgt_workbook_path: Path | str = DEFAULT_TGT_WORKBOOK_PATH,
     template_sheet: str = "EBal|2060",
-    mapping_pairs_path: Path | str = DEFAULT_MAPPING_PAIRS_PATH,
+    mapping_pairs_path: ConfigTableRef = DEFAULT_MAPPING_PAIRS_PATH,
     codebook_path: Path | str = DEFAULT_CODEBOOK_PATH,
     structure_config: dict[str, Any] | None = None,
     known_issues: dict[str, Any] | None = None,
@@ -1225,6 +1237,7 @@ def build_mapping_lineage_audit_table(
     pre_group_incomplete_rows: pd.DataFrame,
     comparison_long_full: pd.DataFrame,
     mapping_status: pd.DataFrame,
+    mapped_ninth_to_esto_balance_rows: pd.DataFrame | None = None,
     target_years: Sequence[int] = (2022, 2023, 2060),
 ) -> pd.DataFrame:
     """
@@ -1265,6 +1278,10 @@ def build_mapping_lineage_audit_table(
         "remove_row_reason",
         "pair_mapping_cardinality",
         "subtotal_alignment",
+        "sheet",
+        "measure",
+        "fuel_label",
+        "chart_group_key",
     ]
 
     def _col(df: pd.DataFrame, name: str, default: object = "") -> pd.Series:
@@ -1339,7 +1356,33 @@ def build_mapping_lineage_audit_table(
             }))
 
     # ---- 9th projection rows ----
-    if not comparison_long_full.empty and not mapping_status.empty:
+    if mapped_ninth_to_esto_balance_rows is not None and not mapped_ninth_to_esto_balance_rows.empty:
+        ninth = mapped_ninth_to_esto_balance_rows.copy()
+        ninth["year"] = pd.to_numeric(_col(ninth, "year", pd.NA), errors="coerce").astype("Int64")
+        ninth = ninth[ninth["year"].isin(target_year_set)].copy()
+        if not ninth.empty:
+            parts.append(pd.DataFrame({
+                "dataset": "9th",
+                "scenario": _col(ninth, "scenario").fillna("").astype(str),
+                "year": ninth["year"],
+                "esto_flow": _col(ninth, "esto_flow").fillna("").astype(str),
+                "esto_product": _col(ninth, "esto_product").fillna("").astype(str),
+                "source_sector": _col(ninth, "ninth_sector").fillna("").astype(str),
+                "source_fuel": _col(ninth, "ninth_fuel").fillna("").astype(str),
+                "value_pj": pd.to_numeric(_col(ninth, "value_pj", pd.NA), errors="coerce"),
+                "is_subtotal": _col(ninth, "subtotal", False).fillna(False).astype(bool),
+                "esto_pair_is_subtotal": False,
+                "ninth_pair_is_subtotal": False,
+                "remove_row": False,
+                "remove_row_reason": "",
+                "pair_mapping_cardinality": "",
+                "subtotal_alignment": "",
+                "sheet": _col(ninth, "sheet").fillna("").astype(str),
+                "measure": _col(ninth, "measure").fillna("").astype(str),
+                "fuel_label": _col(ninth, "fuel_label").fillna("").astype(str),
+                "chart_group_key": _col(ninth, "chart_group_key").fillna("").astype(str),
+            }))
+    elif not comparison_long_full.empty and not mapping_status.empty:
         keys = ["sheet", "measure", "fuel_label"]
         proj = comparison_long_full.copy()
         proj["source"] = _col(proj, "source", "").fillna("").astype(str).str.strip()
@@ -1357,10 +1400,19 @@ def build_mapping_lineage_audit_table(
                 vals = [str(v).strip() for v in series.fillna("").astype(str) if str(v).strip()]
                 return "|".join(sorted(set(vals)))
 
+            def _join_pipe_tokens_unique(series: pd.Series) -> str:
+                tokens: list[str] = []
+                for value in series.fillna("").astype(str):
+                    for token in value.split("|"):
+                        token = token.strip()
+                        if token:
+                            tokens.append(token)
+                return "|".join(sorted(set(tokens)))
+
             meta_agg = (
                 meta.groupby(keys, as_index=False)
                 .agg(
-                    ninth_sector=("sector_code_9th", _join_unique),
+                    ninth_sector=("sector_code_9th", _join_pipe_tokens_unique),
                     ninth_fuel=("ninth_fuel_code", _join_unique),
                     esto_flow=("esto_flow", _join_unique),
                     esto_product=("esto_product", _join_unique),
@@ -1949,33 +2001,23 @@ def write_dashboard_comparator_pair_coverage(
         template_aggregate_groups: list[dict[str, object]] = []
         template_measure_default = str((template.get("defaults") or {}).get("measure", "")).strip()
         def _walk_template(node: dict[str, Any]) -> None:
-            aggregate = node.get("aggregate")
-            if isinstance(aggregate, dict):
-                source_flows = [clean(flow) for flow in list(aggregate.get("source_esto_flows", []) or []) if clean(flow)]
-                aggregate_fuel = clean(aggregate.get("fuel", ""))
+            for aggregate in _dashboard_template_aggregate_specs(node, default_measure=template_measure_default):
+                source_flows = [clean(flow) for flow in list(aggregate.get("source_flows", []) or []) if clean(flow)]
                 if source_flows:
-                    template_aggregate_groups.append(
-                        {
-                            "source_flows": source_flows,
-                            "source_flows_norm": {norm(flow) for flow in source_flows},
-                            "fuel": aggregate_fuel,
-                            "fuel_norm": norm(aggregate_fuel),
-                        }
-                    )
+                    template_aggregate_groups.append(aggregate)
                 for flow in source_flows:
-                    flow_text = clean(flow)
-                    if flow_text:
-                        template_aggregate_flows.add(flow_text)
+                    template_aggregate_flows.add(flow)
             for spec in _dashboard_template_graph_specs(node, default_measure=template_measure_default):
-                flow = clean(spec.get("esto_flow", ""))
-                for product in list(spec.get("products", []) or []):
-                    product_text = clean(product)
-                    if flow and product_text:
-                        template_exact_esto_pairs.add((norm(flow), norm(product_text)))
-                        if _product_is_total(product_text):
-                            template_total_flows.add(flow)
+                for flow in list(spec.get("esto_flows", []) or [spec.get("esto_flow", "")]):
+                    flow_text = clean(flow)
+                    for product in list(spec.get("products", []) or []):
+                        product_text = clean(product)
+                        if flow_text and product_text:
+                            template_exact_esto_pairs.add((norm(flow_text), norm(product_text)))
+                            if _product_is_total(product_text):
+                                template_total_flows.add(flow_text)
             for key, child in node.items():
-                if key in {"defaults", "aggregate", "graphs", "esto_flow", "_comments", "comments"} or not isinstance(child, dict):
+                if key in TEMPLATE_RESERVED_KEYS or not isinstance(child, dict):
                     continue
                 _walk_template(child)
 
@@ -2875,6 +2917,17 @@ def attach_chart_groups_to_dashboard_exposure(
         "section_label",
         "entry_kind",
     ]
+
+    def _one_metadata_row_per_key(frame: pd.DataFrame, join_cols: list[str], value_cols: list[str]) -> pd.DataFrame:
+        """Keep chart metadata joins row-preserving when a coarse fallback key is duplicated."""
+        if frame.empty:
+            return frame.copy()
+        keep_cols = [*join_cols, *value_cols]
+        work = frame[keep_cols].drop_duplicates().copy()
+        if work.empty:
+            return work
+        return work.groupby(join_cols, as_index=False, dropna=False).first()
+
     merged = exposure.drop(
         columns=metadata_cols
         + [
@@ -2894,14 +2947,15 @@ def attach_chart_groups_to_dashboard_exposure(
     ).copy()
     if not chart_groups.empty:
         chart_groups = _backfill_dashboard_hierarchy(chart_groups)
+        preferred_meta = _one_metadata_row_per_key(chart_groups, preferred_join_cols, metadata_cols)
         merged = merged.merge(
-            chart_groups[preferred_join_cols + metadata_cols].drop_duplicates(),
+            preferred_meta,
             on=preferred_join_cols,
             how="left",
         )
         fallback_needed = merged["chart_group_id"].fillna("").astype(str).str.strip().eq("")
         if fallback_needed.any():
-            fallback_meta = chart_groups[fallback_join_cols + metadata_cols].drop_duplicates()
+            fallback_meta = _one_metadata_row_per_key(chart_groups, fallback_join_cols, metadata_cols)
             fallback = merged.loc[fallback_needed].drop(columns=metadata_cols, errors="ignore").merge(
                 fallback_meta,
                 on=fallback_join_cols,
@@ -2949,8 +3003,9 @@ def attach_chart_groups_to_dashboard_exposure(
             ("chart_group_label", "all_chart_group_label"),
         ]:
             all_join[target_col] = all_join.get(source_col, "").fillna("").astype(str).str.strip()
+        all_meta = _one_metadata_row_per_key(all_join, preferred_join_cols, all_metadata_cols)
         merged = merged.merge(
-            all_join[preferred_join_cols + all_metadata_cols].drop_duplicates(),
+            all_meta,
             on=preferred_join_cols,
             how="left",
         )
@@ -2973,6 +3028,325 @@ def attach_chart_groups_to_dashboard_exposure(
             merged[col] = merged[col].fillna("").astype(str).str.strip()
         merged["chart_exposed_in_dashboard"] = False
     return merged
+
+
+def attach_chart_groups_to_mapping_lineage_audit(
+    mapping_lineage_audit: pd.DataFrame,
+    chart_group_exposure_path: Path | str | None,
+    all_chart_groups_path: Path | str | None = None,
+) -> pd.DataFrame:
+    """Filter mapping lineage audit rows to rendered charts and attach chart metadata."""
+    audit = pd.DataFrame() if mapping_lineage_audit is None else mapping_lineage_audit.copy()
+    chart_cols = [
+        "chart_group_id",
+        "dashboard_path",
+        "chart_file",
+        "page_key",
+        "page_label",
+        "chart_group_key",
+        "chart_group_label",
+        "section_id",
+        "section_label",
+        "entry_kind",
+        "all_chart_group_id",
+        "all_dashboard_path",
+        "all_chart_file",
+        "all_page_key",
+        "all_page_label",
+        "all_chart_group_key",
+        "all_chart_group_label",
+        "all_section_id",
+        "all_section_label",
+        "all_entry_kind",
+        "chart_exposed_in_dashboard",
+    ]
+    for col in chart_cols:
+        if col not in audit.columns:
+            audit[col] = False if col == "chart_exposed_in_dashboard" else ""
+    if audit.empty:
+        leading = [
+            "chart_group_id",
+            "dashboard_path",
+            "chart_file",
+            "chart_group_key",
+            "chart_group_label",
+            "dataset",
+            "scenario",
+            "year",
+            "esto_flow",
+            "esto_product",
+            "source_sector",
+            "source_fuel",
+            "value_pj",
+        ]
+        return audit.reindex(columns=[*leading, *[c for c in audit.columns if c not in leading]])
+
+    working = audit.copy()
+    for col in ["esto_flow", "esto_product", "source_sector", "source_fuel"]:
+        if col not in working.columns:
+            working[col] = ""
+        working[col] = working[col].fillna("").astype(str).str.strip()
+
+    # For 9th lineage rows, the charted fuel is the ESTO product label, not the
+    # raw 9th fuel code. For LEAP/ESTO rows this is also the intended chart fuel.
+    working["fuel_label"] = working["esto_product"].map(lambda value: _strip_esto_code_prefix(value) or _clean_token(value))
+
+    def _lineage_measure_rows(frame: pd.DataFrame) -> pd.DataFrame:
+        if frame.empty:
+            return frame.copy()
+        base = frame.copy()
+        if "sheet" not in base.columns:
+            base["sheet"] = ""
+        base["sheet"] = base["sheet"].fillna("").astype(str).str.strip()
+        missing_sheet = base["sheet"].eq("")
+        base.loc[missing_sheet, "sheet"] = base.loc[missing_sheet, "esto_flow"].map(_sheet_key_from_esto_flow)
+        value = pd.to_numeric(base.get("value_pj", pd.Series(index=base.index)), errors="coerce")
+        flow_text = base["esto_flow"].fillna("").astype(str).str.strip()
+        is_transformation = flow_text.str.startswith("09") | flow_text.str.startswith("08.99")
+        normal = base[~is_transformation].copy()
+        normal["measure"] = "Energy balance (PJ)"
+        transform = base[is_transformation].copy()
+        if transform.empty:
+            return normal
+        tvalue = pd.to_numeric(transform.get("value_pj", pd.Series(index=transform.index)), errors="coerce")
+        input_rows = transform[tvalue.le(0) | tvalue.isna()].copy()
+        output_rows = transform[tvalue.ge(0) | tvalue.isna()].copy()
+        input_rows["measure"] = TRANSFORMATION_INPUT_MEASURE
+        output_rows["measure"] = TRANSFORMATION_OUTPUT_MEASURE
+        return pd.concat([normal, input_rows, output_rows], ignore_index=True, sort=False)
+
+    working = _lineage_measure_rows(working)
+
+    attached = attach_chart_groups_to_dashboard_exposure(
+        working,
+        chart_group_exposure_path,
+        all_chart_groups_path,
+    )
+
+    attached = attached.drop(columns=["sheet", "measure", "fuel_label"], errors="ignore")
+    leading = [
+        "chart_group_id",
+        "dashboard_path",
+        "chart_file",
+        "chart_group_key",
+        "chart_group_label",
+        "section_id",
+        "section_label",
+        "entry_kind",
+        "dataset",
+        "scenario",
+        "year",
+        "esto_flow",
+        "esto_product",
+        "source_sector",
+        "source_fuel",
+        "value_pj",
+    ]
+    attached = attached.reindex(columns=[*leading, *[c for c in attached.columns if c not in leading]])
+    if not attached.empty:
+        attached = attached.sort_values(
+            ["dashboard_path", "chart_group_id", "dataset", "scenario", "year", "esto_flow", "esto_product", "source_sector", "source_fuel"],
+            kind="mergesort",
+        ).reset_index(drop=True)
+    return attached
+
+
+def _chart_kind_from_entry(value: object) -> str:
+    text = _clean_token(value).lower()
+    if text == "aggregate":
+        return "aggregate_total"
+    if text == "direct":
+        return "by_fuel"
+    return text or "by_fuel"
+
+
+def _output_existing_columns(frame: pd.DataFrame, columns: Sequence[str]) -> pd.DataFrame:
+    out = frame.copy()
+    keep = [col for col in columns if col in out.columns]
+    return out[keep].copy()
+
+
+def _with_simplified_dashboard_context(frame: pd.DataFrame) -> pd.DataFrame:
+    out = pd.DataFrame() if frame is None else frame.copy()
+    out = _add_dashboard_context_aliases(out)
+    if "entry_kind" in out.columns:
+        entry_kind = out["entry_kind"].fillna("").astype(str)
+        if "chart_kind" not in out.columns:
+            out["chart_kind"] = entry_kind.map(_chart_kind_from_entry)
+        else:
+            out["chart_kind"] = out["chart_kind"].fillna("").astype(str).str.strip()
+            missing = out["chart_kind"].eq("")
+            out.loc[missing, "chart_kind"] = entry_kind.loc[missing].map(_chart_kind_from_entry)
+    return out
+
+
+def simplify_mapping_lineage_audit_output(mapping_lineage_audit: pd.DataFrame) -> pd.DataFrame:
+    """Return a human-facing mapping-lineage table without renderer bookkeeping columns."""
+    out = _with_simplified_dashboard_context(mapping_lineage_audit)
+    if out.empty:
+        columns = [
+            "dashboard_path",
+            "chart_file",
+            "dashboard_page_key",
+            "dashboard_page_label",
+            "dashboard_section_key",
+            "dashboard_section_label",
+            "chart_kind",
+            "esto_flow_group_key",
+            "esto_flow_group_label",
+            "dataset",
+            "scenario",
+            "year",
+            "esto_flow",
+            "esto_product",
+            "source_sector",
+            "source_fuel",
+            "value_pj",
+            "is_subtotal",
+            "esto_pair_is_subtotal",
+            "ninth_pair_is_subtotal",
+        ]
+        return pd.DataFrame(columns=columns)
+
+    for col in ["chart_group_id", "chart_file", "dashboard_path", "dashboard_section_label", "esto_flow"]:
+        if col not in out.columns:
+            out[col] = ""
+        out[col] = out[col].fillna("").astype(str).str.strip()
+
+    group_cols = ["chart_group_id"]
+    if out["chart_group_id"].eq("").all():
+        group_cols = ["chart_file"] if out["chart_file"].ne("").any() else ["dashboard_path", "dashboard_section_label"]
+
+    group_context = []
+    for values, group in out.groupby(group_cols, dropna=False):
+        key_values = values if isinstance(values, tuple) else (values,)
+        key_record = dict(zip(group_cols, key_values, strict=False))
+        flows = [flow for flow in group["esto_flow"].dropna().astype(str).str.strip().unique() if flow]
+        label = next((text for text in group["dashboard_section_label"].dropna().astype(str).str.strip() if text), "")
+        group_context.append(
+            {
+                **key_record,
+                "esto_flow_group_key": _esto_flow_group_key(flows),
+                "esto_flow_group_label": _esto_flow_group_label(flows, fallback_label=label),
+            }
+        )
+    context = pd.DataFrame(group_context)
+    if not context.empty:
+        out = out.drop(columns=["esto_flow_group_key", "esto_flow_group_label"], errors="ignore").merge(
+            context,
+            on=group_cols,
+            how="left",
+        )
+
+    out["esto_flow_key"] = out["esto_flow"].map(_esto_flow_key)
+    columns = [
+        "dashboard_path",
+        "chart_file",
+        "dashboard_page_key",
+        "dashboard_page_label",
+        "dashboard_section_key",
+        "dashboard_section_label",
+        "chart_kind",
+        "esto_flow_group_key",
+        "esto_flow_group_label",
+        "esto_flow_key",
+        "dataset",
+        "scenario",
+        "year",
+        "esto_flow",
+        "esto_product",
+        "source_sector",
+        "source_fuel",
+        "value_pj",
+        "is_subtotal",
+        "esto_pair_is_subtotal",
+        "ninth_pair_is_subtotal",
+    ]
+    sort_cols = [col for col in ["dashboard_path", "chart_file", "dataset", "scenario", "year", "esto_flow", "esto_product", "source_sector", "source_fuel"] if col in out.columns]
+    out = _output_existing_columns(out, columns)
+    if sort_cols:
+        out = out.sort_values([col for col in sort_cols if col in out.columns], kind="mergesort").reset_index(drop=True)
+    return out
+
+
+def simplify_chart_line_mapping_ledger_output(chart_line_mapping_ledger: pd.DataFrame) -> pd.DataFrame:
+    """Return a compact per-chart-line ledger for human review."""
+    out = _with_simplified_dashboard_context(chart_line_mapping_ledger)
+    if not out.empty:
+        out = _add_esto_flow_context_columns(out)
+    rename_map = {
+        "sector_code_9th": "source_sector",
+        "ninth_fuel_code": "source_fuel",
+    }
+    out = out.rename(columns={k: v for k, v in rename_map.items() if k in out.columns and v not in out.columns})
+    columns = [
+        "dashboard_path",
+        "chart_file",
+        "dashboard_page_key",
+        "dashboard_page_label",
+        "dashboard_section_key",
+        "dashboard_section_label",
+        "chart_kind",
+        "esto_flow_group_key",
+        "esto_flow_group_label",
+        "esto_flow_key",
+        "economy",
+        "scenario",
+        "year",
+        "measure",
+        "fuel_label",
+        "source",
+        "value",
+        "ninth_pairs_label",
+        "is_total_line",
+        "mapping_record_type",
+        "esto_flow",
+        "esto_product",
+        "source_sector",
+        "source_fuel",
+        "exact_comparator_key",
+        "duplicate_exact_comparator_key_count",
+        "component_included_in_total",
+        "total_component_bucket_count",
+        "mapping_source",
+        "mapping_note",
+    ]
+    return _output_existing_columns(out, columns)
+
+
+def simplify_chart_total_component_ledger_output(chart_total_component_ledger: pd.DataFrame) -> pd.DataFrame:
+    """Return a compact total-component ledger focused on included members."""
+    out = _with_simplified_dashboard_context(chart_total_component_ledger)
+    rename_map = {
+        "sector_code_9th": "source_sector",
+        "ninth_fuel_code": "source_fuel",
+    }
+    out = out.rename(columns={k: v for k, v in rename_map.items() if k in out.columns and v not in out.columns})
+    columns = [
+        "dashboard_page_key",
+        "dashboard_page_label",
+        "dashboard_section_key",
+        "dashboard_section_label",
+        "chart_kind",
+        "economy",
+        "scenario",
+        "source",
+        "year",
+        "measure",
+        "sheet",
+        "member_fuel_label",
+        "member_value",
+        "component_included_in_total",
+        "exact_comparator_key",
+        "duplicate_exact_comparator_key_count",
+        "source_sector",
+        "source_fuel",
+        "projection_parent_sector_code",
+        "sector_depth",
+        "fuel_depth",
+        "is_leaf_level",
+    ]
+    return _output_existing_columns(out, columns)
 
 
 def write_ninth_mapping_data_coverage(
@@ -3272,7 +3646,7 @@ def _extract_balance_workbook(
     workbook_path: Path,
     *,
     template_sheet: str,
-    mapping_pairs_path: Path,
+    mapping_pairs_path: ConfigTableRef,
     codebook_path: Path,
     explicit_pair_mappings_only: bool = False,
 ) -> dict[str, Any]:
@@ -3309,7 +3683,7 @@ def load_balance_leap_long(
     ref_workbook_path: Path | str = DEFAULT_REF_WORKBOOK_PATH,
     tgt_workbook_path: Path | str = DEFAULT_TGT_WORKBOOK_PATH,
     template_sheet: str = "EBal|2060",
-    mapping_pairs_path: Path | str = DEFAULT_MAPPING_PAIRS_PATH,
+    mapping_pairs_path: ConfigTableRef = DEFAULT_MAPPING_PAIRS_PATH,
     codebook_path: Path | str = DEFAULT_CODEBOOK_PATH,
     structure_config: dict[str, Any] | None = None,
     known_issues: dict[str, Any] | None = None,
@@ -3325,13 +3699,14 @@ def load_balance_leap_long(
 
     ref_path = _resolve(ref_workbook_path)
     tgt_path = _resolve(tgt_workbook_path)
-    mapping_pairs = _resolve(mapping_pairs_path)
+    mapping_pairs = _resolve_config_table_ref(mapping_pairs_path)
     codebook = _resolve(codebook_path)
 
     for candidate in [ref_path, tgt_path]:
         if not candidate.exists():
             raise FileNotFoundError(f"Missing required input: {candidate}")
-    if not config_table_exists(mapping_pairs):
+    mapping_pairs_file, mapping_pairs_sheet = split_config_table_ref(mapping_pairs)
+    if not config_table_exists(mapping_pairs_file, sheet_name=mapping_pairs_sheet):
         raise FileNotFoundError(f"Missing required input: {mapping_pairs}")
     if not config_table_exists(codebook, sheet_name="code_to_name"):
         raise FileNotFoundError(f"Missing required input: {codebook}")
@@ -3421,6 +3796,15 @@ def load_balance_leap_long(
 
     conflict_rows = pd.DataFrame(columns=mapped.columns)
     agg_keys = ["scenario", "year", "leap_sector", "leap_fuel", "esto_flow", "esto_product"]
+    for col in [
+        "leap_sector_name_full_path",
+        "leap_sector_name_original",
+        "mapping_key_sector",
+        "mapping_key_fuel",
+        "mapping_candidate_rule",
+    ]:
+        if col not in mapped.columns:
+            mapped[col] = ""
 
     grouped = (
         mapped.groupby(agg_keys, as_index=False)
@@ -3667,6 +4051,7 @@ def _build_mapping_status_with_availability(
             availability[source_col] = False
         availability[target_col] = availability[source_col].astype("boolean").fillna(False).astype(bool)
 
+    out = out.drop(columns=["has_leap", "has_base", "has_projection"], errors="ignore")
     out = out.merge(
         availability[keys + ["has_leap", "has_base", "has_projection"]],
         on=keys,
@@ -3878,6 +4263,34 @@ def build_balance_comparison(
     comparison_long = pd.DataFrame(rows)
     comparison_long["year"] = pd.to_numeric(comparison_long["year"], errors="coerce").astype("Int64")
     comparison_long["value"] = pd.to_numeric(comparison_long["value"], errors="coerce")
+    if not template_groups.empty and "template_is_multi_flow" in template_groups.columns:
+        multi_template_groups = template_groups[template_groups["template_is_multi_flow"].fillna(False).astype(bool)].copy()
+        if not multi_template_groups.empty:
+            covered_cols = [
+                "chart_group_key",
+                "measure",
+                "fuel_label",
+                "esto_flow_key",
+            ]
+            for col in covered_cols:
+                if col not in multi_template_groups.columns:
+                    multi_template_groups[col] = ""
+                if col not in comparison_long.columns:
+                    comparison_long[col] = ""
+                multi_template_groups[col] = multi_template_groups[col].fillna("").astype(str).str.strip()
+                comparison_long[col] = comparison_long[col].fillna("").astype(str).str.strip()
+            covered = set(
+                tuple(row)
+                for row in multi_template_groups[covered_cols]
+                .drop_duplicates()
+                .itertuples(index=False, name=None)
+            )
+            if covered:
+                direct_duplicate_mask = (
+                    ~comparison_long["sheet"].fillna("").astype(str).str.startswith("template__")
+                    & comparison_long[covered_cols].apply(lambda row: tuple(row) in covered, axis=1)
+                )
+                comparison_long = comparison_long.loc[~direct_duplicate_mask].copy()
 
     for subtotal_col in ["leap_is_subtotal", "esto_is_subtotal", "ninth_is_subtotal"]:
         if subtotal_col not in comparison_long.columns:
@@ -3900,12 +4313,22 @@ def build_balance_comparison(
         "page_label",
         "chart_group_key",
         "chart_group_label",
+        "dashboard_page_key",
+        "dashboard_page_label",
+        "dashboard_section_key",
+        "dashboard_section_label",
+        "chart_kind",
+        "esto_flow_key",
+        "esto_flow_group_key",
+        "esto_flow_group_label",
         "measure",
         "fuel_label",
         "source",
         "year",
     ]
     comparison_long = _backfill_dashboard_hierarchy(comparison_long, sheet_catalog=hierarchy_sheet_catalog)
+    comparison_long = _add_dashboard_context_aliases(_add_esto_flow_context_columns(comparison_long))
+    comparison_long = _collapse_template_multi_flow_comparison_rows(comparison_long, template_groups)
     comparison_long = (
         comparison_long.groupby(group_cols, as_index=False)["value"]
         .sum(min_count=1)
@@ -3930,6 +4353,14 @@ def build_balance_comparison(
                 "page_label",
                 "chart_group_key",
                 "chart_group_label",
+                "dashboard_page_key",
+                "dashboard_page_label",
+                "dashboard_section_key",
+                "dashboard_section_label",
+                "chart_kind",
+                "esto_flow_key",
+                "esto_flow_group_key",
+                "esto_flow_group_label",
                 "measure",
                 "fuel_label",
                 "year",
@@ -4125,8 +4556,89 @@ def _load_dashboard_template_allowlist(path: Path | str | None) -> dict[str, Any
     return template
 
 
+TEMPLATE_RESERVED_KEYS = {
+    "defaults",
+    "aggregate",
+    "aggregate_graphs",
+    "graphs",
+    "by_fuel_graphs",
+    "esto_flow",
+    "_comments",
+    "comments",
+}
+
+
+def _as_clean_list(value: object) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    if isinstance(value, tuple):
+        return [str(item).strip() for item in value if str(item).strip()]
+    text = str(value or "").strip()
+    return [text] if text else []
+
+
+def _template_measure_list(
+    raw_spec: dict[str, Any],
+    default_measure: str = "",
+    *,
+    use_default: bool = True,
+) -> list[str]:
+    measures_raw = raw_spec.get("measures", raw_spec.get("measure", ""))
+    measures = _as_clean_list(measures_raw)
+    if use_default and not measures and str(default_measure or "").strip():
+        measures = [str(default_measure).strip()]
+    return measures
+
+
+def _dashboard_template_aggregate_specs(
+    node: dict[str, Any],
+    *,
+    default_measure: str = "",
+) -> list[dict[str, Any]]:
+    """Normalize V2 aggregate_graphs and legacy aggregate declarations."""
+    if not isinstance(node, dict):
+        return []
+    raw_specs: list[dict[str, Any]] = []
+    for key, value in node.items():
+        if key == "aggregate_graphs" and isinstance(value, dict):
+            raw_specs.append(value)
+        elif key == "aggregate" and isinstance(value, dict):
+            raw_specs.append(
+                {
+                    "fuels": value.get("fuel", value.get("fuels", "Total")),
+                    "esto_flows": value.get("source_esto_flows", value.get("esto_flows", [])),
+                    "measures": value.get("measures", value.get("measure", "")),
+                }
+            )
+
+    normalized: list[dict[str, Any]] = []
+    for idx, raw_spec in enumerate(raw_specs, start=1):
+        flows = _as_clean_list(raw_spec.get("esto_flows", raw_spec.get("source_esto_flows", [])))
+        fuel = str(raw_spec.get("fuels", raw_spec.get("fuel", "Total")) or "Total").strip() or "Total"
+        measures = _template_measure_list(raw_spec, default_measure)
+        if not flows:
+            continue
+        normalized.append(
+            {
+                "aggregate_id": f"aggregate_{idx}",
+                "fuel": fuel,
+                "fuels": fuel,
+                "source_flows": flows,
+                "esto_flows": flows,
+                "source_flows_norm": {" ".join(flow.lower().split()) for flow in flows if flow},
+                "fuel_norm": " ".join(fuel.lower().split()),
+                "measures": measures,
+                "use_esto_to_ninth_mapping": _to_bool(
+                    raw_spec.get("use_esto_to_ninth_mapping", False),
+                    default=False,
+                ),
+            }
+        )
+    return normalized
+
+
 def _validate_dashboard_template_allowlist(template: dict[str, Any], resolved: Path) -> None:
-    reserved = {"defaults", "aggregate", "graphs", "esto_flow", "_comments", "comments"}
+    reserved = TEMPLATE_RESERVED_KEYS
 
     def _walk(node: dict[str, Any], path: tuple[str, ...] = ()) -> None:
         if "fuels" in node:
@@ -4139,6 +4651,14 @@ def _validate_dashboard_template_allowlist(template: dict[str, Any], resolved: P
         if graphs is not None and not isinstance(graphs, dict):
             label = " > ".join(path) or "<root>"
             raise ValueError(f"Template 'graphs' must be an object at {label} in {resolved}")
+        aggregate_graphs = node.get("aggregate_graphs")
+        if aggregate_graphs is not None and not isinstance(aggregate_graphs, dict):
+            label = " > ".join(path) or "<root>"
+            raise ValueError(f"Template 'aggregate_graphs' must be an object at {label} in {resolved}")
+        by_fuel_graphs = node.get("by_fuel_graphs")
+        if by_fuel_graphs is not None and not isinstance(by_fuel_graphs, dict):
+            label = " > ".join(path) or "<root>"
+            raise ValueError(f"Template 'by_fuel_graphs' must be an object at {label} in {resolved}")
         for key, child in node.items():
             if key in reserved or not isinstance(child, dict):
                 continue
@@ -4152,22 +4672,17 @@ def _dashboard_template_graph_specs(
     *,
     default_measure: str = "",
 ) -> list[dict[str, Any]]:
-    """Normalize ESTO-first dashboard-template graph declarations."""
+    """Normalize V2 by_fuel_graphs and legacy graph declarations."""
     if not isinstance(node, dict):
         return []
-    graphs = node.get("graphs")
-    if not isinstance(graphs, dict):
-        return []
-    common_flow = str(node.get("esto_flow", "") or "").strip()
+    common_flows = _as_clean_list(node.get("esto_flow", ""))
     normalized: list[dict[str, Any]] = []
-    for graph_name, raw_spec in graphs.items():
-        graph_id = str(graph_name).strip()
-        if not graph_id:
-            continue
+
+    def _normalize_one(graph_id: str, raw_spec: dict[str, Any], fallback_flows: list[str]) -> None:
         if not isinstance(raw_spec, dict):
             raise ValueError(f"Dashboard template graph {graph_id!r} must be an object")
-        flow = str(raw_spec.get("esto_flow", "") or common_flow).strip()
-        measure = str(raw_spec.get("measure", "") or "").strip() or default_measure
+        flows = _as_clean_list(raw_spec.get("esto_flows", raw_spec.get("esto_flow", ""))) or fallback_flows
+        measures = _template_measure_list(raw_spec, default_measure, use_default=False)
         products_raw = raw_spec.get("products", raw_spec.get("fuels", []))
         include_all = isinstance(products_raw, str) and str(products_raw).strip().lower() == "all"
         if include_all:
@@ -4184,22 +4699,42 @@ def _dashboard_template_graph_specs(
             for value in list(raw_spec.get("exclude_products", []) or [])
             if str(value).strip()
         ]
-        normalized.append(
-            {
-                "graph_id": graph_id,
-                "esto_flow": flow,
-                "measure": measure,
-                "include_all_products": include_all,
-                "products": products,
-                "products_norm": {norm_text for norm_text in [" ".join(product.lower().split()) for product in products] if norm_text},
-                "exclude_products": exclude_products,
-                "exclude_products_norm": {
-                    norm_text
-                    for norm_text in [" ".join(product.lower().split()) for product in exclude_products]
-                    if norm_text
-                },
-            }
-        )
+        products_norm = {norm_text for norm_text in [" ".join(product.lower().split()) for product in products] if norm_text}
+        exclude_products_norm = {
+            norm_text
+            for norm_text in [" ".join(product.lower().split()) for product in exclude_products]
+            if norm_text
+        }
+        for measure in measures or [""]:
+            normalized.append(
+                {
+                    "graph_id": graph_id,
+                    "esto_flow": flows[0] if flows else "",
+                    "esto_flows": flows,
+                    "esto_flows_norm": {" ".join(flow.lower().split()) for flow in flows if flow},
+                    "measure": measure,
+                    "include_all_products": include_all,
+                    "products": products,
+                    "products_norm": products_norm,
+                    "exclude_products": exclude_products,
+                    "exclude_products_norm": exclude_products_norm,
+                    "is_multi_flow": len(flows) > 1,
+                    "use_esto_to_ninth_mapping": _to_bool(
+                        raw_spec.get("use_esto_to_ninth_mapping", False),
+                        default=False,
+                    ),
+                }
+            )
+
+    for key, value in node.items():
+        if key == "by_fuel_graphs" and isinstance(value, dict):
+            _normalize_one("by_fuel_graphs", value, common_flows)
+        elif key == "graphs" and isinstance(value, dict):
+            for graph_name, raw_spec in value.items():
+                graph_id = str(graph_name).strip()
+                if not graph_id:
+                    continue
+                _normalize_one(graph_id, raw_spec, common_flows)
     return normalized
 
 
@@ -4218,7 +4753,7 @@ def build_esto_axis_structure_from_dashboard_template(
     if not template:
         return {"page_tree": [], "sheet_catalog": {}, "esto_flow_to_sheet": {}, "empty_page_notice": DEFAULT_EMPTY_PAGE_NOTICE}
 
-    reserved = {"defaults", "aggregate", "graphs", "esto_flow", "_comments", "comments"}
+    reserved = TEMPLATE_RESERVED_KEYS
     top_label_inverse = {v: k for k, v in BALANCE_DASHBOARD_TOP_LABELS.items()}
     measure_default = str((template.get("defaults") or {}).get("measure", "")).strip() or "Energy balance (PJ)"
     page_paths: list[list[str]] = []
@@ -4263,12 +4798,12 @@ def build_esto_axis_structure_from_dashboard_template(
     def _walk(node: dict[str, Any], display_path: tuple[str, ...] = ()) -> None:
         if display_path:
             _remember_path(display_path)
-        aggregate = node.get("aggregate")
-        if isinstance(aggregate, dict):
-            for flow in list(aggregate.get("source_esto_flows", []) or []):
+        for aggregate in _dashboard_template_aggregate_specs(node, default_measure=measure_default):
+            for flow in list(aggregate.get("source_flows", []) or []):
                 _remember_flow(flow, display_path)
         for spec in _dashboard_template_graph_specs(node, default_measure=measure_default):
-            _remember_flow(spec.get("esto_flow", ""), display_path)
+            for flow in list(spec.get("esto_flows", []) or [spec.get("esto_flow", "")]):
+                _remember_flow(flow, display_path)
         for key, child in node.items():
             if key in reserved or not isinstance(child, dict):
                 continue
@@ -4337,18 +4872,13 @@ def _select_all_graph_products(
     })
 
     measure_norm = _norm(measure)
-    is_transformation_measure = measure_norm in {
-        _norm(TRANSFORMATION_INPUT_MEASURE),
-        _norm(TRANSFORMATION_OUTPUT_MEASURE),
-    }
-
     if (
-        is_transformation_measure
-        and chart_comparison_long is not None
+        chart_comparison_long is not None
         and not chart_comparison_long.empty
         and "fuel_label" in ms.columns
     ):
-        # Identify which balance sheets carry this ESTO flow.
+        # Identify which rendered chart rows carry this ESTO flow, then keep
+        # products whose display rows have non-zero magnitude in any source.
         ms_fl = ms.copy()
         for col in ["sheet", "fuel_label"]:
             if col not in ms_fl.columns:
@@ -4362,11 +4892,15 @@ def _select_all_graph_products(
                 if col not in cdf.columns:
                     cdf[col] = ""
                 cdf[col] = cdf[col].fillna("").astype(str).str.strip()
+            if "value" not in cdf.columns:
+                cdf["value"] = 0.0
+            cdf["value"] = pd.to_numeric(cdf["value"], errors="coerce").fillna(0.0)
 
-            # fuel_labels present in sign-split chart data for this measure.
             chart_fuel_labels = set(
                 cdf.loc[
-                    cdf["sheet"].isin(flow_sheets) & cdf["measure"].map(_norm).eq(measure_norm),
+                    cdf["sheet"].isin(flow_sheets)
+                    & cdf["measure"].map(_norm).eq(measure_norm)
+                    & cdf["value"].abs().gt(1e-12),
                     "fuel_label",
                 ].unique()
             ) - {""}
@@ -4441,7 +4975,7 @@ def write_dashboard_graph_fuel_coverage(
         flow_products = {fn: sorted(products) for fn, products in by_flow.items()}
 
     rows: list[dict[str, Any]] = []
-    reserved = {"defaults", "aggregate", "graphs", "esto_flow", "_comments", "comments"}
+    reserved = TEMPLATE_RESERVED_KEYS
     measure_default = (
         str((template.get("defaults") or {}).get("measure", default_measure)).strip()
         or default_measure
@@ -4453,6 +4987,7 @@ def write_dashboard_graph_fuel_coverage(
             path_str = " > ".join(path) if path else "<root>"
             for spec in specs:
                 flow = str(spec.get("esto_flow", "")).strip()
+                flows = [str(item).strip() for item in list(spec.get("esto_flows", []) or [flow]) if str(item).strip()]
                 measure = str(spec.get("measure", "")).strip() or measure_default
                 graph_id = str(spec.get("graph_id", "")).strip()
                 include_all = bool(spec.get("include_all_products", False))
@@ -4462,24 +4997,37 @@ def write_dashboard_graph_fuel_coverage(
 
                 if include_all:
                     selection_mode = "all"
-                    selected, available = _select_all_graph_products(
-                        esto_flow=flow,
-                        measure=measure,
-                        exclude_products_norm=exclude_norm,
-                        mapping_status=mapping_status,
-                        chart_comparison_long=chart_comparison_long,
-                    )
+                    selected_set: set[str] = set()
+                    available_set: set[str] = set()
+                    for flow_item in flows:
+                        selected_part, available_part = _select_all_graph_products(
+                            esto_flow=flow_item,
+                            measure=measure,
+                            exclude_products_norm=exclude_norm,
+                            mapping_status=mapping_status,
+                            chart_comparison_long=chart_comparison_long,
+                        )
+                        selected_set.update(selected_part)
+                        available_set.update(available_part)
+                    selected = sorted(selected_set)
+                    available = sorted(available_set)
                 else:
                     selection_mode = "explicit_products"
-                    available = flow_products.get(_norm(flow), [])
+                    available = sorted({product for flow_item in flows for product in flow_products.get(_norm(flow_item), [])})
                     selected = explicit_products
 
                 selected_set = set(selected)
                 available_not_shown = [p for p in available if p not in selected_set]
+                component_pairs = [
+                    f"{flow_item} | {product}"
+                    for flow_item in flows
+                    for product in selected
+                ]
 
                 rows.append({
                     "dashboard_path": path_str,
                     "node_esto_flow": flow,
+                    "configured_esto_flows": "; ".join(flows),
                     "graph_id": graph_id,
                     "measure": measure,
                     "selection_mode": selection_mode,
@@ -4487,6 +5035,7 @@ def write_dashboard_graph_fuel_coverage(
                     "products_selected": "; ".join(selected),
                     "excluded_products": "; ".join(exclude_products),
                     "available_not_shown": "; ".join(available_not_shown),
+                    "component_esto_pairs": " || ".join(component_pairs),
                 })
 
         for key, child in node.items():
@@ -4501,6 +5050,7 @@ def write_dashboard_graph_fuel_coverage(
     columns = [
         "dashboard_path",
         "node_esto_flow",
+        "configured_esto_flows",
         "graph_id",
         "measure",
         "selection_mode",
@@ -4508,6 +5058,7 @@ def write_dashboard_graph_fuel_coverage(
         "products_selected",
         "excluded_products",
         "available_not_shown",
+        "component_esto_pairs",
     ]
     df = pd.DataFrame(rows, columns=columns) if rows else pd.DataFrame(columns=columns)
     if not df.empty:
@@ -4553,7 +5104,13 @@ def _split_transformation_input_output_measures(
     frame["sheet"] = frame["sheet"].fillna("").astype(str)
     frame["value"] = pd.to_numeric(frame["value"], errors="coerce")
 
-    target = frame["sheet"].isin(transformation_sheets)
+    dashboard_top = pd.Series("", index=frame.index, dtype="object")
+    for col in ["dashboard_page_label", "page_label"]:
+        if col in frame.columns:
+            candidate = frame[col].fillna("").astype(str).str.strip()
+            dashboard_top = dashboard_top.where(dashboard_top.astype(str).str.strip().ne(""), candidate)
+
+    target = frame["sheet"].isin(transformation_sheets) | dashboard_top.isin(TRANSFORMATION_DASHBOARD_TOP_GROUPS)
     unchanged = frame[~target].copy()
     transform = frame[target].copy()
     if transform.empty:
@@ -4934,6 +5491,13 @@ _CHART_VIRTUALIZATION_SCRIPT = """
 """
 
 
+def _as_sort_int(value: object, default: int = 9999) -> int:
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return default
+
+
 def _build_page_html(
     *,
     title: str,
@@ -5042,12 +5606,16 @@ def _build_page_html(
         def _entry_sort_key(entry: dict[str, str]) -> tuple[object, ...]:
             fuel = str(entry.get("fuel", "")).strip()
             measure = str(entry.get("measure", "")).strip()
+            template_order = _as_sort_int(
+                entry.get("template_order", ""),
+                0 if str(entry.get("entry_kind", "")).strip() == "aggregate" else 1,
+            )
             measure_rank = {
                 TRANSFORMATION_INPUT_MEASURE: 0,
                 TRANSFORMATION_OUTPUT_MEASURE: 1,
             }.get(measure, 2)
             return (
-                0 if str(entry.get("entry_kind", "")).strip() == "aggregate" else 1,
+                template_order,
                 measure_rank,
                 measure.lower(),
                 0 if fuel == "Total" else 1,
@@ -5212,7 +5780,7 @@ def render_balance_dashboards(
     def _template_flow_paths() -> dict[str, tuple[str, ...]]:
         if not template_allowlist:
             return {}
-        reserved = {"defaults", "aggregate", "graphs", "esto_flow", "_comments", "comments"}
+        reserved = TEMPLATE_RESERVED_KEYS
         top_label_inverse = {v: k for k, v in BALANCE_DASHBOARD_TOP_LABELS.items()}
         flow_paths: dict[str, tuple[str, ...]] = {}
         measure_default = str((template_allowlist.get("defaults") or {}).get("measure", "")).strip()
@@ -5234,12 +5802,12 @@ def render_balance_dashboards(
                     flow_paths[flow_text] = candidate_path
 
         def _walk(node: dict[str, Any], display_path: tuple[str, ...]) -> None:
-            aggregate = node.get("aggregate")
-            if isinstance(aggregate, dict):
-                for flow in list(aggregate.get("source_esto_flows", []) or []):
+            for aggregate in _dashboard_template_aggregate_specs(node, default_measure=measure_default):
+                for flow in list(aggregate.get("source_flows", []) or []):
                     _remember_flow(flow, display_path)
             for spec in _dashboard_template_graph_specs(node, default_measure=measure_default):
-                _remember_flow(spec.get("esto_flow", ""), display_path)
+                for flow in list(spec.get("esto_flows", []) or [spec.get("esto_flow", "")]):
+                    _remember_flow(flow, display_path)
             for key, child in node.items():
                 if key in reserved or not isinstance(child, dict):
                     continue
@@ -5362,6 +5930,12 @@ def render_balance_dashboards(
             or str(entry.get("file", "")).startswith("aggregate__")
         )
 
+    def _as_sort_int(value: object, default: int = 9999) -> int:
+        try:
+            return int(str(value).strip())
+        except (TypeError, ValueError):
+            return default
+
     mapping_lookup: dict[tuple[str, str, str], dict[str, Any]] = {}
     if mapping_status is not None and not mapping_status.empty:
         status = mapping_status.copy()
@@ -5404,16 +5978,27 @@ def render_balance_dashboards(
         )
         return mapping_lookup.get(blank_measure_key, {"esto_pairs": [], "esto_flows": [], "esto_products": []})
 
-    reserved_template_keys = {"defaults", "aggregate", "graphs", "esto_flow", "_comments", "comments"}
+    reserved_template_keys = TEMPLATE_RESERVED_KEYS
     allowed_template_paths: set[tuple[str, ...]] = set()
     allowed_template_nodes: dict[tuple[str, ...], dict[str, Any]] = {}
     allowed_template_graph_specs: dict[tuple[str, ...], list[dict[str, Any]]] = {}
+    template_entry_order: dict[tuple[tuple[str, ...], str], int] = {}
     template_measure_default = str((template_allowlist.get("defaults") or {}).get("measure", "")).strip() or "Energy balance (PJ)"
 
     def _collect_template_allowlist(node: dict[str, Any], path: tuple[str, ...] = ()) -> None:
         if path:
             allowed_template_paths.add(path)
             allowed_template_nodes[path] = node
+        order_idx = 0
+        for key, child in node.items():
+            if key in {"aggregate_graphs", "aggregate"} and isinstance(child, dict):
+                template_entry_order.setdefault((path, "aggregate"), order_idx)
+                order_idx += 1
+            elif key in {"by_fuel_graphs", "graphs"} and isinstance(child, dict):
+                template_entry_order.setdefault((path, "direct"), order_idx)
+                order_idx += 1
+            elif key not in reserved_template_keys and isinstance(child, dict):
+                order_idx += 1
         graph_specs = _dashboard_template_graph_specs(node, default_measure=template_measure_default)
         if graph_specs:
             allowed_template_graph_specs[path] = graph_specs
@@ -5440,7 +6025,45 @@ def render_balance_dashboards(
         if not template_allowlist:
             return False
         node = allowed_template_nodes.get(_display_path_tuple(path), {})
-        return isinstance(node, dict) and isinstance(node.get("aggregate"), dict)
+        return isinstance(node, dict) and bool(
+            _dashboard_template_aggregate_specs(node, default_measure=template_measure_default)
+        )
+
+    def _template_order_for_entry(path: tuple[str, ...], entry: dict[str, str]) -> int:
+        kind = "aggregate" if _is_aggregate_entry(entry) else "direct"
+        fallback = 0 if kind == "aggregate" else 1
+        if not template_allowlist:
+            return fallback
+        return template_entry_order.get((_display_path_tuple(path), kind), fallback)
+
+    def _template_aggregate_specs_for_path(path: tuple[str, ...]) -> list[dict[str, Any]]:
+        if not template_allowlist:
+            return []
+        node = allowed_template_nodes.get(_display_path_tuple(path), {})
+        if not isinstance(node, dict):
+            return []
+        return _dashboard_template_aggregate_specs(node, default_measure=template_measure_default)
+
+    def _component_sheets_for_aggregate_path(path: tuple[str, ...]) -> list[str]:
+        aggregate_specs = _template_aggregate_specs_for_path(path)
+        configured_flows = [
+            str(flow).strip()
+            for spec in aggregate_specs
+            for flow in list(spec.get("esto_flows", spec.get("source_flows", [])) or [])
+            if str(flow).strip()
+        ]
+        if not configured_flows:
+            return _leaf_descendant_sheets(path)
+
+        sheets: list[str] = []
+        seen: set[str] = set()
+        for flow in configured_flows:
+            sheet = str(esto_flow_to_sheet.get(flow, "")).strip()
+            if not sheet or sheet in seen:
+                continue
+            seen.add(sheet)
+            sheets.append(sheet)
+        return sorted(sheets, key=lambda sheet: tuple(part.lower() for part in sheet_paths.get(sheet, (sheet,))))
 
     def _entry_allowed_by_template(path: tuple[str, ...], entry: dict[str, str]) -> bool:
         if not template_allowlist:
@@ -5452,18 +6075,17 @@ def render_balance_dashboards(
         measure = str(entry.get("measure", "")).strip()
         fuel = str(entry.get("fuel", "")).strip()
         if _is_aggregate_entry(entry):
-            aggregate = node.get("aggregate")
-            if not isinstance(aggregate, dict):
+            aggregate_specs = _dashboard_template_aggregate_specs(node, default_measure=template_measure_default)
+            if not aggregate_specs:
                 return False
-            aggregate_fuel = str(aggregate.get("fuel", "Total")).strip() or "Total"
-            if fuel and fuel != aggregate_fuel:
-                return False
-            measures = {
-                str(value).strip()
-                for value in list(aggregate.get("measures", []) or [])
-                if str(value).strip()
-            }
-            return not measures or not measure or measure in measures
+            for aggregate in aggregate_specs:
+                aggregate_fuel = str(aggregate.get("fuel", "Total")).strip() or "Total"
+                if fuel and fuel != aggregate_fuel:
+                    continue
+                measures = {str(value).strip() for value in list(aggregate.get("measures", []) or []) if str(value).strip()}
+                if not measures or not measure or measure in measures:
+                    return True
+            return False
         graph_specs = allowed_template_graph_specs.get(display_path, [])
         if not graph_specs:
             return False
@@ -5473,10 +6095,12 @@ def render_balance_dashboards(
             return False
         for spec in graph_specs:
             spec_measure = str(spec.get("measure", "")).strip()
-            spec_flow_norm = " ".join(str(spec.get("esto_flow", "")).strip().lower().split())
+            spec_flow_norms = set(spec.get("esto_flows_norm", set()))
+            if not spec_flow_norms:
+                spec_flow_norms = {" ".join(str(spec.get("esto_flow", "")).strip().lower().split())}
             matching_pairs = [
                 pair for pair in pairs
-                if " ".join(str(pair.get("esto_flow", "")).strip().lower().split()) == spec_flow_norm
+                if " ".join(str(pair.get("esto_flow", "")).strip().lower().split()) in spec_flow_norms
             ]
             if not matching_pairs:
                 continue
@@ -5544,6 +6168,7 @@ def render_balance_dashboards(
                     "file": str(file_name),
                     "path_label": _path_label(raw_path),
                     "entry_kind": "direct",
+                    "template_order": str(_template_order_for_entry(raw_path, {"entry_kind": "direct"})),
                     **_dashboard_hierarchy_from_path(
                         raw_path,
                         entry_kind="direct",
@@ -5640,7 +6265,7 @@ def render_balance_dashboards(
             for candidate in node_path_set
         )
 
-    def _has_all_dataset_families(frame: pd.DataFrame) -> bool:
+    def _has_required_aggregate_dataset_families(frame: pd.DataFrame) -> bool:
         if frame.empty or "source" not in frame.columns or "value" not in frame.columns:
             return False
         values = pd.to_numeric(frame["value"], errors="coerce")
@@ -5648,10 +6273,8 @@ def render_balance_dashboards(
         if valid.empty:
             return False
         sources = set(valid["source"].fillna("").astype(str).str.strip())
-        return (
-            "leap" in sources
-            and bool(sources & {"base", "base_estimated", "base_mixed"})
-            and bool(sources & {"projection", "projection_estimated", "projection_mixed"})
+        return bool(sources & {"base", "base_estimated", "base_mixed"}) and bool(
+            sources & {"projection", "projection_estimated", "projection_mixed"}
         )
 
     def _has_nonzero_values(frame: pd.DataFrame) -> bool:
@@ -5666,7 +6289,7 @@ def render_balance_dashboards(
             if not path or not _has_child_path(path):
                 if not _template_node_has_aggregate(path):
                     continue
-            component_sheets = _leaf_descendant_sheets(path)
+            component_sheets = _component_sheets_for_aggregate_path(path)
             is_transformation_parent = path[0] in TRANSFORMATION_DASHBOARD_TOP_GROUPS
             if len(component_sheets) <= 1 and not is_transformation_parent and not _template_node_has_aggregate(path):
                 continue
@@ -5688,7 +6311,7 @@ def render_balance_dashboards(
                     collapse_base_family=True,
                     collapse_projection_family=True,
                 )
-                if total_rows.empty or not _has_all_dataset_families(total_rows) or not _has_nonzero_values(total_rows):
+                if total_rows.empty or not _has_required_aggregate_dataset_families(total_rows) or not _has_nonzero_values(total_rows):
                     continue
                 chart_path = make_chart(
                     title,
@@ -5709,6 +6332,7 @@ def render_balance_dashboards(
                         "file": chart_path.name,
                         "path_label": _path_label(path),
                         "entry_kind": "aggregate",
+                        "template_order": str(_template_order_for_entry(path, {"entry_kind": "aggregate"})),
                         **_dashboard_hierarchy_from_path(
                             path,
                             entry_kind="aggregate",
@@ -5724,6 +6348,9 @@ def render_balance_dashboards(
 
     aggregate_charts_written = _add_parent_aggregate_chart_entries()
     _apply_template_allowlist_to_paths_and_entries()
+    for node_path, entries in node_entries.items():
+        for entry in entries:
+            entry["template_order"] = str(_template_order_for_entry(node_path, entry))
     all_node_entries_for_chart_groups = {
         path: [dict(entry) for entry in entries]
         for path, entries in node_entries.items()
@@ -5771,6 +6398,8 @@ def render_balance_dashboards(
     top_level = [label for label in configured_top_order if label in top_level_set]
     top_level += sorted([label for label in top_level_set if label not in set(top_level)], key=lambda s: s.lower())
     top_page_paths = [(label,) for label in top_level if label in BALANCE_DASHBOARD_MAJOR_SECTOR_PAGES]
+    if not top_page_paths:
+        top_page_paths = [(label,) for label in top_level]
     top_links = [(_display_balance_path_part(label, is_top=True), _page_filename_from_path((label,))) for label, in top_page_paths]
 
     path_to_filename = {path: _page_filename_from_path(path) for path in node_paths if path}
@@ -5820,7 +6449,7 @@ def render_balance_dashboards(
             node = _node_for_display_path(display_path)
             aggregate_entries = [entry for entry in entries if _is_aggregate_entry(entry)]
             if aggregate_entries:
-                source_sheets = _leaf_descendant_sheets(node_path)
+                source_sheets = _component_sheets_for_aggregate_path(node_path)
                 source_flows = sorted(
                     {
                         sheet_to_flow.get(str(sheet), "")
@@ -5829,8 +6458,8 @@ def render_balance_dashboards(
                     }
                 )
                 aggregate: dict[str, Any] = {
-                    "fuel": "Total",
-                    "source_esto_flows": source_flows,
+                    "fuels": "Total",
+                    "esto_flows": source_flows,
                 }
                 measures = sorted(
                     {
@@ -5842,11 +6471,10 @@ def render_balance_dashboards(
                 )
                 if measures:
                     aggregate["measures"] = measures
-                node["aggregate"] = aggregate
+                node["aggregate_graphs"] = aggregate
                 continue
 
             graph_specs: list[dict[str, Any]] = []
-            graph_counter = 0
             for entry in entries:
                 mapping_info = _chart_mapping_info(entry)
                 pairs = list(mapping_info.get("esto_pairs", []) or [])
@@ -5861,21 +6489,44 @@ def render_balance_dashboards(
                 if not flows and not products:
                     continue
                 measure = str(entry.get("measure", "")).strip()
-                graph_counter += 1
                 spec: dict[str, Any] = {}
                 if flows:
-                    spec["esto_flow"] = flows[0]
+                    spec["esto_flows"] = flows
                 if measure and measure != default_measure:
                     spec["measure"] = measure
                 spec["products"] = products or "all"
-                graph_specs.append((f"graph_{graph_counter}", spec))
+                graph_specs.append(spec)
             if graph_specs:
-                unique_flows = sorted({str(spec.get("esto_flow", "")).strip() for _, spec in graph_specs if str(spec.get("esto_flow", "")).strip()})
-                if len(unique_flows) == 1:
-                    node["esto_flow"] = unique_flows[0]
-                    for _, spec in graph_specs:
-                        spec.pop("esto_flow", None)
-                node["graphs"] = {graph_id: spec for graph_id, spec in graph_specs}
+                unique_flows = sorted(
+                    {
+                        flow
+                        for spec in graph_specs
+                        for flow in list(spec.get("esto_flows", []) or [])
+                        if str(flow).strip()
+                    }
+                )
+                unique_products = sorted(
+                    {
+                        product
+                        for spec in graph_specs
+                        for product in list(spec.get("products", []) or [])
+                        if str(product).strip() and str(product).strip().lower() != "all"
+                    }
+                )
+                by_fuel: dict[str, Any] = {"products": unique_products or "All"}
+                if unique_flows:
+                    by_fuel["esto_flows"] = unique_flows
+                measures = sorted(
+                    {
+                        str(spec.get("measure", "")).strip()
+                        for spec in graph_specs
+                        if str(spec.get("measure", "")).strip()
+                        and str(spec.get("measure", "")).strip() != default_measure
+                    }
+                )
+                if measures:
+                    by_fuel["measures"] = measures
+                node["by_fuel_graphs"] = by_fuel
 
         return template
 
@@ -5980,6 +6631,7 @@ def render_balance_dashboards(
                     "chart_group_key": str(entry.get("chart_group_key", "")),
                     "chart_group_label": str(entry.get("chart_group_label", "")),
                     "measure": str(entry.get("measure", "")),
+                    "template_order": str(entry.get("template_order", "")),
                     "chart_file": f"charts/{entry.get('file', '')}",
                     "esto_flows": mapping_info.get("esto_flows", []),
                     "esto_products": mapping_info.get("esto_products", []),
@@ -6000,6 +6652,7 @@ def render_balance_dashboards(
                             "chart_group_key": str(entry.get("chart_group_key", "")),
                             "chart_group_label": str(entry.get("chart_group_label", "")),
                             "measure": str(entry.get("measure", "")),
+                            "template_order": str(entry.get("template_order", "")),
                             "fuel": fuel,
                             "chart_file": f"charts/{entry.get('file', '')}",
                             "esto_flow": str(pair.get("esto_flow", "")),
@@ -6020,12 +6673,13 @@ def render_balance_dashboards(
                 "chart_group_key",
                 "chart_group_label",
                 "measure",
+                "template_order",
                 "fuel",
                 "chart_file",
                 "esto_flow",
                 "esto_product",
             ],
-        ).sort_values(["dashboard_path", "chart_group_key", "sheet", "measure", "fuel", "esto_flow", "esto_product"]).to_csv(csv_path, index=False)
+        ).sort_values(["dashboard_path", "template_order", "chart_group_key", "sheet", "measure", "fuel", "esto_flow", "esto_product"]).to_csv(csv_path, index=False)
         rendered_template_path = out_dir / "chart_navigation_rendered_template.json"
         rendered_template_path.write_text(
             json.dumps(_compact_dashboard_template(), ensure_ascii=True, indent=2) + "\n",
@@ -6071,6 +6725,7 @@ def render_balance_dashboards(
                         "section_id": section_id,
                         "section_label": section_label,
                         "entry_kind": str(entry.get("entry_kind", "direct") or "direct"),
+                        "template_order": str(entry.get("template_order", "")),
                     }
                 )
         return rows
@@ -6103,6 +6758,7 @@ def render_balance_dashboards(
                     "section_id": _section_id_from_path(path),
                     "section_label": _display_balance_path_part(path[-1], is_top=False) if path else "",
                     "entry_kind": "direct",
+                    "template_order": str(_template_order_for_entry(path, {"entry_kind": "direct"})),
                 }
             )
         return rows
@@ -6133,12 +6789,14 @@ def render_balance_dashboards(
             if not pairs:
                 return False
 
-            spec_flow = str(spec.get("esto_flow", "")).strip()
-            spec_flow_norm = " ".join(spec_flow.lower().split())
-            if not spec_flow_norm:
+            spec_flow_norms = set(spec.get("esto_flows_norm", set()))
+            if not spec_flow_norms:
+                spec_flow = str(spec.get("esto_flow", "")).strip()
+                spec_flow_norms = {" ".join(spec_flow.lower().split())} if spec_flow else set()
+            if not spec_flow_norms:
                 return False
 
-            spec_measure = str(spec.get("measure", "") or template_measure_default or "Energy balance (PJ)").strip()
+            spec_measure = str(spec.get("measure", "")).strip()
             entry_measure = str(entry.get("measure", "")).strip()
             if spec_measure and entry_measure and spec_measure != entry_measure:
                 return False
@@ -6146,7 +6804,7 @@ def render_balance_dashboards(
             matching_pairs = [
                 pair
                 for pair in pairs
-                if " ".join(str(pair.get("esto_flow", "")).strip().lower().split()) == spec_flow_norm
+                if " ".join(str(pair.get("esto_flow", "")).strip().lower().split()) in spec_flow_norms
             ]
             if not matching_pairs:
                 return False
@@ -6221,6 +6879,7 @@ def render_balance_dashboards(
                             "section_id": section_id,
                             "section_label": section_label,
                             "entry_kind": "direct",
+                            "template_order": str(_template_order_for_entry(tmpl_path, {"entry_kind": "direct"})),
                         }
                     )
 
@@ -6264,10 +6923,22 @@ def render_balance_dashboards(
                         "section_id": agg_section_id,
                         "section_label": agg_section_label,
                         "entry_kind": "aggregate",
+                        "template_order": str(_template_order_for_entry(path, {"entry_kind": "aggregate"})),
                     }
                 )
 
-        return rows
+        return sorted(
+            rows,
+            key=lambda row: (
+                str(row.get("dashboard_path", "")),
+                _as_sort_int(row.get("template_order", "")),
+                str(row.get("chart_group_key", "")),
+                str(row.get("sheet", "")),
+                str(row.get("measure", "")),
+                str(row.get("fuel_label", "")),
+                str(row.get("chart_file", "")),
+            ),
+        )
 
     def _write_chart_group_exposure() -> tuple[Path, Path]:
         exposed_rows = _template_chart_group_rows()
@@ -6294,7 +6965,7 @@ def render_balance_dashboards(
             deduped_all_rows.append(row)
 
         chart_group_path = out_dir / "chart_group_exposure.csv"
-        pd.DataFrame(
+        exposed_df = pd.DataFrame(
             exposed_rows,
             columns=[
                 "chart_group_id",
@@ -6310,14 +6981,19 @@ def render_balance_dashboards(
                 "section_id",
                 "section_label",
                 "entry_kind",
+                "template_order",
             ],
-        ).sort_values(
-            ["dashboard_path", "chart_group_key", "sheet", "measure", "fuel_label", "chart_file", "chart_group_id"],
-            kind="mergesort",
-        ).to_csv(chart_group_path, index=False)
+        )
+        if not exposed_df.empty:
+            exposed_df["_template_order_sort"] = exposed_df["template_order"].map(_as_sort_int)
+            exposed_df = exposed_df.sort_values(
+                ["dashboard_path", "_template_order_sort", "chart_group_key", "sheet", "measure", "fuel_label", "chart_file", "chart_group_id"],
+                kind="mergesort",
+            ).drop(columns=["_template_order_sort"])
+        exposed_df.to_csv(chart_group_path, index=False)
 
         all_chart_groups_path = out_dir / "all_chart_groups.csv"
-        pd.DataFrame(
+        all_chart_groups_df = pd.DataFrame(
             deduped_all_rows,
             columns=[
                 "chart_group_id",
@@ -6333,12 +7009,17 @@ def render_balance_dashboards(
                 "section_id",
                 "section_label",
                 "entry_kind",
+                "template_order",
                 "exposed_in_dashboard",
             ],
-        ).sort_values(
-            ["dashboard_path", "chart_group_key", "sheet", "measure", "fuel_label", "chart_file", "chart_group_id"],
-            kind="mergesort",
-        ).to_csv(all_chart_groups_path, index=False)
+        )
+        if not all_chart_groups_df.empty:
+            all_chart_groups_df["_template_order_sort"] = all_chart_groups_df["template_order"].map(_as_sort_int)
+            all_chart_groups_df = all_chart_groups_df.sort_values(
+                ["dashboard_path", "_template_order_sort", "chart_group_key", "sheet", "measure", "fuel_label", "chart_file", "chart_group_id"],
+                kind="mergesort",
+            ).drop(columns=["_template_order_sort"])
+        all_chart_groups_df.to_csv(all_chart_groups_path, index=False)
         return chart_group_path, all_chart_groups_path
 
     chart_hierarchy_json_path, chart_hierarchy_csv_path, rendered_template_path = _write_chart_navigation_hierarchy()
@@ -6351,10 +7032,11 @@ def render_balance_dashboards(
     if stale_index.exists():
         stale_index.unlink()
 
-    for path in top_page_paths:
+    render_page_paths = [path for path in node_paths if path]
+    for path in render_page_paths:
         if not path:
             continue
-        title = _display_balance_path_part(path[-1], is_top=True)
+        title = _display_balance_path_part(path[-1], is_top=len(path) == 1)
         filename = path_to_filename[path]
 
         child_links = _section_links_for_top_path(path)
@@ -6646,6 +7328,140 @@ def _sheet_key_from_esto_flow(flow: object) -> str:
     return f"esto__{_safe_token(base)}"
 
 
+def _esto_flow_key(flow: object) -> str:
+    """Stable internal key for one ESTO flow."""
+    text = _clean_token(flow)
+    if not text:
+        return ""
+    code = _esto_flow_code(text)
+    if code:
+        return f"esto_flow__{_safe_token(code.replace('.', '_'))}__{_safe_token(_strip_esto_code_prefix(text) or text)}"
+    return f"esto_flow__{_safe_token(text)}"
+
+
+def _esto_flow_group_key(flows: Sequence[object]) -> str:
+    """Stable internal key for a declared group of one or more ESTO flows."""
+    clean_flows = sorted(
+        {_clean_token(flow) for flow in flows if _clean_token(flow)},
+        key=lambda flow: (_esto_flow_sort_key(flow), flow.lower()),
+    )
+    if not clean_flows:
+        return ""
+    flow_keys = [_esto_flow_key(flow).replace("esto_flow__", "", 1) for flow in clean_flows]
+    return "esto_flow_group__" + "__".join(flow_keys)
+
+
+def _esto_flow_group_label(flows: Sequence[object], fallback_label: object = "") -> str:
+    """Human label for a declared ESTO flow group."""
+    fallback = _clean_token(fallback_label)
+    if fallback:
+        return fallback
+    clean_flows = [_clean_token(flow) for flow in flows if _clean_token(flow)]
+    if len(clean_flows) == 1:
+        return _strip_esto_code_prefix(clean_flows[0]) or clean_flows[0]
+    return " + ".join(_strip_esto_code_prefix(flow) or flow for flow in clean_flows)
+
+
+def _add_dashboard_context_aliases(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add clearer dashboard/context names while preserving legacy columns."""
+    out = pd.DataFrame() if frame is None else frame.copy()
+    for col in ["page_key", "page_label", "chart_group_key", "chart_group_label"]:
+        if col not in out.columns:
+            out[col] = ""
+        out[col] = out[col].fillna("").astype(str).str.strip()
+    alias_pairs = {
+        "dashboard_page_key": "page_key",
+        "dashboard_page_label": "page_label",
+        "dashboard_section_key": "chart_group_key",
+        "dashboard_section_label": "chart_group_label",
+    }
+    for alias_col, source_col in alias_pairs.items():
+        if alias_col not in out.columns:
+            out[alias_col] = out[source_col]
+        else:
+            out[alias_col] = out[alias_col].fillna("").astype(str).str.strip()
+            out.loc[out[alias_col].eq(""), alias_col] = out.loc[out[alias_col].eq(""), source_col]
+    if "chart_kind" not in out.columns:
+        out["chart_kind"] = "by_fuel"
+    out["chart_kind"] = out["chart_kind"].fillna("").astype(str).str.strip().replace("", "by_fuel")
+    return out
+
+
+def _add_esto_flow_context_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    """Add stable ESTO flow and flow-group keys used for comparison/dedupe."""
+    out = pd.DataFrame() if frame is None else frame.copy()
+    for col in ["esto_flow", "chart_group_label"]:
+        if col not in out.columns:
+            out[col] = ""
+        out[col] = out[col].fillna("").astype(str).str.strip()
+    if "esto_flow_key" not in out.columns:
+        out["esto_flow_key"] = out["esto_flow"].map(_esto_flow_key)
+    else:
+        out["esto_flow_key"] = out["esto_flow_key"].fillna("").astype(str).str.strip()
+        missing = out["esto_flow_key"].eq("")
+        out.loc[missing, "esto_flow_key"] = out.loc[missing, "esto_flow"].map(_esto_flow_key)
+    if "esto_flow_group_key" not in out.columns:
+        out["esto_flow_group_key"] = out["esto_flow"].map(lambda flow: _esto_flow_group_key([flow]))
+    else:
+        out["esto_flow_group_key"] = out["esto_flow_group_key"].fillna("").astype(str).str.strip()
+        missing = out["esto_flow_group_key"].eq("")
+        out.loc[missing, "esto_flow_group_key"] = out.loc[missing, "esto_flow"].map(lambda flow: _esto_flow_group_key([flow]))
+    if "esto_flow_group_label" not in out.columns:
+        out["esto_flow_group_label"] = [
+            _esto_flow_group_label([flow], fallback_label=label)
+            for flow, label in zip(out["esto_flow"], out["chart_group_label"], strict=False)
+        ]
+    else:
+        out["esto_flow_group_label"] = out["esto_flow_group_label"].fillna("").astype(str).str.strip()
+        missing = out["esto_flow_group_label"].eq("")
+        out.loc[missing, "esto_flow_group_label"] = [
+            _esto_flow_group_label([flow], fallback_label=label)
+            for flow, label in zip(out.loc[missing, "esto_flow"], out.loc[missing, "chart_group_label"], strict=False)
+        ]
+    return out
+
+
+def _collapse_template_multi_flow_comparison_rows(
+    comparison_long: pd.DataFrame,
+    template_groups: pd.DataFrame,
+) -> pd.DataFrame:
+    """Make template multi-flow rows aggregate at the declared flow-group level."""
+    if comparison_long.empty or template_groups.empty or "template_is_multi_flow" not in template_groups.columns:
+        return comparison_long.copy()
+
+    multi_template_groups = template_groups[template_groups["template_is_multi_flow"].fillna(False).astype(bool)].copy()
+    if multi_template_groups.empty:
+        return comparison_long.copy()
+
+    out = comparison_long.copy()
+    match_cols = ["scenario", "sheet", "chart_group_key", "measure", "fuel_label"]
+    needed_cols = match_cols + ["esto_flow_key", "esto_flow_group_key"]
+    for col in needed_cols:
+        if col not in out.columns:
+            out[col] = ""
+        out[col] = out[col].fillna("").astype(str).str.strip()
+    for col in match_cols:
+        if col not in multi_template_groups.columns:
+            multi_template_groups[col] = ""
+        multi_template_groups[col] = multi_template_groups[col].fillna("").astype(str).str.strip()
+
+    covered = set(
+        tuple(row)
+        for row in multi_template_groups[match_cols]
+        .drop_duplicates()
+        .itertuples(index=False, name=None)
+    )
+    if not covered:
+        return out
+
+    template_mask = out["sheet"].fillna("").astype(str).str.startswith("template__")
+    covered_mask = out[match_cols].apply(lambda row: tuple(row) in covered, axis=1)
+    collapse_mask = template_mask & covered_mask & out["esto_flow_group_key"].ne("")
+    if collapse_mask.any():
+        out.loc[collapse_mask, "esto_flow_key"] = out.loc[collapse_mask, "esto_flow_group_key"]
+    return out
+
+
 def _build_page_tree_from_paths(paths: list[list[str]]) -> list[dict[str, Any]]:
     root: dict[str, Any] = {"children": {}}
     for path in paths:
@@ -6745,7 +7561,7 @@ def load_balance_leap_long_esto_axis(
     ref_workbook_path: Path | str = DEFAULT_REF_WORKBOOK_PATH,
     tgt_workbook_path: Path | str = DEFAULT_TGT_WORKBOOK_PATH,
     template_sheet: str = "EBal|2060",
-    mapping_pairs_path: Path | str = DEFAULT_MAPPING_PAIRS_PATH,
+    mapping_pairs_path: ConfigTableRef = DEFAULT_MAPPING_PAIRS_PATH,
     codebook_path: Path | str = DEFAULT_CODEBOOK_PATH,
     structure_config: dict[str, Any] | None = None,
     known_issues: dict[str, Any] | None = None,
@@ -6757,12 +7573,13 @@ def load_balance_leap_long_esto_axis(
 
     ref_path = _resolve(ref_workbook_path)
     tgt_path = _resolve(tgt_workbook_path)
-    mapping_pairs = _resolve(mapping_pairs_path)
+    mapping_pairs = _resolve_config_table_ref(mapping_pairs_path)
     codebook = _resolve(codebook_path)
     for candidate in [ref_path, tgt_path]:
         if not candidate.exists():
             raise FileNotFoundError(f"Missing required input: {candidate}")
-    if not config_table_exists(mapping_pairs):
+    mapping_pairs_file, mapping_pairs_sheet = split_config_table_ref(mapping_pairs)
+    if not config_table_exists(mapping_pairs_file, sheet_name=mapping_pairs_sheet):
         raise FileNotFoundError(f"Missing required input: {mapping_pairs}")
     if not config_table_exists(codebook, sheet_name="code_to_name"):
         raise FileNotFoundError(f"Missing required input: {codebook}")
@@ -6828,8 +7645,8 @@ def load_balance_leap_long_esto_axis(
         mapped.groupby(["scenario", "year", "esto_flow", "esto_product"], as_index=False)
         .agg(
             leap_value=("value_petajoule", "sum"),
-            leap_sector=("leap_sector", _coalesce_unique),
-            leap_fuel=("leap_fuel", _coalesce_unique),
+            leap_sector=("leap_sector", _coalesce_pipe_tokens_unique),
+            leap_fuel=("leap_fuel", _coalesce_pipe_tokens_unique),
             leap_sector_name=("leap_sector_name", _coalesce_unique),
             leap_fuel_name=("leap_fuel_name", _coalesce_unique),
             is_subtotal=("is_subtotal", "max"),
@@ -6965,6 +7782,15 @@ def _dashboard_template_esto_axis_records(
     *,
     scenario_names: Sequence[str],
     default_measure: str = "Energy balance (PJ)",
+    leap_working: pd.DataFrame | None = None,
+    base_df: pd.DataFrame | None = None,
+    ninth_df: pd.DataFrame | None = None,
+    esto_to_ninth: dict[tuple[str, str], list[tuple[str, str]]] | None = None,
+    base_year: int | None = None,
+    base_economy: str = "",
+    projection_economy: str = "",
+    projection_years: Sequence[int] = (),
+    scenario_to_projection: dict[str, str] | None = None,
 ) -> pd.DataFrame:
     """Return template-declared ESTO-axis rows that may not exist in LEAP exports."""
     template = _load_dashboard_template_allowlist(chart_navigation_guide_path)
@@ -6978,27 +7804,141 @@ def _dashboard_template_esto_axis_records(
         "measure",
         "fuel_label",
         "esto_flow",
+        "esto_flow_key",
+        "esto_flow_group_key",
+        "esto_flow_group_label",
         "esto_product",
+        "dashboard_page_key",
+        "dashboard_page_label",
+        "dashboard_section_key",
+        "dashboard_section_label",
+        "chart_kind",
+        "template_is_multi_flow",
+        "use_esto_to_ninth_mapping",
     ]
     if not template:
         return pd.DataFrame(columns=columns)
 
     rows: list[dict[str, str]] = []
-    reserved = {"defaults", "aggregate", "graphs", "esto_flow", "_comments", "comments"}
+    reserved = TEMPLATE_RESERVED_KEYS
     measure_default = str((template.get("defaults") or {}).get("measure", default_measure)).strip() or default_measure
     scenarios = [_normalize_scenario(name) for name in scenario_names if _clean_token(name)]
+    scenario_projection = dict(scenario_to_projection or {})
+
+    def _norm(value: object) -> str:
+        return " ".join(str(value or "").strip().lower().split())
+
+    def _nonzero_series(series: pd.Series) -> bool:
+        values = pd.to_numeric(series, errors="coerce").dropna()
+        return bool(not values.empty and values.abs().gt(1e-12).any())
+
+    def _virtual_sheet_for_path(path: tuple[str, ...]) -> str:
+        token = "__".join(_safe_token(str(part).replace("\\", "_")) for part in path if str(part).strip())
+        return f"template__{token or 'root'}"
+
+    projection_cache: dict[tuple[str, str, str], pd.Series] = {}
+
+    def _projection_pair_has_nonzero(esto_flow: str, product: str) -> bool:
+        if ninth_df is None or ninth_df.empty or not projection_years:
+            return False
+        targets = list((esto_to_ninth or {}).get((esto_flow, product), []))
+        if not targets:
+            return False
+        projection_scenarios = sorted(set(scenario_projection.values()) or {str(name).lower() for name in scenarios})
+        for projection_scenario in projection_scenarios:
+            for sector_code, fuel_code in targets:
+                cache_key = (sector_code, fuel_code, projection_scenario)
+                if cache_key not in projection_cache:
+                    projection_cache[cache_key] = pull_projection_series(
+                        ninth_df,
+                        sector_code=sector_code,
+                        fuel_code=fuel_code,
+                        economy_code=projection_economy,
+                        scenario=projection_scenario,
+                        projection_years=projection_years,
+                        value_sign_role="",
+                    )
+                if _nonzero_series(projection_cache[cache_key]):
+                    return True
+        return False
+
+    def _all_products_for_flows(flows: list[str], exclude_norm: set[str]) -> list[str]:
+        flow_norms = {_norm(flow) for flow in flows if _norm(flow)}
+        products: set[str] = set()
+
+        if leap_working is not None and not leap_working.empty:
+            leap = leap_working.copy()
+            for col in ["esto_flow", "esto_product", "leap_value", "esto_is_subtotal"]:
+                if col not in leap.columns:
+                    leap[col] = False if col == "esto_is_subtotal" else ""
+            leap["esto_flow"] = leap["esto_flow"].fillna("").astype(str).str.strip()
+            leap["esto_product"] = leap["esto_product"].fillna("").astype(str).str.strip()
+            leap["leap_value"] = pd.to_numeric(leap["leap_value"], errors="coerce").fillna(0.0)
+            leap["esto_is_subtotal"] = leap["esto_is_subtotal"].fillna(False).astype(bool)
+            for row in leap.itertuples(index=False):
+                flow = str(getattr(row, "esto_flow", "")).strip()
+                product = str(getattr(row, "esto_product", "")).strip()
+                if (
+                    _norm(flow) in flow_norms
+                    and product
+                    and not _product_is_total(product)
+                    and _norm(product) not in exclude_norm
+                    and not bool(getattr(row, "esto_is_subtotal", False))
+                    and abs(float(getattr(row, "leap_value", 0.0) or 0.0)) > 1e-12
+                ):
+                    products.add(product)
+
+        if base_df is not None and not base_df.empty and base_year is not None:
+            base = base_df.copy()
+            year_col = str(base_year)
+            for col in ["economy", "flows", "products", year_col, "is_subtotal"]:
+                if col not in base.columns:
+                    base[col] = False if col == "is_subtotal" else ""
+            base = base[base["economy"].fillna("").astype(str).str.strip().eq(str(base_economy))].copy()
+            base["value"] = pd.to_numeric(base[year_col], errors="coerce").fillna(0.0)
+            base["is_subtotal"] = base["is_subtotal"].fillna(False).astype(bool)
+            for row in base.itertuples(index=False):
+                flow = str(getattr(row, "flows", "")).strip()
+                product = str(getattr(row, "products", "")).strip()
+                if (
+                    _norm(flow) in flow_norms
+                    and product
+                    and not _product_is_total(product)
+                    and _norm(product) not in exclude_norm
+                    and not bool(getattr(row, "is_subtotal", False))
+                    and abs(float(getattr(row, "value", 0.0) or 0.0)) > 1e-12
+                ):
+                    products.add(product)
+
+        for flow, product in sorted((esto_to_ninth or {}).keys()):
+            if (
+                _norm(flow) in flow_norms
+                and product
+                and not _product_is_total(product)
+                and _norm(product) not in exclude_norm
+                and _projection_pair_has_nonzero(flow, product)
+            ):
+                products.add(product)
+
+        return sorted(products, key=lambda item: (_esto_flow_sort_key(item), item.lower()))
 
     def _walk(node: dict[str, Any], path: tuple[str, ...]) -> None:
         for spec in _dashboard_template_graph_specs(node, default_measure=measure_default):
-            flow = str(spec.get("esto_flow", "")).strip()
             measure = str(spec.get("measure", "")).strip() or measure_default
-            if not flow or bool(spec.get("include_all_products", False)):
+            flows = [str(flow).strip() for flow in list(spec.get("esto_flows", []) or [spec.get("esto_flow", "")]) if str(flow).strip()]
+            if not flows:
                 continue
-            for product in list(spec.get("products", []) or []):
+            if bool(spec.get("include_all_products", False)):
+                products = _all_products_for_flows(flows, set(spec.get("exclude_products_norm", set())))
+            else:
+                products = list(spec.get("products", []) or [])
+            group_label = _esto_flow_group_label(flows, fallback_label=path[-1] if path else "")
+            flow_group_key = _esto_flow_group_key(flows)
+            for product in products:
                 product_text = str(product).strip()
                 if not product_text:
                     continue
-                sheet = _sheet_key_from_esto_flow(flow)
+                sheet = _virtual_sheet_for_path(path) if len(flows) > 1 else _sheet_key_from_esto_flow(flows[0])
                 fuel_label_text = _strip_esto_code_prefix(product_text) or product_text
                 hierarchy = _dashboard_hierarchy_from_path(
                     path,
@@ -7006,18 +7946,29 @@ def _dashboard_template_esto_axis_records(
                     measure=measure,
                     fallback_label=sheet,
                 )
-                for scenario in scenarios:
-                    rows.append(
-                        {
-                            "scenario": scenario,
-                            "sheet": sheet,
-                            **hierarchy,
-                            "measure": measure,
-                            "fuel_label": fuel_label_text,
-                            "esto_flow": flow,
-                            "esto_product": product_text,
-                        }
-                    )
+                for flow in flows:
+                    for scenario in scenarios:
+                        rows.append(
+                            {
+                                "scenario": scenario,
+                                "sheet": sheet,
+                                **hierarchy,
+                                "measure": measure,
+                                "fuel_label": fuel_label_text,
+                                "esto_flow": flow,
+                                "esto_flow_key": _esto_flow_key(flow),
+                                "esto_flow_group_key": flow_group_key,
+                                "esto_flow_group_label": group_label,
+                                "esto_product": product_text,
+                                "dashboard_page_key": hierarchy["page_key"],
+                                "dashboard_page_label": hierarchy["page_label"],
+                                "dashboard_section_key": hierarchy["chart_group_key"],
+                                "dashboard_section_label": hierarchy["chart_group_label"],
+                                "chart_kind": "by_fuel",
+                                "template_is_multi_flow": len(flows) > 1,
+                                "use_esto_to_ninth_mapping": bool(spec.get("use_esto_to_ninth_mapping", False)),
+                            }
+                        )
         for key, child in node.items():
             if key in reserved or not isinstance(child, dict):
                 continue
@@ -7028,7 +7979,7 @@ def _dashboard_template_esto_axis_records(
     _walk(template, ())
     if not rows:
         return pd.DataFrame(columns=columns)
-    return pd.DataFrame(rows, columns=columns).drop_duplicates().reset_index(drop=True)
+    return _add_dashboard_context_aliases(pd.DataFrame(rows, columns=columns)).drop_duplicates().reset_index(drop=True)
 
 def build_balance_comparison_esto_axis(
     *,
@@ -7095,6 +8046,34 @@ def build_balance_comparison_esto_axis(
     }
 
     esto_to_ninth: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    def _add_esto_to_ninth_target(esto_flow: object, esto_product: object, ninth_sector: object, ninth_fuel: object) -> None:
+        flow = _clean_token(esto_flow)
+        product = _clean_token(esto_product)
+        sector = _clean_token(ninth_sector)
+        fuel = _clean_token(ninth_fuel)
+        if not (flow and product and sector and fuel):
+            return
+        pairs = esto_to_ninth.setdefault((flow, product), [])
+        pair = (sector, fuel)
+        if pair not in pairs:
+            pairs.append(pair)
+
+    def _split_mapping_tokens(value: object) -> list[str]:
+        return [token.strip() for token in str(value or "").split("|") if token.strip()]
+
+    def _iter_ninth_mapping_pairs(sectors: object, fuels: object) -> list[tuple[str, str]]:
+        sector_tokens = _split_mapping_tokens(sectors)
+        fuel_tokens = _split_mapping_tokens(fuels)
+        if not sector_tokens or not fuel_tokens:
+            return []
+        if len(sector_tokens) == len(fuel_tokens):
+            return list(dict.fromkeys(zip(sector_tokens, fuel_tokens)))
+        if len(fuel_tokens) == 1:
+            return [(sector, fuel_tokens[0]) for sector in sector_tokens]
+        if len(sector_tokens) == 1:
+            return [(sector_tokens[0], fuel) for fuel in fuel_tokens]
+        return [(sector, fuel) for sector in sector_tokens for fuel in fuel_tokens]
+
     if not mapping_status.empty:
         _ms = mapping_status.copy()
         for _col in ("esto_flow", "esto_product", "sector_code_9th", "ninth_fuel_code"):
@@ -7103,15 +8082,141 @@ def build_balance_comparison_esto_axis(
             _ms[_col] = _ms[_col].fillna("").astype(str).str.strip()
         _ms = _ms[_ms["esto_flow"].ne("") & _ms["esto_product"].ne("")].copy()
         for _, _row in _ms[["esto_flow", "esto_product", "sector_code_9th", "ninth_fuel_code"]].drop_duplicates().iterrows():
-            _key = (_row["esto_flow"], _row["esto_product"])
-            _pairs = esto_to_ninth.setdefault(_key, [])
-            for _s in [s for s in _row["sector_code_9th"].split("|") if s.strip()]:
-                for _f in [f for f in _row["ninth_fuel_code"].split("|") if f.strip()]:
-                    _pair = (_s.strip(), _f.strip())
-                    if _pair not in _pairs:
-                        _pairs.append(_pair)
+            for _s, _f in _iter_ninth_mapping_pairs(_row["sector_code_9th"], _row["ninth_fuel_code"]):
+                _add_esto_to_ninth_target(_row["esto_flow"], _row["esto_product"], _s, _f)
+
+    def _template_enabled_esto_to_ninth_pairs(canonical_pairs_frame: pd.DataFrame) -> pd.DataFrame:
+        if chart_navigation_guide_path is None or canonical_pairs_frame.empty:
+            return canonical_pairs_frame.iloc[0:0].copy()
+        template = _load_dashboard_template_allowlist(chart_navigation_guide_path)
+        if not template:
+            return canonical_pairs_frame.iloc[0:0].copy()
+
+        enabled_all_product_flows: set[str] = set()
+        enabled_pairs: set[tuple[str, str]] = set()
+
+        def _norm_text(value: object) -> str:
+            return " ".join(str(value or "").strip().lower().split())
+
+        def _walk_enabled_specs(node: dict[str, Any]) -> None:
+            for aggregate in _dashboard_template_aggregate_specs(node):
+                if not bool(aggregate.get("use_esto_to_ninth_mapping", False)):
+                    continue
+                for flow in list(aggregate.get("esto_flows", aggregate.get("source_flows", [])) or []):
+                    flow_norm = _norm_text(flow)
+                    if flow_norm:
+                        # Aggregate totals need all mapped products for the flow.
+                        enabled_all_product_flows.add(flow_norm)
+
+            for spec in _dashboard_template_graph_specs(node):
+                if not bool(spec.get("use_esto_to_ninth_mapping", False)):
+                    continue
+                flow_norms = {_norm_text(flow) for flow in list(spec.get("esto_flows", []) or []) if _norm_text(flow)}
+                if not flow_norms:
+                    continue
+                if bool(spec.get("include_all_products", False)):
+                    enabled_all_product_flows.update(flow_norms)
+                    continue
+                for product in list(spec.get("products", []) or []):
+                    product_norm = _norm_text(product)
+                    if product_norm:
+                        for flow_norm in flow_norms:
+                            enabled_pairs.add((flow_norm, product_norm))
+
+            for key, child in node.items():
+                if key in TEMPLATE_RESERVED_KEYS or not isinstance(child, dict):
+                    continue
+                _walk_enabled_specs(child)
+
+        _walk_enabled_specs(template)
+        if not enabled_all_product_flows and not enabled_pairs:
+            return canonical_pairs_frame.iloc[0:0].copy()
+
+        work = canonical_pairs_frame.copy()
+        work["_esto_flow_norm"] = work["esto_flow"].map(_norm_text)
+        work["_esto_product_norm"] = work["esto_product"].map(_norm_text)
+        allowed = work["_esto_flow_norm"].isin(enabled_all_product_flows) | work.apply(
+            lambda row: (row["_esto_flow_norm"], row["_esto_product_norm"]) in enabled_pairs,
+            axis=1,
+        )
+        return work.loc[allowed].drop(columns=["_esto_flow_norm", "_esto_product_norm"]).copy()
+
+    canonical_pairs = (mapping_inputs or {}).get("canonical_pairs", pd.DataFrame())
+    if (
+        ninth_df is not None
+        and not ninth_df.empty
+        and isinstance(canonical_pairs, pd.DataFrame)
+        and not canonical_pairs.empty
+    ):
+        _cp = canonical_pairs.copy()
+        _rename = {"9th_sector": "ninth_sector", "9th_fuel": "ninth_fuel"}
+        _cp = _cp.rename(columns={k: v for k, v in _rename.items() if k in _cp.columns and v not in _cp.columns})
+        for _col in ("esto_flow", "esto_product", "ninth_sector", "ninth_fuel"):
+            if _col not in _cp.columns:
+                _cp[_col] = ""
+            _cp[_col] = _cp[_col].fillna("").astype(str).str.strip()
+        _cp = _cp[
+            _cp["esto_flow"].ne("")
+            & _cp["esto_product"].ne("")
+            & _cp["ninth_sector"].ne("")
+            & _cp["ninth_fuel"].ne("")
+        ].copy()
+        _cp = _template_enabled_esto_to_ninth_pairs(_cp)
+        for _row in _cp[["esto_flow", "esto_product", "ninth_sector", "ninth_fuel"]].drop_duplicates().itertuples(index=False):
+            _add_esto_to_ninth_target(_row.esto_flow, _row.esto_product, _row.ninth_sector, _row.ninth_fuel)
+
+    if esto_to_ninth:
         for _key in esto_to_ninth:
             esto_to_ninth[_key] = sorted(esto_to_ninth[_key])
+
+    def _ninth_hierarchy_tokens(code: object) -> tuple[str, ...]:
+        tokens: list[str] = []
+        for token in str(code or "").strip().lower().split("_"):
+            token = token.strip()
+            if not token:
+                break
+            if token.isdigit() or token == "x":
+                tokens.append(token)
+                continue
+            break
+        return tuple(tokens)
+
+    def _is_ninth_parent_code(parent_code: object, child_code: object) -> bool:
+        parent_tokens = _ninth_hierarchy_tokens(parent_code)
+        child_tokens = _ninth_hierarchy_tokens(child_code)
+        if not parent_tokens or len(parent_tokens) >= len(child_tokens):
+            return False
+        if "x" in parent_tokens:
+            # Treat explicit x-buckets as catch-all leaves unless subtotal flags
+            # identify them as always-subtotal below.
+            return False
+        return child_tokens[: len(parent_tokens)] == parent_tokens
+
+    def _drop_parent_ninth_targets(targets: list[tuple[str, str]]) -> list[tuple[str, str]]:
+        """Remove parent 9th sector/fuel targets when child targets are present."""
+        deduped = sorted(set(targets))
+        if len(deduped) <= 1:
+            return deduped
+        keep: list[tuple[str, str]] = []
+        for sector, fuel in deduped:
+            has_child_sector_same_fuel = any(
+                other_fuel == fuel and _is_ninth_parent_code(sector, other_sector)
+                for other_sector, other_fuel in deduped
+                if (other_sector, other_fuel) != (sector, fuel)
+            )
+            has_child_fuel_same_sector = any(
+                other_sector == sector and _is_ninth_parent_code(fuel, other_fuel)
+                for other_sector, other_fuel in deduped
+                if (other_sector, other_fuel) != (sector, fuel)
+            )
+            if has_child_sector_same_fuel or has_child_fuel_same_sector:
+                continue
+            keep.append((sector, fuel))
+        return keep or deduped
+
+    if esto_to_ninth:
+        for _key in list(esto_to_ninth):
+            esto_to_ninth[_key] = _drop_parent_ninth_targets(esto_to_ninth[_key])
 
     # When an ESTO pair maps to a mix of always-subtotal and non-subtotal ninth pairs,
     # drop the always-subtotal ones. Otherwise a subtotal row and its component rows are
@@ -7171,12 +8276,15 @@ def build_balance_comparison_esto_axis(
         sheet_catalog=hierarchy_sheet_catalog,
         sheet_col="sheet_name",
     )
+    leap_working = _add_dashboard_context_aliases(_add_esto_flow_context_columns(leap_working))
 
     rows: list[dict[str, Any]] = []
     base_cache: dict[tuple[str, str], float] = {}
     projection_series_cache: dict[tuple[str, str, str], pd.Series] = {}
-    # Per-(sheet, scenario): set of (ninth_sector, ninth_fuel) pairs already used in projection sums.
-    # Prevents counting the same 9th series multiple times when several LEAP fuels share a 9th pair.
+    ninth_projection_component_rows: list[dict[str, Any]] = []
+    # Per-(ESTO flow group, scenario): set of (ninth_sector, ninth_fuel) pairs already used in projection sums.
+    # Prevents counting the same 9th series multiple times when several ESTO products
+    # share a 9th pair, even if dashboard template aliases assign different rendering keys.
     used_ninth_pairs: dict[tuple[str, str], set[tuple[str, str]]] = {}
     # (sheet, measure, fuel_label) -> compact annotation string for chart rendering
     ninth_pairs_label_map: dict[tuple[str, str, str], str] = {}
@@ -7189,6 +8297,14 @@ def build_balance_comparison_esto_axis(
             "page_label",
             "chart_group_key",
             "chart_group_label",
+            "dashboard_page_key",
+            "dashboard_page_label",
+            "dashboard_section_key",
+            "dashboard_section_label",
+            "chart_kind",
+            "esto_flow_key",
+            "esto_flow_group_key",
+            "esto_flow_group_label",
             "measure",
             "fuel_label",
             "year",
@@ -7207,6 +8323,14 @@ def build_balance_comparison_esto_axis(
                 "page_label",
                 "chart_group_key",
                 "chart_group_label",
+                "dashboard_page_key",
+                "dashboard_page_label",
+                "dashboard_section_key",
+                "dashboard_section_label",
+                "chart_kind",
+                "esto_flow_key",
+                "esto_flow_group_key",
+                "esto_flow_group_label",
                 "measure",
                 "fuel_label",
                 "source",
@@ -7230,6 +8354,14 @@ def build_balance_comparison_esto_axis(
                 "page_label",
                 "chart_group_key",
                 "chart_group_label",
+                "dashboard_page_key",
+                "dashboard_page_label",
+                "dashboard_section_key",
+                "dashboard_section_label",
+                "chart_kind",
+                "esto_flow_key",
+                "esto_flow_group_key",
+                "esto_flow_group_label",
                 "measure",
                 "fuel_label",
                 "esto_flow",
@@ -7244,7 +8376,74 @@ def build_balance_comparison_esto_axis(
     template_groups = _dashboard_template_esto_axis_records(
         chart_navigation_guide_path,
         scenario_names=list(scenario_to_projection) or list(leap_working["scenario"].dropna().astype(str).unique()),
+        leap_working=leap_working,
+        base_df=base_df,
+        ninth_df=ninth_df,
+        esto_to_ninth=esto_to_ninth,
+        base_year=base_year,
+        base_economy=base_economy,
+        projection_economy=projection_economy,
+        projection_years=projection_years,
+        scenario_to_projection=scenario_to_projection,
     )
+    if not template_groups.empty and "template_is_multi_flow" in template_groups.columns:
+        multi_template_groups = template_groups[template_groups["template_is_multi_flow"].fillna(False).astype(bool)].copy()
+        if not multi_template_groups.empty:
+            multi_keys = multi_template_groups[
+                [
+                    "scenario",
+                    "sheet",
+                    "page_key",
+                    "page_label",
+                    "chart_group_key",
+                    "chart_group_label",
+                    "dashboard_page_key",
+                    "dashboard_page_label",
+                    "dashboard_section_key",
+                    "dashboard_section_label",
+                    "chart_kind",
+                    "esto_flow_key",
+                    "esto_flow_group_key",
+                    "esto_flow_group_label",
+                    "measure",
+                    "fuel_label",
+                    "esto_flow",
+                    "esto_product",
+                ]
+            ].drop_duplicates()
+            leap_multi = leap_working.merge(
+                multi_keys,
+                left_on=["scenario", "esto_flow", "esto_product"],
+                right_on=["scenario", "esto_flow", "esto_product"],
+                how="inner",
+                suffixes=("", "_template"),
+            )
+            if not leap_multi.empty:
+                leap_multi_rows = pd.DataFrame(
+                    {
+                        "economy": projection_economy,
+                        "scenario": leap_multi["scenario"],
+                        "sheet": leap_multi["sheet"],
+                        "page_key": leap_multi["page_key_template"],
+                        "page_label": leap_multi["page_label_template"],
+                        "chart_group_key": leap_multi["chart_group_key_template"],
+                        "chart_group_label": leap_multi["chart_group_label_template"],
+                        "dashboard_page_key": leap_multi["dashboard_page_key_template"],
+                        "dashboard_page_label": leap_multi["dashboard_page_label_template"],
+                        "dashboard_section_key": leap_multi["dashboard_section_key_template"],
+                        "dashboard_section_label": leap_multi["dashboard_section_label_template"],
+                        "chart_kind": leap_multi["chart_kind_template"],
+                        "esto_flow_key": leap_multi["esto_flow_key_template"],
+                        "esto_flow_group_key": leap_multi["esto_flow_group_key_template"],
+                        "esto_flow_group_label": leap_multi["esto_flow_group_label_template"],
+                        "measure": leap_multi["measure_template"],
+                        "fuel_label": leap_multi["fuel_label_template"],
+                        "source": "leap",
+                        "year": leap_multi["year"],
+                        "value": leap_multi["leap_value"],
+                    }
+                )
+                rows.extend(leap_multi_rows.to_dict("records"))
     if not template_groups.empty:
         groups = (
             pd.concat([groups, template_groups], ignore_index=True, sort=False)
@@ -7256,20 +8455,22 @@ def build_balance_comparison_esto_axis(
             groups[_col] = False
         groups[_col] = groups[_col].fillna(False).astype(bool)
     groups = _backfill_dashboard_hierarchy(groups, sheet_catalog=hierarchy_sheet_catalog)
+    groups = _add_dashboard_context_aliases(_add_esto_flow_context_columns(groups))
 
-    # Precompute which (sheet, measure, ninth_sector, ninth_fuel) are claimed by more than one
+    # Precompute which (ESTO flow group, measure, ninth_sector, ninth_fuel) are claimed by more than one
     # (esto_flow, esto_product) group. Used to decide whether to show annotation and to deduplicate.
     _ninth_pair_claimants: dict[tuple[str, str, str, str], list[str]] = {}
     for _grow in groups.itertuples(index=False):
         _grd = _grow._asdict()
-        _gsheet = _clean_token(_grd.get("sheet", ""))
-        _gchart_group_key = _clean_token(_grd.get("chart_group_key", "")) or _gsheet
+        _gflow_group_key = _clean_token(_grd.get("esto_flow_group_key", ""))
+        if not _gflow_group_key:
+            _gflow_group_key = _esto_flow_group_key([_grd.get("esto_flow", "")]) or _clean_token(_grd.get("sheet", ""))
         _gmeasure = _clean_token(_grd.get("measure", ""))
         _gfuel = _clean_token(_grd.get("fuel_label", ""))
         _gflow = _clean_token(_grd.get("esto_flow", ""))
         _gproduct = _clean_token(_grd.get("esto_product", ""))
         for _ns, _nf in esto_to_ninth.get((_gflow, _gproduct), []):
-            _key = (_gchart_group_key, _gmeasure, _ns, _nf)
+            _key = (_gflow_group_key, _gmeasure, _ns, _nf)
             if _key not in _ninth_pair_claimants:
                 _ninth_pair_claimants[_key] = []
             if _gfuel not in _ninth_pair_claimants[_key]:
@@ -7283,9 +8484,17 @@ def build_balance_comparison_esto_axis(
         page_label = _clean_token(rd.get("page_label", ""))
         chart_group_key = _clean_token(rd.get("chart_group_key", "")) or sheet
         chart_group_label = _clean_token(rd.get("chart_group_label", "")) or sheet
+        dashboard_page_key = _clean_token(rd.get("dashboard_page_key", "")) or page_key
+        dashboard_page_label = _clean_token(rd.get("dashboard_page_label", "")) or page_label
+        dashboard_section_key = _clean_token(rd.get("dashboard_section_key", "")) or chart_group_key
+        dashboard_section_label = _clean_token(rd.get("dashboard_section_label", "")) or chart_group_label
+        chart_kind = _clean_token(rd.get("chart_kind", "")) or "by_fuel"
         measure = _clean_token(rd.get("measure", ""))
         fuel_label = _clean_token(rd.get("fuel_label", ""))
         esto_flow = _clean_token(rd.get("esto_flow", ""))
+        esto_flow_key = _clean_token(rd.get("esto_flow_key", "")) or _esto_flow_key(esto_flow)
+        esto_flow_group_key = _clean_token(rd.get("esto_flow_group_key", "")) or _esto_flow_group_key([esto_flow])
+        esto_flow_group_label = _clean_token(rd.get("esto_flow_group_label", "")) or _esto_flow_group_label([esto_flow], chart_group_label)
         esto_product = _clean_token(rd.get("esto_product", ""))
         esto_is_subtotal = bool(rd.get("esto_is_subtotal", False))
         ninth_is_subtotal = bool(rd.get("ninth_is_subtotal", False))
@@ -7312,6 +8521,14 @@ def build_balance_comparison_esto_axis(
                 "page_label": page_label,
                 "chart_group_key": chart_group_key,
                 "chart_group_label": chart_group_label,
+                "dashboard_page_key": dashboard_page_key,
+                "dashboard_page_label": dashboard_page_label,
+                "dashboard_section_key": dashboard_section_key,
+                "dashboard_section_label": dashboard_section_label,
+                "chart_kind": chart_kind,
+                "esto_flow_key": esto_flow_key,
+                "esto_flow_group_key": esto_flow_group_key,
+                "esto_flow_group_label": esto_flow_group_label,
                 "measure": measure,
                 "fuel_label": fuel_label,
                 "source": "base",
@@ -7321,7 +8538,7 @@ def build_balance_comparison_esto_axis(
         )
 
         proj_scenario = scenario_to_projection.get(scenario, scenario.lower())
-        sheet_scenario_key = (chart_group_key, scenario)
+        sheet_scenario_key = (esto_flow_group_key or sheet, scenario)
         if sheet_scenario_key not in used_ninth_pairs:
             used_ninth_pairs[sheet_scenario_key] = set()
 
@@ -7344,11 +8561,28 @@ def build_balance_comparison_esto_axis(
                         value_sign_role="",
                     )
                 series = projection_series_cache[cache_key]
+                for component_year, component_value in series.items():
+                    ninth_projection_component_rows.append(
+                        {
+                            "scenario": scenario,
+                            "year": int(component_year),
+                            "ninth_sector": sector_code,
+                            "esto_flow": esto_flow,
+                            "ninth_fuel": fuel_code,
+                            "esto_product": esto_product,
+                            "value_pj": float(component_value) if pd.notna(component_value) else float("nan"),
+                            "subtotal": False,
+                            "sheet": sheet,
+                            "measure": measure,
+                            "fuel_label": fuel_label,
+                            "chart_group_key": chart_group_key,
+                        }
+                    )
                 if total_series is None:
                     total_series = series.copy()
                 else:
                     total_series = total_series.add(series, fill_value=0.0)
-            # Mark newly used pairs so later fuel rows on same sheet/scenario skip them
+            # Mark newly used pairs so later fuel rows in the same ESTO flow group/scenario skip them.
             for pair in unused_targets:
                 used_ninth_pairs[sheet_scenario_key].add(pair)
             if total_series is None:
@@ -7359,13 +8593,13 @@ def build_balance_comparison_esto_axis(
             ann_key = (chart_group_key, measure, fuel_label)
             if ann_key not in ninth_pairs_label_map:
                 is_shared = any(
-                    len(_ninth_pair_claimants.get((chart_group_key, measure, ns, nf), [])) > 1
+                    len(_ninth_pair_claimants.get((esto_flow_group_key, measure, ns, nf), [])) > 1
                     for ns, nf in all_targets
                 )
                 if len(all_targets) != 1 or is_shared:
                     parts: list[str] = []
                     for ns, nf in sorted(set(all_targets)):
-                        claimants = _ninth_pair_claimants.get((chart_group_key, measure, ns, nf), [])
+                        claimants = _ninth_pair_claimants.get((esto_flow_group_key, measure, ns, nf), [])
                         shared_with = [c for c in claimants if c != fuel_label]
                         tag = f"{nf}/{ns}" if ns else nf
                         if shared_with:
@@ -7385,17 +8619,53 @@ def build_balance_comparison_esto_axis(
                     "page_label": page_label,
                     "chart_group_key": chart_group_key,
                     "chart_group_label": chart_group_label,
+                    "dashboard_page_key": dashboard_page_key,
+                    "dashboard_page_label": dashboard_page_label,
+                    "dashboard_section_key": dashboard_section_key,
+                    "dashboard_section_label": dashboard_section_label,
+                    "chart_kind": chart_kind,
+                    "esto_flow_key": esto_flow_key,
+                    "esto_flow_group_key": esto_flow_group_key,
+                    "esto_flow_group_label": esto_flow_group_label,
                     "measure": measure,
                     "fuel_label": fuel_label,
                     "source": "projection",
                     "year": int(proj_year),
                     "value": float(proj_value) if pd.notna(proj_value) else float("nan"),
                 }
-            )
+        )
 
     comparison_long = pd.DataFrame(rows)
     comparison_long["year"] = pd.to_numeric(comparison_long["year"], errors="coerce").astype("Int64")
     comparison_long["value"] = pd.to_numeric(comparison_long["value"], errors="coerce")
+    if not template_groups.empty and "template_is_multi_flow" in template_groups.columns:
+        multi_template_groups = template_groups[template_groups["template_is_multi_flow"].fillna(False).astype(bool)].copy()
+        if not multi_template_groups.empty:
+            covered_cols = [
+                "chart_group_key",
+                "measure",
+                "fuel_label",
+                "esto_flow_key",
+            ]
+            for col in covered_cols:
+                if col not in multi_template_groups.columns:
+                    multi_template_groups[col] = ""
+                if col not in comparison_long.columns:
+                    comparison_long[col] = ""
+                multi_template_groups[col] = multi_template_groups[col].fillna("").astype(str).str.strip()
+                comparison_long[col] = comparison_long[col].fillna("").astype(str).str.strip()
+            covered = set(
+                tuple(row)
+                for row in multi_template_groups[covered_cols]
+                .drop_duplicates()
+                .itertuples(index=False, name=None)
+            )
+            if covered:
+                direct_duplicate_mask = (
+                    ~comparison_long["sheet"].fillna("").astype(str).str.startswith("template__")
+                    & comparison_long[covered_cols].apply(lambda row: tuple(row) in covered, axis=1)
+                )
+                comparison_long = comparison_long.loc[~direct_duplicate_mask].copy()
     group_cols = [
         "economy",
         "scenario",
@@ -7404,12 +8674,22 @@ def build_balance_comparison_esto_axis(
         "page_label",
         "chart_group_key",
         "chart_group_label",
+        "dashboard_page_key",
+        "dashboard_page_label",
+        "dashboard_section_key",
+        "dashboard_section_label",
+        "chart_kind",
+        "esto_flow_key",
+        "esto_flow_group_key",
+        "esto_flow_group_label",
         "measure",
         "fuel_label",
         "source",
         "year",
     ]
     comparison_long = _backfill_dashboard_hierarchy(comparison_long, sheet_catalog=hierarchy_sheet_catalog)
+    comparison_long = _add_dashboard_context_aliases(_add_esto_flow_context_columns(comparison_long))
+    comparison_long = _collapse_template_multi_flow_comparison_rows(comparison_long, template_groups)
     comparison_long = (
         comparison_long.groupby(group_cols, as_index=False)["value"]
         .sum(min_count=1)
@@ -7443,6 +8723,14 @@ def build_balance_comparison_esto_axis(
                 "page_label",
                 "chart_group_key",
                 "chart_group_label",
+                "dashboard_page_key",
+                "dashboard_page_label",
+                "dashboard_section_key",
+                "dashboard_section_label",
+                "chart_kind",
+                "esto_flow_key",
+                "esto_flow_group_key",
+                "esto_flow_group_label",
                 "measure",
                 "fuel_label",
                 "year",
@@ -7461,9 +8749,49 @@ def build_balance_comparison_esto_axis(
         mapping_status_for_availability,
         sheet_catalog=hierarchy_sheet_catalog,
     )
+    mapping_status_for_availability = _add_dashboard_context_aliases(
+        _add_esto_flow_context_columns(mapping_status_for_availability)
+    )
+    for col in ["esto_flow", "esto_product", "sector_code_9th", "ninth_fuel_code", "mapping_note"]:
+        if col not in mapping_status_for_availability.columns:
+            mapping_status_for_availability[col] = ""
+        mapping_status_for_availability[col] = mapping_status_for_availability[col].fillna("").astype(str).str.strip()
+    if esto_to_ninth and not mapping_status_for_availability.empty:
+        def _joined_pruned_targets(row: pd.Series, item_index: int) -> str:
+            targets = esto_to_ninth.get(
+                (_clean_token(row.get("esto_flow", "")), _clean_token(row.get("esto_product", ""))),
+                [],
+            )
+            return "|".join(sorted({pair[item_index] for pair in targets if pair[item_index]}))
+
+        mapping_status_for_availability["sector_code_9th"] = mapping_status_for_availability.apply(
+            lambda row: _joined_pruned_targets(row, 0) or str(row.get("sector_code_9th", "")),
+            axis=1,
+        )
+        mapping_status_for_availability["ninth_fuel_code"] = mapping_status_for_availability.apply(
+            lambda row: _joined_pruned_targets(row, 1) or str(row.get("ninth_fuel_code", "")),
+            axis=1,
+        )
     if not template_groups.empty:
         template_status = template_groups.copy()
-        for col in ["sheet", "page_key", "page_label", "chart_group_key", "chart_group_label", "measure", "esto_flow", "esto_product"]:
+        for col in [
+            "sheet",
+            "page_key",
+            "page_label",
+            "chart_group_key",
+            "chart_group_label",
+            "dashboard_page_key",
+            "dashboard_page_label",
+            "dashboard_section_key",
+            "dashboard_section_label",
+            "chart_kind",
+            "esto_flow",
+            "esto_flow_key",
+            "esto_flow_group_key",
+            "esto_flow_group_label",
+            "esto_product",
+            "measure",
+        ]:
             if col not in mapping_status_for_availability.columns:
                 mapping_status_for_availability[col] = ""
             mapping_status_for_availability[col] = mapping_status_for_availability[col].fillna("").astype(str).str.strip()
@@ -7514,6 +8842,7 @@ def build_balance_comparison_esto_axis(
 
     mapping_status_out = _build_mapping_status_with_availability(mapping_status_for_availability, comparison_long)
     mapping_status_out = _backfill_dashboard_hierarchy(mapping_status_out, sheet_catalog=hierarchy_sheet_catalog)
+    mapping_status_out = _add_dashboard_context_aliases(_add_esto_flow_context_columns(mapping_status_out))
     mapping_status_out["projection_targets_count"] = mapping_status_out.apply(
         lambda r: len(esto_to_ninth.get((_clean_token(r.get("esto_flow", "")), _clean_token(r.get("esto_product", ""))), [])),
         axis=1,
@@ -7528,6 +8857,7 @@ def build_balance_comparison_esto_axis(
         "comparison_long": comparison_long,
         "comparison_wide": comparison_wide,
         "mapping_status": mapping_status_out,
+        "ninth_projection_components": pd.DataFrame(ninth_projection_component_rows),
         "base_df": base_df,
         "ninth_df": ninth_df,
         "reassignment_status": reassignment_status,

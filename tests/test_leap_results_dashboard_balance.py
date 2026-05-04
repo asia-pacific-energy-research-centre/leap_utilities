@@ -6,9 +6,10 @@ from pathlib import Path
 import openpyxl
 import pandas as pd
 import pytest
+from openpyxl.styles import Alignment
 
 from codebase.utilities import leap_results_dashboard_balance as balance_mod
-from codebase.leap_results_dashboard_balance_workflow import run_workflow
+from codebase.utilities.energy_balance_template_extractor import TemplateBalanceExtractor, TemplateLayout
 from codebase.utilities.leap_results_dashboard_v2.comparison_engine import build_total_component_ledger
 
 
@@ -84,6 +85,40 @@ def test_extract_balance_workbook_converts_units_to_petajoule(tmp_path: Path) ->
     row_2023 = mapped[pd.to_numeric(mapped["year"], errors="coerce").eq(2023)].iloc[0]
     assert row_2023["units_petajoule"] == "Petajoule"
     assert pytest.approx(float(row_2023["value_petajoule"]), rel=1e-9, abs=1e-12) == 0.001
+
+
+def test_balance_template_extractor_preserves_duplicate_flow_label_occurrences() -> None:
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.cell(3, 2, "Fuel A")
+    rows = [
+        ("Total transformation sector", 0, 0.0),
+        ("Transport non road", 0, 0.0),
+        ("Air", 1, 1.0),
+        ("Other parent", 0, 0.0),
+        ("Air", 1, 2.0),
+        ("Total final energy consumption", 0, 0.0),
+    ]
+    for row_idx, (name, indent, value) in enumerate(rows, start=4):
+        cell = ws.cell(row_idx, 1, name)
+        cell.alignment = Alignment(indent=indent)
+        ws.cell(row_idx, 2, value)
+
+    extractor = TemplateBalanceExtractor(
+        template_sheet="unused",
+        mapping_pairs_path=Path("unused.xlsx"),
+        codebook_path=Path("unused.xlsx"),
+    )
+    result = extractor._extract_sheet_matrix(
+        ws,
+        template=TemplateLayout(flows=[name for name, _, _ in rows], fuels=["Fuel A"]),
+    )
+
+    air_rows = result[result["leap_sector_name_raw"].eq("Air")][["leap_sector_name_full_path", "value"]]
+    assert air_rows.to_dict("records") == [
+        {"leap_sector_name_full_path": "Transport non road/Air", "value": 1.0},
+        {"leap_sector_name_full_path": "Other parent/Air", "value": 2.0},
+    ]
 
 
 def test_load_balance_leap_long_filters_full_mappings_and_is_deterministic(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -467,6 +502,427 @@ def test_template_esto_axis_records_emit_page_and_chart_group_fields() -> None:
     assert row["chart_group_key"]
 
 
+def test_v2_template_schema_parses_aggregate_and_by_fuel_nodes() -> None:
+    template = {
+        "defaults": {"measure": "Energy balance (PJ)"},
+        "Industry": {
+            "aggregate_graphs": {
+                "fuels": "Total",
+                "esto_flows": ["14.02 Construction"],
+            },
+            "Construction": {
+                "by_fuel_graphs": {
+                    "esto_flows": ["14.02 Construction"],
+                    "products": "All",
+                }
+            },
+        },
+    }
+
+    import unittest.mock as mock
+
+    with mock.patch.object(balance_mod, "_load_dashboard_template_allowlist", return_value=template):
+        structure = balance_mod.build_esto_axis_structure_from_dashboard_template(None)
+
+    assert "14.02 Construction" in structure["esto_flow_to_sheet"]
+    sheet = structure["esto_flow_to_sheet"]["14.02 Construction"]
+    assert structure["sheet_catalog"][sheet]["path"] == ["Industry sector", "Construction"]
+
+
+def test_template_all_products_uses_nonzero_leap_base_and_projection_rows() -> None:
+    template = {
+        "defaults": {"measure": "Energy balance (PJ)"},
+        "Supply": {
+            "Imports": {
+                "by_fuel_graphs": {
+                    "esto_flows": ["02 Imports"],
+                    "products": "All",
+                }
+            }
+        },
+    }
+    leap_working = pd.DataFrame(
+        [
+            {
+                "scenario": "Target",
+                "esto_flow": "02 Imports",
+                "esto_product": "01.02 Other bituminous coal",
+                "leap_value": -2.0,
+                "esto_is_subtotal": False,
+            }
+        ]
+    )
+    base_df = pd.DataFrame(
+        [
+            {
+                "economy": "20USA",
+                "flows": "02 Imports",
+                "products": "08.01 Natural gas",
+                "2022": 3.0,
+                "is_subtotal": False,
+            }
+        ]
+    )
+
+    import unittest.mock as mock
+
+    def fake_projection_series(_ninth_df, *, fuel_code, projection_years, **_kwargs):  # noqa: ANN001
+        value = 4.0 if fuel_code == "07_01_motor_gasoline" else 0.0
+        return pd.Series({year: value for year in projection_years})
+
+    with (
+        mock.patch.object(balance_mod, "_load_dashboard_template_allowlist", return_value=template),
+        mock.patch.object(balance_mod, "pull_projection_series", side_effect=fake_projection_series),
+    ):
+        result = balance_mod._dashboard_template_esto_axis_records(
+            None,
+            scenario_names=["Target"],
+            leap_working=leap_working,
+            base_df=base_df,
+            ninth_df=pd.DataFrame({"dummy": [1]}),
+            esto_to_ninth={
+                ("02 Imports", "07.01 Motor gasoline"): [("sector_a", "07_01_motor_gasoline")],
+                ("02 Imports", "16.01 Biogas"): [("sector_a", "16_01_biogas")],
+            },
+            base_year=2022,
+            base_economy="20USA",
+            projection_economy="20_USA",
+            projection_years=[2023],
+            scenario_to_projection={"target": "target"},
+        )
+
+    assert set(result["esto_product"]) == {
+        "01.02 Other bituminous coal",
+        "08.01 Natural gas",
+        "07.01 Motor gasoline",
+    }
+    assert "Other bituminous coal" in set(result["fuel_label"])
+
+
+def test_multi_flow_by_fuel_template_sums_component_flows_in_comparison() -> None:
+    template = {
+        "defaults": {"measure": "Energy balance (PJ)"},
+        "Supply": {
+            "Imports plus exports": {
+                "by_fuel_graphs": {
+                    "esto_flows": ["02 Imports", "03 Exports"],
+                    "products": "All",
+                }
+            }
+        },
+    }
+    leap_long = pd.DataFrame(
+        [
+            {
+                "scenario": "Target",
+                "sheet_name": "imports",
+                "measure": "Energy balance (PJ)",
+                "fuel_label": "Natural gas",
+                "year": 2023,
+                "leap_value": 10.0,
+                "esto_flow": "02 Imports",
+                "esto_product": "08.01 Natural gas",
+            },
+            {
+                "scenario": "Target",
+                "sheet_name": "exports",
+                "measure": "Energy balance (PJ)",
+                "fuel_label": "Natural gas",
+                "year": 2023,
+                "leap_value": -4.0,
+                "esto_flow": "03 Exports",
+                "esto_product": "08.01 Natural gas",
+            },
+        ]
+    )
+    mapping_status = leap_long[
+        ["sheet_name", "measure", "fuel_label", "esto_flow", "esto_product"]
+    ].rename(columns={"sheet_name": "sheet"})
+    mapping_status["sector_code_9th"] = ""
+    mapping_status["ninth_fuel_code"] = ""
+    base_df = pd.DataFrame(
+        [
+            {"economy": "20USA", "flows": "02 Imports", "products": "08.01 Natural gas", "2022": 2.0, "is_subtotal": False},
+            {"economy": "20USA", "flows": "03 Exports", "products": "08.01 Natural gas", "2022": -5.0, "is_subtotal": False},
+        ]
+    )
+
+    import unittest.mock as mock
+
+    with mock.patch.object(balance_mod, "_load_dashboard_template_allowlist", return_value=template):
+        result = balance_mod.build_balance_comparison_esto_axis(
+            leap_long=leap_long,
+            mapping_status=mapping_status,
+            base_year=2022,
+            projection_years=[2023],
+            base_economy="20USA",
+            projection_economy="20_USA",
+            scenario_map={"Target": "target"},
+            base_df=base_df,
+            ninth_df=pd.DataFrame(),
+            chart_navigation_guide_path=None,
+        )
+
+    comparison = result["comparison_long"]
+    virtual = comparison[
+        comparison["sheet"].astype(str).str.startswith("template__")
+        & comparison["fuel_label"].eq("Natural gas")
+    ]
+    assert not virtual.empty
+    leap_value = virtual.loc[virtual["source"].eq("leap"), "value"].sum()
+    base_value = virtual.loc[virtual["source"].eq("base"), "value"].sum()
+    assert leap_value == pytest.approx(6.0)
+    assert base_value == pytest.approx(-3.0)
+    status = result["mapping_status"]
+    virtual_status = status[
+        status["sheet"].astype(str).str.startswith("template__")
+        & status["fuel_label"].eq("Natural gas")
+    ]
+    assert set(virtual_status["esto_flow"]) == {"02 Imports", "03 Exports"}
+    assert virtual_status["esto_flow_group_key"].nunique() == 1
+    assert virtual_status["esto_flow_group_label"].iloc[0] == "Imports plus exports"
+
+
+def test_build_balance_comparison_esto_axis_drops_parent_ninth_targets_when_children_exist() -> None:
+    leap_long = pd.DataFrame(
+        [
+            {
+                "scenario": "Target",
+                "sheet_name": "steel",
+                "measure": "Energy balance (PJ)",
+                "fuel_label": "Anthracite",
+                "year": 2023,
+                "leap_value": 1.0,
+                "esto_flow": "14.03.01 Iron and steel",
+                "esto_product": "01.04 Anthracite",
+            }
+        ]
+    )
+    mapping_status = pd.DataFrame(
+        [
+            {
+                "sheet": "steel",
+                "measure": "Energy balance (PJ)",
+                "fuel_label": "Anthracite",
+                "esto_flow": "14.03.01 Iron and steel",
+                "esto_product": "01.04 Anthracite",
+                "sector_code_9th": "14_03_01_01_fs|14_03_01_03_ccs|14_03_01_iron_and_steel",
+                "ninth_fuel_code": "01_x_thermal_coal",
+            }
+        ]
+    )
+    base_df = pd.DataFrame(
+        [
+            {
+                "economy": "20USA",
+                "flows": "14.03.01 Iron and steel",
+                "products": "01.04 Anthracite",
+                "2022": 0.0,
+                "is_subtotal": False,
+            }
+        ]
+    )
+    ninth_df = pd.DataFrame(
+        [
+            {
+                "economy": "20_USA",
+                "scenarios": "target",
+                "sectors": "14_industry_sector",
+                "sub1sectors": "14_03_manufacturing",
+                "sub2sectors": "14_03_01_iron_and_steel",
+                "sub3sectors": "x",
+                "sub4sectors": "x",
+                "fuels": "01_coal",
+                "subfuels": "01_x_thermal_coal",
+                "subtotal_layout": True,
+                "subtotal_results": True,
+                "2023": 100.0,
+            },
+            {
+                "economy": "20_USA",
+                "scenarios": "target",
+                "sectors": "14_industry_sector",
+                "sub1sectors": "14_03_manufacturing",
+                "sub2sectors": "14_03_01_iron_and_steel",
+                "sub3sectors": "14_03_01_01_fs",
+                "sub4sectors": "x",
+                "fuels": "01_coal",
+                "subfuels": "01_x_thermal_coal",
+                "subtotal_layout": False,
+                "subtotal_results": False,
+                "2023": 7.0,
+            },
+            {
+                "economy": "20_USA",
+                "scenarios": "target",
+                "sectors": "14_industry_sector",
+                "sub1sectors": "14_03_manufacturing",
+                "sub2sectors": "14_03_01_iron_and_steel",
+                "sub3sectors": "14_03_01_03_ccs",
+                "sub4sectors": "x",
+                "fuels": "01_coal",
+                "subfuels": "01_x_thermal_coal",
+                "subtotal_layout": False,
+                "subtotal_results": False,
+                "2023": 3.0,
+            },
+        ]
+    )
+
+    result = balance_mod.build_balance_comparison_esto_axis(
+        leap_long=leap_long,
+        mapping_status=mapping_status,
+        base_year=2022,
+        projection_years=[2023],
+        base_economy="20USA",
+        projection_economy="20_USA",
+        scenario_map={"Target": "target"},
+        base_df=base_df,
+        ninth_df=ninth_df,
+        chart_navigation_guide_path=None,
+    )
+
+    comparison = result["comparison_long"]
+    projection_value = comparison.loc[
+        comparison["source"].eq("projection")
+        & comparison["fuel_label"].eq("Anthracite")
+        & pd.to_numeric(comparison["year"], errors="coerce").eq(2023),
+        "value",
+    ].sum()
+    assert projection_value == pytest.approx(10.0)
+    status = result["mapping_status"]
+    target_text = "|".join(status["sector_code_9th"].fillna("").astype(str).unique())
+    assert "14_03_01_iron_and_steel" not in target_text
+    assert "14_03_01_01_fs" in target_text
+    assert "14_03_01_03_ccs" in target_text
+
+
+def test_build_balance_comparison_esto_axis_dedupes_shared_ninth_pairs_by_sheet() -> None:
+    """Shared 9th rows should only feed the first ESTO-product chart on a sheet.
+
+    Domestic air transport can map both gasoline-type and kerosene-type jet fuel
+    ESTO products to the same 9th ``07_x_jet_fuel`` series. The pre-render
+    chart_group_key can differ by input source, so the dedupe must use the
+    stable ESTO-axis sheet rather than the chart-group alias.
+    """
+    leap_long = pd.DataFrame(
+        [
+            {
+                "scenario": "Target",
+                "sheet_name": "esto__15_01__Domestic_air_transport",
+                "page_key": "transport",
+                "page_label": "Transport",
+                "chart_group_key": "chart_group_alias_a",
+                "chart_group_label": "Domestic air transport",
+                "measure": "Energy balance (PJ)",
+                "fuel_label": "Gasoline type jet fuel",
+                "year": 2023,
+                "leap_value": 1.0,
+                "esto_flow": "15.01 Domestic air transport",
+                "esto_product": "07.04 Gasoline type jet fuel",
+            },
+            {
+                "scenario": "Target",
+                "sheet_name": "esto__15_01__Domestic_air_transport",
+                "page_key": "transport",
+                "page_label": "Transport",
+                "chart_group_key": "chart_group_alias_b",
+                "chart_group_label": "Domestic air transport",
+                "measure": "Energy balance (PJ)",
+                "fuel_label": "Kerosene type jet fuel",
+                "year": 2023,
+                "leap_value": 2.0,
+                "esto_flow": "15.01 Domestic air transport",
+                "esto_product": "07.05 Kerosene type jet fuel",
+            },
+        ]
+    )
+    mapping_status = pd.DataFrame(
+        [
+            {
+                "sheet": "esto__15_01__Domestic_air_transport",
+                "chart_group_key": "chart_group_alias_a",
+                "measure": "Energy balance (PJ)",
+                "fuel_label": "Gasoline type jet fuel",
+                "esto_flow": "15.01 Domestic air transport",
+                "esto_product": "07.04 Gasoline type jet fuel",
+                "sector_code_9th": "15_01_01_passenger",
+                "ninth_fuel_code": "07_x_jet_fuel",
+            },
+            {
+                "sheet": "esto__15_01__Domestic_air_transport",
+                "chart_group_key": "chart_group_alias_b",
+                "measure": "Energy balance (PJ)",
+                "fuel_label": "Kerosene type jet fuel",
+                "esto_flow": "15.01 Domestic air transport",
+                "esto_product": "07.05 Kerosene type jet fuel",
+                "sector_code_9th": "15_01_01_passenger",
+                "ninth_fuel_code": "07_x_jet_fuel",
+            },
+        ]
+    )
+    base_df = pd.DataFrame(
+        [
+            {
+                "economy": "20USA",
+                "flows": "15.01 Domestic air transport",
+                "products": "07.04 Gasoline type jet fuel",
+                "2022": 0.0,
+                "is_subtotal": False,
+            },
+            {
+                "economy": "20USA",
+                "flows": "15.01 Domestic air transport",
+                "products": "07.05 Kerosene type jet fuel",
+                "2022": 0.0,
+                "is_subtotal": False,
+            },
+        ]
+    )
+    ninth_df = pd.DataFrame(
+        [
+            {
+                "economy": "20_USA",
+                "scenarios": "target",
+                "sectors": "15_transport_sector",
+                "sub1sectors": "15_01_domestic_air_transport",
+                "sub2sectors": "15_01_01_passenger",
+                "sub3sectors": "x",
+                "sub4sectors": "x",
+                "fuels": "07_petroleum_products",
+                "subfuels": "07_x_jet_fuel",
+                "subtotal_layout": False,
+                "subtotal_results": False,
+                "2023": 123.0,
+            },
+        ]
+    )
+
+    result = balance_mod.build_balance_comparison_esto_axis(
+        leap_long=leap_long,
+        mapping_status=mapping_status,
+        base_year=2022,
+        projection_years=[2023],
+        base_economy="20USA",
+        projection_economy="20_USA",
+        scenario_map={"Target": "target"},
+        base_df=base_df,
+        ninth_df=ninth_df,
+        chart_navigation_guide_path=None,
+    )
+
+    projection = result["comparison_long"][
+        result["comparison_long"]["source"].eq("projection")
+        & pd.to_numeric(result["comparison_long"]["year"], errors="coerce").eq(2023)
+    ]
+    values = projection.set_index("fuel_label")["value"]
+
+    assert values["Gasoline type jet fuel"] == pytest.approx(123.0)
+    assert pd.isna(values["Kerosene type jet fuel"])
+    assert projection["esto_flow_group_key"].nunique() == 1
+    assert set(projection["dashboard_section_key"]) == {"chart_group_alias_a", "chart_group_alias_b"}
+
+
 def test_render_balance_dashboards_exposes_multiple_chart_groups_on_one_page(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -555,6 +1011,286 @@ def test_render_balance_dashboards_exposes_multiple_chart_groups_on_one_page(
     assert exposure["chart_group_key"].nunique() == 2
 
 
+def test_render_balance_dashboards_allows_unmeasured_transformation_by_fuel_graphs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_build_charts(comparison_long, charts_dir, backend="plotly", hide_leap_only_charts=False):  # noqa: ANN001
+        charts_dir.mkdir(parents=True, exist_ok=True)
+        written = []
+        for (sheet, measure, fuel), _ in comparison_long.groupby(["sheet", "measure", "fuel_label"]):
+            file_name = f"{balance_mod._safe_token(f'{sheet}__{measure}')}__{balance_mod._safe_token(fuel)}.html"
+            path = charts_dir / file_name
+            path.write_text("<html><body>chart</body></html>", encoding="utf-8")
+            written.append(path)
+        return written
+
+    monkeypatch.setattr(balance_mod, "build_charts", _fake_build_charts)
+    template = {
+        "defaults": {"measure": "Energy balance (PJ)"},
+        "Refining": {
+            "Oil refineries": {
+                "by_fuel_graphs": {
+                    "esto_flows": ["09.07 Oil refineries"],
+                    "products": "All",
+                }
+            }
+        },
+    }
+
+    with monkeypatch.context() as m:
+        m.setattr(balance_mod, "_load_dashboard_template_allowlist", lambda _path: template)
+        structure = balance_mod.build_esto_axis_structure_from_dashboard_template(None)
+        sheet = structure["esto_flow_to_sheet"]["09.07 Oil refineries"]
+        comparison_long = pd.DataFrame(
+            [
+                {
+                    "economy": "20_USA",
+                    "scenario": "Target",
+                    "sheet": sheet,
+                    "measure": "Energy balance (PJ)",
+                    "fuel_label": "Crude oil",
+                    "source": "leap",
+                    "year": 2030,
+                    "value": -1.0,
+                },
+                {
+                    "economy": "20_USA",
+                    "scenario": "Target",
+                    "sheet": sheet,
+                    "measure": "Energy balance (PJ)",
+                    "fuel_label": "Crude oil",
+                    "source": "projection",
+                    "year": 2030,
+                    "value": 2.0,
+                },
+            ]
+        )
+        mapping_status = pd.DataFrame(
+            [
+                {
+                    "sheet": sheet,
+                    "measure": "Energy balance (PJ)",
+                    "fuel_label": "Crude oil",
+                    "esto_flow": "09.07 Oil refineries",
+                    "esto_product": "06.01 Crude oil",
+                }
+            ]
+        )
+        out = balance_mod.render_balance_dashboards(
+            comparison_long=comparison_long,
+            mapping_status=mapping_status,
+            structure_config=structure,
+            output_dir=tmp_path,
+            chart_backend="plotly",
+            chart_navigation_guide_path=None,
+        )
+
+    exposure = pd.read_csv(out["chart_group_exposure"])
+    crude_rows = exposure[
+        exposure["entry_kind"].eq("direct")
+        & exposure["fuel_label"].eq("Crude oil")
+    ]
+    assert set(crude_rows["measure"]) == {
+        balance_mod.TRANSFORMATION_INPUT_MEASURE,
+        balance_mod.TRANSFORMATION_OUTPUT_MEASURE,
+    }
+
+
+def test_render_balance_dashboards_writes_refining_aggregate_without_leap_rows(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _fake_build_charts(comparison_long, charts_dir, backend="plotly", hide_leap_only_charts=False):  # noqa: ANN001
+        charts_dir.mkdir(parents=True, exist_ok=True)
+        written = []
+        for (sheet, measure, fuel), _ in comparison_long.groupby(["sheet", "measure", "fuel_label"]):
+            file_name = f"{balance_mod._safe_token(f'{sheet}__{measure}')}__{balance_mod._safe_token(fuel)}.html"
+            path = charts_dir / file_name
+            path.write_text("<html><body>chart</body></html>", encoding="utf-8")
+            written.append(path)
+        return written
+
+    def _fake_make_chart(sheet, fuel, subset, output_dir, backend="plotly", display_sheet=None, file_sheet=None):  # noqa: ANN001
+        output_dir.mkdir(parents=True, exist_ok=True)
+        path = output_dir / f"{balance_mod._safe_token(file_sheet or sheet)}__{balance_mod._safe_token(fuel)}.html"
+        path.write_text("<html><body>aggregate</body></html>", encoding="utf-8")
+        return path
+
+    template = {
+        "defaults": {"measure": "Energy balance (PJ)"},
+        "Refining": {
+            "aggregate_graphs": {
+                "fuels": "Total",
+                "esto_flows": ["09.07 Oil refineries"],
+                "measures": [
+                    balance_mod.TRANSFORMATION_INPUT_MEASURE,
+                    balance_mod.TRANSFORMATION_OUTPUT_MEASURE,
+                ],
+            },
+            "Oil refineries": {
+                "by_fuel_graphs": {
+                    "esto_flows": ["09.07 Oil refineries"],
+                    "products": "All",
+                }
+            },
+        },
+    }
+
+    with monkeypatch.context() as m:
+        m.setattr(balance_mod, "_load_dashboard_template_allowlist", lambda _path: template)
+        m.setattr(balance_mod, "build_charts", _fake_build_charts)
+        m.setattr(balance_mod, "make_chart", _fake_make_chart)
+        structure = balance_mod.build_esto_axis_structure_from_dashboard_template(None)
+        sheet = structure["esto_flow_to_sheet"]["09.07 Oil refineries"]
+        comparison_long = pd.DataFrame(
+            [
+                {
+                    "economy": "20_USA",
+                    "scenario": "Target",
+                    "sheet": sheet,
+                    "measure": "Energy balance (PJ)",
+                    "fuel_label": "Crude oil",
+                    "source": "base",
+                    "year": 2022,
+                    "value": -10.0,
+                },
+                {
+                    "economy": "20_USA",
+                    "scenario": "Target",
+                    "sheet": sheet,
+                    "measure": "Energy balance (PJ)",
+                    "fuel_label": "Crude oil",
+                    "source": "projection",
+                    "year": 2030,
+                    "value": -11.0,
+                },
+                {
+                    "economy": "20_USA",
+                    "scenario": "Target",
+                    "sheet": sheet,
+                    "measure": "Energy balance (PJ)",
+                    "fuel_label": "Motor gasoline",
+                    "source": "base",
+                    "year": 2022,
+                    "value": 8.0,
+                },
+                {
+                    "economy": "20_USA",
+                    "scenario": "Target",
+                    "sheet": sheet,
+                    "measure": "Energy balance (PJ)",
+                    "fuel_label": "Motor gasoline",
+                    "source": "projection",
+                    "year": 2030,
+                    "value": 9.0,
+                },
+            ]
+        )
+        mapping_status = pd.DataFrame(
+            [
+                {
+                    "sheet": sheet,
+                    "measure": "Energy balance (PJ)",
+                    "fuel_label": "Crude oil",
+                    "esto_flow": "09.07 Oil refineries",
+                    "esto_product": "06.01 Crude oil",
+                },
+                {
+                    "sheet": sheet,
+                    "measure": "Energy balance (PJ)",
+                    "fuel_label": "Motor gasoline",
+                    "esto_flow": "09.07 Oil refineries",
+                    "esto_product": "07.01 Motor gasoline",
+                },
+            ]
+        )
+        out = balance_mod.render_balance_dashboards(
+            comparison_long=comparison_long,
+            mapping_status=mapping_status,
+            structure_config=structure,
+            output_dir=tmp_path,
+            chart_backend="plotly",
+            chart_navigation_guide_path=None,
+        )
+
+    exposure = pd.read_csv(out["chart_group_exposure"])
+    aggregate_rows = exposure[
+        exposure["entry_kind"].eq("aggregate")
+        & exposure["dashboard_path"].eq("Refining")
+        & exposure["fuel_label"].eq("Total")
+    ]
+    assert set(aggregate_rows["measure"]) == {
+        balance_mod.TRANSFORMATION_INPUT_MEASURE,
+        balance_mod.TRANSFORMATION_OUTPUT_MEASURE,
+    }
+
+
+def test_mapping_lineage_audit_attaches_only_rendered_chart_groups(tmp_path: Path) -> None:
+    chart_groups = pd.DataFrame(
+        [
+            {
+                "chart_group_id": "chart::charts/construction.html",
+                "dashboard_path": "Industry > Construction",
+                "chart_file": "charts/construction.html",
+                "page_key": "industry",
+                "page_label": "Industry",
+                "chart_group_key": "industry__construction",
+                "chart_group_label": "Construction",
+                "section_id": "construction",
+                "section_label": "Construction",
+                "entry_kind": "direct",
+                "sheet": "esto__14_02__Construction",
+                "measure": "Energy balance (PJ)",
+                "fuel_label": "Anthracite",
+            }
+        ]
+    )
+    chart_groups_path = tmp_path / "chart_group_exposure.csv"
+    chart_groups.to_csv(chart_groups_path, index=False)
+    all_chart_groups = chart_groups.copy()
+    all_chart_groups["exposed_in_dashboard"] = True
+    all_chart_groups_path = tmp_path / "all_chart_groups.csv"
+    all_chart_groups.to_csv(all_chart_groups_path, index=False)
+
+    lineage = pd.DataFrame(
+        [
+            {
+                "dataset": "9th",
+                "scenario": "Target",
+                "year": 2023,
+                "esto_flow": "14.02 Construction",
+                "esto_product": "01.04 Anthracite",
+                "source_sector": "14_02_construction",
+                "source_fuel": "01_x_thermal_coal",
+                "value_pj": 1.0,
+            },
+            {
+                "dataset": "9th",
+                "scenario": "Target",
+                "year": 2023,
+                "esto_flow": "14 Industry sector",
+                "esto_product": "01.04 Anthracite",
+                "source_sector": "14_industry_sector",
+                "source_fuel": "01_x_thermal_coal",
+                "value_pj": 2.0,
+            },
+        ]
+    )
+
+    attached = balance_mod.attach_chart_groups_to_mapping_lineage_audit(
+        lineage,
+        chart_groups_path,
+        all_chart_groups_path,
+    )
+
+    assert len(attached) == 1
+    row = attached.iloc[0]
+    assert row["chart_group_id"] == "chart::charts/construction.html"
+    assert row["esto_flow"] == "14.02 Construction"
+    assert row["source_sector"] == "14_02_construction"
+
+
 def test_total_component_ledger_dedup_scopes_to_chart_group_key() -> None:
     chart_rows = pd.DataFrame(
         [
@@ -615,6 +1351,8 @@ def test_attach_chart_groups_uses_legacy_sheet_fallback(tmp_path: Path) -> None:
 def test_balance_dashboard_workflow_integration_usa_inputs() -> None:
     if os.getenv("RUN_BALANCE_INTEGRATION", "").strip().lower() not in {"1", "true", "yes", "y"}:
         pytest.skip("Set RUN_BALANCE_INTEGRATION=1 to run full integration workflow test.")
+
+    from codebase.leap_results_dashboard_balance_workflow import run_workflow
 
     result = run_workflow()
     out_dir = Path(result["comparison_long"]).resolve().parent

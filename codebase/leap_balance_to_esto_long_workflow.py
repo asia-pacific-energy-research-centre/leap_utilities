@@ -69,10 +69,10 @@ TGT_WORKBOOK_PATH = resolve_balance_export_workbook(
 )
 
 KNOWN_ISSUES_CONFIG_PATH = _resolve("config/leap_results_balance_known_issues.json")
-CHART_NAVIGATION_GUIDE_PATH = _resolve("config/leap_comparison_dashboard_template.json")
+CHART_NAVIGATION_GUIDE_PATH = _resolve("config/leap_comparison_dashboard_template_v2.json")
 
 LEAP_TO_ESTO_MAPPING = (_resolve("config/leap_mappings.xlsx"), "leap_combined_esto")
-NINTH_TO_ESTO_MAPPING = (_resolve("config/ninth_pairs_to_esto_pairs.xlsx"), "ninth_pairs_to_esto_pairs")
+NINTH_TO_ESTO_MAPPING = (_resolve("config/master_config.xlsx"), "ninth_pairs_to_esto_pairs")
 CODEBOOK_PATH = _resolve("config/sector_fuel_codes_to_names.xlsx")
 SHEET_MAP_PATH = _resolve("config/leap_results_sheet_map.csv")
 BACKUP_MAPPINGS_PATH = _resolve("config/backup_leap_mappings.xlsx")
