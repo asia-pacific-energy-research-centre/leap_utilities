@@ -289,7 +289,7 @@ class TemplateBalanceExtractor:
             "total final energy demand": "total final energy consumption",
             "total transformation": "total transformation sector",
             "transmission and distribution": "transmission and distribution losses",
-            "non specified transformation": "transformation nonspecified",
+            "non specified transformation": "Transfers nonspecified",
             "ng liquefaction": "liquefaction regasification plants",
             "lng regasification": "liquefaction regasification plants",
             "oil refining": "oil refineries",

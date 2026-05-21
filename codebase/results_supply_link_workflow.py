@@ -7,10 +7,37 @@ supply imports, exports, and production targets that keep the model balanced. It
 is the integrated supply path to use when demand/transformation results should
 drive supply trade updates rather than running the standalone supply workflow
 alone.
+
+How to think about the whole workflow
+-------------------------------------
+1. Read LEAP's current story:
+   The workflow starts by reading LEAP balance results and translating them into
+   the same ESTO fuel language used by the 9th/ESTO supply data.
+2. Add the transformation story:
+   It adds what transformation modules are expected to consume and produce,
+   including process outputs, feedstocks, losses, and transfer activity.
+3. Add the supply story:
+   It brings in baseline production, imports, exports, and stock changes from
+   the supply data pipeline.
+4. Find the gap:
+   For every economy, scenario, fuel, and year, it asks whether supply plus
+   transformation output is enough to meet demand, transformation input needs,
+   and losses.
+5. Choose where the fix belongs:
+   In the balanced iterative approach, imports are left for LEAP to reveal,
+   exports stay anchored, and any remaining gaps can be routed to transformation
+   capacity, primary production, or additional exports on later passes.
+6. Write LEAP-ready inputs:
+   The workflow packages the answers into supply, transformation, transfer, and
+   loss/own-use proxy workbooks, then combines them into a LEAP import workbook.
+7. Loop if needed:
+   Import the workbook into LEAP, recalculate, refresh/export LEAP balance
+   results, and rerun so the next pass can respond to the remaining gaps.
 """
 
 from __future__ import annotations
 
+import importlib.util
 from functools import lru_cache
 from datetime import datetime, timezone
 import json
@@ -53,7 +80,11 @@ from codebase.functions import supply_data_pipeline, leap_api
 from codebase.functions.analysis_input_write_dispatcher import (
     get_analysis_input_write_mode,
 )
-from codebase import leap_results_workflow, transformation_workflow, transfers_workflow
+from codebase import (
+    other_loss_own_use_proxy_workflow,
+    transformation_workflow,
+    transfers_workflow,
+)
 from codebase.utilities.leap_results_dashboard_balance import (
     DEFAULT_BACKUP_MAPPINGS_PATH as DEFAULT_BALANCE_BACKUP_MAPPINGS_PATH,
     DEFAULT_BASE_TABLE_PATH as DEFAULT_BALANCE_BASE_TABLE_PATH,
@@ -90,6 +121,20 @@ def _resolve(path: Path | str) -> Path:
     raw = str(path).replace("\\", "/")
     candidate = Path(raw)
     return candidate if candidate.is_absolute() else (REPO_ROOT / candidate)
+
+
+def _load_leap_results_workflow():
+    """Load the permanently renamed LEAP Results workflow file."""
+    workflow_path = REPO_ROOT / "codebase" / "leap_results_workflow - LEAP API.py"
+    spec = importlib.util.spec_from_file_location("leap_results_workflow_leap_api", workflow_path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load LEAP Results workflow from {workflow_path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+leap_results_workflow = _load_leap_results_workflow()
 
 
 def _emit_completion_beep(*, success: bool = True, style: str = "simple") -> None:
@@ -243,6 +288,18 @@ LEAP_IMPORT_TRANSFERS_TO_LEAP = True
 LEAP_IMPORT_LOG_LEVEL = "summary"  # detailed|summary|quiet
 LEAP_IMPORT_WARNING_PRINT_LIMIT = 20
 
+# Other loss / own-use proxy controls.
+# - "auto" syncs to CAPACITY_UNMET_PASS_MODE.
+# - "first" forces ESTO + 9th proxy activity.
+# - "second" forces LEAP-balance proxy activity.
+RUN_OTHER_LOSS_OWN_USE_PROXY = True
+OTHER_LOSS_OWN_USE_PROXY_STAGE = "auto"  # auto|first|second
+OTHER_LOSS_OWN_USE_OUTPUT_FUEL_SCOPE = "economy"  # economy|all_economies
+OTHER_LOSS_OWN_USE_INCLUDE_IN_LEAP_IMPORT = True
+OTHER_LOSS_OWN_USE_LEAP_BALANCE_WORKBOOK_PATH = None
+OTHER_LOSS_OWN_USE_LEAP_BALANCE_SCENARIO = "Target"
+OTHER_LOSS_OWN_USE_LEAP_BALANCE_DATE_ID = None
+
 # Results packaging controls.
 # - When True, workflow writes one consolidated run workbook in OUTPUT_DIR.
 # - When False, legacy per-file outputs (csv/xlsx sidecars) are used.
@@ -280,27 +337,14 @@ FULL_MODEL_EXPORT_CATALOG_SHEET = RESULTS_VERIFICATION_EXPORT_SHEET
 
 # Transformation refresh from live LEAP Results (before reconciliation).
 REFRESH_TRANSFORMATION_MEASURES_FROM_LEAP_RESULTS = False
-REFRESH_TRANSFORMATION_MEASURE_SCENARIO = "Reference"
+REFRESH_TRANSFORMATION_MEASURE_SCENARIO = "Target"
 REFRESH_TRANSFORMATION_MEASURE_REGION = LEAP_IMPORT_REGION
 
-# Trade target behavior.
-# Runtime toggle is set in the bottom "Notebook Runtime Variables" block.
-# Modes:
-# - "legacy_split": current behaviour. Supply gets residual imports/exports and
-#   transformation output fuels get import/export targets.
-# - "output_share_supply_exports": trial mode. Supply imports are left at zero
-#   so LEAP can autobalance them, all explicit exports stay on supply branches,
-#   and transformation output-fuel import/export targets are omitted so
-#   transformation activity is driven by Output Share / Process Share instead.
-# - "capacity_constrained": transformation import/export targets are explicitly
-#   written as zeros (to clear stale values) and process Exogenous Capacity is
-#   set from projected process outputs to constrain overproduction in LEAP.
-# - "capacity_unmet_iterative": workbook/manual mode only. Uses latest supply
-#   results tables to proxy unmet imports, then iteratively uplifts process
-#   exogenous capacity with persisted state across manual LEAP recalc passes.
-# - "capacity_unmet_iterative_balanced": extends iterative mode using imports
-#   deltas as unmet proxy. Positive import gaps uplift transformation and
-#   primary production; negative import gaps are routed to extra exports.
+# Trade target behavior is fixed to the balanced iterative supply-link method.
+# Imports are omitted from supply exports so LEAP can reveal unmet requirements
+# after recalculation. Later passes use those balance results to add
+# transformation capacity, primary production, or export adjustments.
+ACTIVE_SUPPLY_LINK_METHOD = "capacity_unmet_iterative_balanced"
 DEMAND_SECTOR_PREFIXES = ("04_", "05_", "14_", "15_", "16_")
 
 # Capacity-constrained mode knobs.
@@ -312,8 +356,17 @@ CAPACITY_ENDOGENOUS = 0.0
 CAPACITY_CLEAR_OUTPUT_TRADE_TARGETS = True
 
 # Capacity unmet iterative mode knobs.
+# CAPACITY_UNMET_PASS_MODE choices:
+# - "baseline_seed": first clean pass; ignore old iterative state and write
+#   baseline exports/capacity only.
+# - "results_update": follow-up pass; use refreshed LEAP balance results and
+#   persisted state to allocate remaining gaps.
+# Backward-compatible aliases accepted by the resolver:
+# - "first_clean" -> "baseline_seed"
+# - "consecutive" -> "results_update"
 # The iterative pass now prefers balance-table outputs for observed trade
 # instead of legacy LEAP results workbooks.
+CAPACITY_UNMET_PASS_MODE = "results_update"
 CAPACITY_UNMET_STATE_PATH = RESULTS_RUNTIME_DIR / "capacity_unmet_iterative_state.json"
 CAPACITY_UNMET_RESULTS_DIR = YEARLY_BALANCE_DIR
 CAPACITY_UNMET_IMPORT_SHEETS: tuple[str, ...] = ("imports primary", "imports secondary")
@@ -617,32 +670,32 @@ BALANCE_DEMAND_TEMPLATE_SHEET = "EBal|2060"
 
 def _use_legacy_trade_split_mode() -> bool:
     """Return True when exports should use the legacy split-target behavior."""
-    return str(TRADE_TARGET_EXPORT_MODE).strip().lower() == "legacy_split"
+    return False
 
 
 def _use_output_share_supply_exports_mode() -> bool:
     """Return True when supply exports should carry explicit trade values and imports stay zero."""
-    return str(TRADE_TARGET_EXPORT_MODE).strip().lower() == "output_share_supply_exports"
+    return False
 
 
 def _use_capacity_unmet_iterative_mode() -> bool:
     """Return True when capacity is manually uplifted using iterative unmet-import passes."""
-    return str(TRADE_TARGET_EXPORT_MODE).strip().lower() == "capacity_unmet_iterative"
+    return False
 
 
 def _use_capacity_unmet_iterative_balanced_mode() -> bool:
     """Return True when iterative mode handles both positive and negative net-trade residuals."""
-    return str(TRADE_TARGET_EXPORT_MODE).strip().lower() == "capacity_unmet_iterative_balanced"
+    return True
 
 
 def _use_capacity_unmet_iterative_any_mode() -> bool:
     """Return True for any iterative unmet-capacity mode."""
-    return _use_capacity_unmet_iterative_mode() or _use_capacity_unmet_iterative_balanced_mode()
+    return True
 
 
 def _use_capacity_constrained_mode() -> bool:
     """Return True when exports should set process capacities and clear trade targets."""
-    return str(TRADE_TARGET_EXPORT_MODE).strip().lower() == "capacity_constrained"
+    return False
 
 
 def _use_capacity_like_mode() -> bool:
@@ -1029,21 +1082,41 @@ def _capacity_unmet_default_state() -> dict[str, object]:
     }
 
 
-def _resolve_capacity_unmet_iteration_run_mode() -> str:
-    """Return validated run mode for iterative unmet-capacity passes."""
-    mode = str(CAPACITY_UNMET_ITERATION_RUN_MODE or "").strip().lower() or "consecutive"
-    valid = {"consecutive", "first_clean"}
-    if mode not in valid:
+def _resolve_capacity_unmet_pass_mode(raw_mode: str | None = None) -> str:
+    """Return canonical pass mode for iterative unmet-capacity passes."""
+    configured = (
+        raw_mode
+        if raw_mode is not None
+        else CAPACITY_UNMET_PASS_MODE
+    )
+    token = str(configured or "").strip().lower() or "results_update"
+    aliases = {
+        "baseline_seed": "baseline_seed",
+        "seed_baseline": "baseline_seed",
+        "first_clean": "baseline_seed",
+        "first": "baseline_seed",
+        "first_run": "baseline_seed",
+        "baseline": "baseline_seed",
+        "results_update": "results_update",
+        "update_from_results": "results_update",
+        "consecutive": "results_update",
+        "second": "results_update",
+        "second_run": "results_update",
+        "leap_balance": "results_update",
+    }
+    mode = aliases.get(token)
+    if mode is None:
         raise ValueError(
-            "Invalid CAPACITY_UNMET_ITERATION_RUN_MODE="
-            f"{CAPACITY_UNMET_ITERATION_RUN_MODE!r}. Valid values: {sorted(valid)}"
+            "Invalid CAPACITY_UNMET_PASS_MODE="
+            f"{configured!r}. Valid values: ['baseline_seed', 'results_update'] "
+            "(old aliases 'first_clean' and 'consecutive' are also accepted)."
         )
     return mode
 
 
-def _is_capacity_unmet_first_clean_run_mode() -> bool:
+def _is_capacity_unmet_baseline_seed_pass() -> bool:
     """Return True when iterative unmet workflow should run baseline-only first pass."""
-    return _resolve_capacity_unmet_iteration_run_mode() == "first_clean"
+    return _resolve_capacity_unmet_pass_mode() == "baseline_seed"
 
 
 def _read_capacity_unmet_state(
@@ -1051,11 +1124,11 @@ def _read_capacity_unmet_state(
     *,
     run_mode: str | None = None,
 ) -> dict[str, object]:
-    """Load iterative capacity state JSON from disk (or reset for first_clean mode)."""
+    """Load iterative capacity state JSON from disk (or reset for baseline_seed mode)."""
     path = _resolve(state_path)
-    mode = str(run_mode or _resolve_capacity_unmet_iteration_run_mode()).strip().lower()
+    mode = _resolve_capacity_unmet_pass_mode(run_mode)
     default_state = _capacity_unmet_default_state()
-    if mode == "first_clean":
+    if mode == "baseline_seed":
         if path.exists() and bool(CAPACITY_UNMET_FIRST_CLEAN_ARCHIVE_EXISTING_STATE):
             archive_dir = _resolve(RESULTS_SINGLE_FILE_ARCHIVE_DIR)
             archive_dir.mkdir(parents=True, exist_ok=True)
@@ -1064,16 +1137,16 @@ def _read_capacity_unmet_state(
             try:
                 shutil.copy2(path, archive_path)
                 print(
-                    "[CAPACITY_UNMET] first_clean mode: archived existing state to "
+                    "[CAPACITY_UNMET] baseline_seed mode: archived existing state to "
                     f"{archive_path}"
                 )
             except Exception as exc:
                 print(
-                    "[WARN] Failed archiving existing capacity unmet state in first_clean mode: "
+                    "[WARN] Failed archiving existing capacity unmet state in baseline_seed mode: "
                     f"{exc}"
                 )
         print(
-            "[CAPACITY_UNMET] first_clean mode: ignoring persisted iterative state and "
+            "[CAPACITY_UNMET] baseline_seed mode: ignoring persisted iterative state and "
             "starting from empty cumulative additions."
         )
         return default_state
@@ -2278,6 +2351,159 @@ def _load_active_direct_demand_mapping_sheet(sheet_name: str) -> pd.DataFrame:
     return frame.loc[active_mask].copy()
 
 
+def _read_config_table_ref(table_ref, **kwargs) -> pd.DataFrame:
+    """Read either a path or a (path, sheet_name) config table reference."""
+    if isinstance(table_ref, tuple) and len(table_ref) == 2:
+        return read_config_table(table_ref[0], sheet_name=table_ref[1], **kwargs)
+    return read_config_table(table_ref, **kwargs)
+
+
+def _build_augmented_balance_demand_mapping_workbook() -> Path:
+    """
+    Write a runtime mapping workbook with inferred demand ESTO mappings.
+
+    LEAP balance conversion intentionally uses explicit LEAP path mappings. Some
+    direct-demand rows have explicit LEAP->9th mappings but no authored
+    LEAP->ESTO row. For those rows, infer the ESTO pair through the canonical
+    9th->ESTO bridge so demand-side rows are not dropped from supply linking.
+    """
+    raw_esto = read_config_table(
+        DIRECT_DEMAND_MAPPING_WORKBOOK,
+        sheet_name=DIRECT_DEMAND_ESTO_MAPPING_SHEET,
+        dtype=str,
+    ).fillna("")
+    raw_ninth = read_config_table(
+        DIRECT_DEMAND_MAPPING_WORKBOOK,
+        sheet_name=DIRECT_DEMAND_NINTH_MAPPING_SHEET,
+        dtype=str,
+    ).fillna("")
+    canonical = _read_config_table_ref(BALANCE_DEMAND_NINTH_TO_ESTO_MAPPING, dtype=str).fillna("")
+
+    required_esto = ["leap_sector_name_full_path", "raw_leap_fuel_name", "esto_flow", "esto_product"]
+    required_ninth = ["leap_sector_name_full_path", "raw_leap_fuel_name", "ninth_sector", "ninth_fuel"]
+    required_canonical = ["9th_sector", "9th_fuel", "esto_flow", "esto_product"]
+    missing_esto = [col for col in required_esto if col not in raw_esto.columns]
+    missing_ninth = [col for col in required_ninth if col not in raw_ninth.columns]
+    missing_canonical = [col for col in required_canonical if col not in canonical.columns]
+    if missing_esto or missing_ninth or missing_canonical:
+        raise KeyError(
+            "Cannot build augmented balance-demand mappings because required columns are missing: "
+            f"esto={missing_esto}, ninth={missing_ninth}, canonical={missing_canonical}"
+        )
+
+    active_esto = raw_esto.copy()
+    active_ninth = raw_ninth.copy()
+    for frame in [active_esto, active_ninth]:
+        if "remove_row" not in frame.columns:
+            frame["remove_row"] = False
+        if "duplicate_to_remove" not in frame.columns:
+            frame["duplicate_to_remove"] = False
+    active_esto = active_esto[
+        ~active_esto["remove_row"].map(_truthy_flag)
+        & ~active_esto["duplicate_to_remove"].map(_truthy_flag)
+    ].copy()
+    active_ninth = active_ninth[
+        ~active_ninth["remove_row"].map(_truthy_flag)
+        & ~active_ninth["duplicate_to_remove"].map(_truthy_flag)
+    ].copy()
+
+    for col in required_esto:
+        active_esto[col] = active_esto[col].fillna("").astype(str).str.strip()
+    for col in required_ninth:
+        active_ninth[col] = active_ninth[col].fillna("").astype(str).str.strip()
+    for col in required_canonical:
+        canonical[col] = canonical[col].fillna("").astype(str).str.strip()
+
+    existing_keys = set(
+        active_esto.loc[
+            active_esto["leap_sector_name_full_path"].ne("")
+            & active_esto["raw_leap_fuel_name"].ne("")
+            & active_esto["esto_flow"].ne("")
+            & active_esto["esto_product"].ne(""),
+            ["leap_sector_name_full_path", "raw_leap_fuel_name"],
+        ].itertuples(index=False, name=None)
+    )
+
+    candidates = active_ninth[
+        active_ninth["leap_sector_name_full_path"].ne("")
+        & active_ninth["raw_leap_fuel_name"].ne("")
+        & active_ninth["ninth_sector"].ne("")
+        & active_ninth["ninth_fuel"].ne("")
+        & active_ninth["ninth_sector"].map(_is_demand_sector_mapping)
+    ].copy()
+    if "leap_is_subtotal" in candidates.columns:
+        candidates = candidates[~candidates["leap_is_subtotal"].map(_truthy_flag)].copy()
+    if "ninth_pair_is_subtotal" in candidates.columns:
+        candidates = candidates[~candidates["ninth_pair_is_subtotal"].map(_truthy_flag)].copy()
+    if candidates.empty:
+        augmented_path = _resolve(RESULTS_CHECKS_DIR) / "results_supply_link_augmented_balance_demand_mappings.xlsx"
+        augmented_path.parent.mkdir(parents=True, exist_ok=True)
+        with pd.ExcelWriter(augmented_path) as writer:
+            raw_esto.to_excel(writer, sheet_name=DIRECT_DEMAND_ESTO_MAPPING_SHEET, index=False)
+            raw_ninth.to_excel(writer, sheet_name=DIRECT_DEMAND_NINTH_MAPPING_SHEET, index=False)
+        return augmented_path
+
+    candidates["_source_key"] = list(
+        candidates[["leap_sector_name_full_path", "raw_leap_fuel_name"]].itertuples(index=False, name=None)
+    )
+    candidates = candidates[~candidates["_source_key"].isin(existing_keys)].copy()
+    inferred = candidates.merge(
+        canonical[required_canonical].drop_duplicates(),
+        left_on=["ninth_sector", "ninth_fuel"],
+        right_on=["9th_sector", "9th_fuel"],
+        how="left",
+        suffixes=("", "_canonical"),
+    )
+    inferred = inferred[
+        inferred["esto_flow"].fillna("").astype(str).str.strip().ne("")
+        & inferred["esto_product"].fillna("").astype(str).str.strip().ne("")
+    ].copy()
+    inferred = inferred.drop_duplicates(
+        subset=["leap_sector_name_full_path", "raw_leap_fuel_name", "esto_flow", "esto_product"]
+    )
+
+    inferred_rows = pd.DataFrame(columns=raw_esto.columns)
+    if not inferred.empty:
+        inferred_rows = pd.DataFrame("", index=range(len(inferred)), columns=raw_esto.columns)
+        for col in raw_esto.columns:
+            if col in inferred.columns:
+                inferred_rows[col] = inferred[col].values
+        if "leap_sector_name_original" in inferred_rows.columns:
+            inferred_rows["leap_sector_name_original"] = inferred["leap_sector_name_full_path"].values
+        if "leap_is_subtotal" in inferred_rows.columns:
+            inferred_rows["leap_is_subtotal"] = False
+        if "esto_pair_is_subtotal" in inferred_rows.columns:
+            inferred_rows["esto_pair_is_subtotal"] = False
+        if "subtotal_mismatch_is_ok" in inferred_rows.columns:
+            inferred_rows["subtotal_mismatch_is_ok"] = False
+        if "many_to_many_is_ok" in inferred_rows.columns:
+            inferred_rows["many_to_many_is_ok"] = False
+        if "remove_row" in inferred_rows.columns:
+            inferred_rows["remove_row"] = False
+        if "Note" in inferred_rows.columns:
+            inferred_rows["Note"] = (
+                "Runtime inferred for results_supply_link from leap_combined_ninth "
+                "+ ninth_pairs_to_esto_pairs."
+            )
+
+    augmented_esto = pd.concat([raw_esto, inferred_rows], ignore_index=True, sort=False)
+    for cardinality_col in ["pair_mapping_cardinality", "fuel_mapping_cardinality", "sector_mapping_cardinality"]:
+        if cardinality_col in augmented_esto.columns:
+            augmented_esto[cardinality_col] = ""
+    augmented_path = _resolve(RESULTS_CHECKS_DIR) / "results_supply_link_augmented_balance_demand_mappings.xlsx"
+    augmented_path.parent.mkdir(parents=True, exist_ok=True)
+    with pd.ExcelWriter(augmented_path) as writer:
+        augmented_esto.to_excel(writer, sheet_name=DIRECT_DEMAND_ESTO_MAPPING_SHEET, index=False)
+        raw_ninth.to_excel(writer, sheet_name=DIRECT_DEMAND_NINTH_MAPPING_SHEET, index=False)
+    if not inferred_rows.empty:
+        print(
+            "[INFO] Added "
+            f"{len(inferred_rows)} runtime-inferred demand LEAP->ESTO mapping row(s) "
+            f"for balance-demand conversion. See {augmented_path}."
+        )
+    return augmented_path
+
+
 def _annotate_balance_demand_issue_scope(balance_demand_issues: pd.DataFrame) -> pd.DataFrame:
     """Mark which balance-demand mapping issues can affect demand-side inputs."""
     if balance_demand_issues is None or balance_demand_issues.empty:
@@ -2831,12 +3057,13 @@ def load_balance_demand_inputs(
 
     structure_config = build_esto_axis_structure_from_dashboard_template(BALANCE_DEMAND_CHART_NAVIGATION_GUIDE_PATH)
     known_issues = _load_optional_json_dict(BALANCE_DEMAND_KNOWN_ISSUES_CONFIG_PATH)
+    balance_mapping_workbook = _build_augmented_balance_demand_mapping_workbook()
 
     conversion = convert_leap_balances_to_esto_long_table(
         ref_workbook_path=BALANCE_DEMAND_REF_WORKBOOK_PATH,
         tgt_workbook_path=BALANCE_DEMAND_TGT_WORKBOOK_PATH,
         template_sheet=BALANCE_DEMAND_TEMPLATE_SHEET,
-        mapping_pairs_path=BALANCE_DEMAND_LEAP_TO_ESTO_MAPPING_WORKBOOK,
+        mapping_pairs_path=balance_mapping_workbook,
         codebook_path=BALANCE_DEMAND_CODEBOOK_PATH,
         structure_config=structure_config,
         known_issues=known_issues,
@@ -4361,8 +4588,8 @@ def build_supply_overrides(reconciliation_table: pd.DataFrame) -> dict[str, dict
     use_output_share_supply_exports = _use_output_share_supply_exports_mode()
     use_capacity_unmet_iterative = _use_capacity_unmet_iterative_mode()
     use_capacity_unmet_balanced = _use_capacity_unmet_iterative_balanced_mode()
-    balanced_first_clean_mode = (
-        use_capacity_unmet_balanced and _is_capacity_unmet_first_clean_run_mode()
+    balanced_baseline_seed_mode = (
+        use_capacity_unmet_balanced and _is_capacity_unmet_baseline_seed_pass()
     )
     for _, row in reconciliation_table.iterrows():
         economy = str(row["economy"])
@@ -4384,15 +4611,15 @@ def build_supply_overrides(reconciliation_table: pd.DataFrame) -> dict[str, dict
             exports_value = row.get("adjusted_exports", row.get("projected_exports", 0.0))
         elif use_capacity_unmet_balanced:
             # Always keep imports at zero in iterative-balanced mode.
-            # first_clean/consecutive differences only affect export adjustments and
-            # whether runtime residual allocations are applied.
+            # baseline_seed/results_update differences only affect export
+            # adjustments and whether runtime residual allocations are applied.
             imports_value = 0.0
             if CAPACITY_UNMET_PIN_EXPORTS_TO_9TH_PROJECTIONS:
                 # Keep exports anchored to 9th trade projections in iterative-balanced mode.
                 exports_value = row.get("projected_exports", 0.0)
             else:
                 exports_value = row.get("adjusted_exports", row.get("projected_exports", 0.0))
-                if not balanced_first_clean_mode:
+                if not balanced_baseline_seed_mode:
                     exports_value = float(exports_value) + _lookup_runtime_export_adjustment(
                         economy=economy,
                         scenario=scenario,
@@ -4408,7 +4635,7 @@ def build_supply_overrides(reconciliation_table: pd.DataFrame) -> dict[str, dict
         product_bucket["exports"][year] = max(float(exports_value), 0.0)
         if use_capacity_unmet_balanced:
             primary_add = 0.0
-            if not balanced_first_clean_mode:
+            if not balanced_baseline_seed_mode:
                 primary_add = _lookup_runtime_primary_addition(
                     economy=economy,
                     scenario=scenario,
@@ -4591,7 +4818,7 @@ def _run_capacity_unmet_iterative_pass(
             f"for capacity_unmet_iterative: {preview}"
         )
 
-    run_mode = _resolve_capacity_unmet_iteration_run_mode()
+    run_mode = _resolve_capacity_unmet_pass_mode()
     state = _read_capacity_unmet_state(state_path=state_path, run_mode=run_mode)
     cumulative_capacity_map = _parse_runtime_capacity_additions_from_state(
         state.get("cumulative_capacity_additions")
@@ -5019,7 +5246,7 @@ def _run_capacity_unmet_iterative_balanced_pass(
             f"for capacity_unmet_iterative_balanced: {preview}"
         )
 
-    run_mode = _resolve_capacity_unmet_iteration_run_mode()
+    run_mode = _resolve_capacity_unmet_pass_mode()
     state = _read_capacity_unmet_state(state_path=state_path, run_mode=run_mode)
     cumulative_capacity_map = _parse_runtime_capacity_additions_from_state(
         state.get("cumulative_capacity_additions")
@@ -5820,9 +6047,9 @@ def _build_supply_measures_for_trade_mode() -> list[dict[str, object]]:
     measures = [dict(item) for item in supply_data_pipeline.SUPPLY_MEASURES]
     if not _use_capacity_unmet_iterative_any_mode():
         return measures
-    # In iterative consecutive runs, leave Imports unchanged in LEAP by omitting
+    # In results_update passes, leave Imports unchanged in LEAP by omitting
     # import rows from workbook exports entirely.
-    if _resolve_capacity_unmet_iteration_run_mode() == "consecutive":
+    if _resolve_capacity_unmet_pass_mode() == "results_update":
         measures = [
             measure
             for measure in measures
@@ -6472,6 +6699,174 @@ def save_combined_supply_transformation_export(
         )
     print(f"Saved combined supply+transformation workbook to {combined_path}")
     return combined_path
+
+
+def _resolve_other_loss_own_use_proxy_activity_source_mode(
+    *,
+    proxy_stage: str | None = None,
+    iteration_run_mode: str | None = None,
+) -> str:
+    """Resolve other loss/own-use proxy activity source from the run stage."""
+    stage = str(proxy_stage or OTHER_LOSS_OWN_USE_PROXY_STAGE or "auto").strip().lower()
+    if stage in {"first", "first_run", "first_clean", "baseline", "baseline_seed"}:
+        return "esto_ninth"
+    if stage in {"second", "second_run", "consecutive", "leap_balance", "results_update"}:
+        return "leap_balance"
+    if stage != "auto":
+        raise ValueError(
+            "Invalid OTHER_LOSS_OWN_USE_PROXY_STAGE="
+            f"{proxy_stage!r}. Valid values are 'auto', 'first', and 'second'."
+        )
+
+    mode = _resolve_capacity_unmet_pass_mode(iteration_run_mode)
+    if mode == "baseline_seed":
+        return "esto_ninth"
+    if mode == "results_update":
+        return "leap_balance"
+    raise ValueError(
+        "Cannot auto-resolve other loss/own-use proxy stage from "
+        f"CAPACITY_UNMET_PASS_MODE={iteration_run_mode!r}. "
+        "Use OTHER_LOSS_OWN_USE_PROXY_STAGE='first' or 'second'."
+    )
+
+
+def _resolve_other_loss_own_use_leap_balance_workbook_path(
+    *,
+    economy: str,
+    activity_source_mode: str,
+    workbook_path: Path | str | None = None,
+    scenario: str | None = None,
+    date_id: str | None = None,
+) -> Path | None:
+    """Resolve the LEAP balance workbook only when the second-stage proxy needs it."""
+    if str(activity_source_mode or "").strip().lower() != "leap_balance":
+        return None
+    try:
+        return other_loss_own_use_proxy_workflow.resolve_leap_balance_workbook_path(
+            economy=economy,
+            scenario=scenario or OTHER_LOSS_OWN_USE_LEAP_BALANCE_SCENARIO,
+            date_id=date_id if date_id is not None else OTHER_LOSS_OWN_USE_LEAP_BALANCE_DATE_ID,
+            workbook_path=(
+                workbook_path
+                if workbook_path is not None
+                else OTHER_LOSS_OWN_USE_LEAP_BALANCE_WORKBOOK_PATH
+            ),
+        )
+    except Exception as exc:
+        raise FileNotFoundError(
+            "Other loss/own-use proxy second-stage mode needs a LEAP balance "
+            f"workbook for economy={economy!r}, "
+            f"scenario={scenario or OTHER_LOSS_OWN_USE_LEAP_BALANCE_SCENARIO!r}. "
+            "Set OTHER_LOSS_OWN_USE_LEAP_BALANCE_WORKBOOK_PATH explicitly or "
+            "check data/leap balances exports."
+        ) from exc
+
+
+def build_other_loss_own_use_proxy_workbooks_for_results_supply(
+    *,
+    economies: Iterable[str],
+    scenarios: Iterable[str],
+    import_scenarios: Iterable[str] | str | None,
+    proxy_stage: str | None = None,
+    iteration_run_mode: str | None = None,
+    output_fuel_scope: str | None = None,
+    leap_balance_workbook_path: Path | str | None = None,
+    leap_balance_scenario: str | None = None,
+    leap_balance_date_id: str | None = None,
+) -> list[Path]:
+    """Build one other loss/own-use proxy workbook per economy for this run."""
+    economy_list = workflow_common.normalize_economies(economies)
+    scenario_list = workflow_common.normalize_workflow_scenarios(scenarios, SCENARIOS)
+    activity_source_mode = _resolve_other_loss_own_use_proxy_activity_source_mode(
+        proxy_stage=proxy_stage,
+        iteration_run_mode=iteration_run_mode,
+    )
+    paths: list[Path] = []
+    for economy in economy_list:
+        resolved_balance_workbook = _resolve_other_loss_own_use_leap_balance_workbook_path(
+            economy=str(economy),
+            activity_source_mode=activity_source_mode,
+            workbook_path=leap_balance_workbook_path,
+            scenario=leap_balance_scenario,
+            date_id=leap_balance_date_id,
+        )
+        print(
+            "[INFO] Building other loss/own-use proxy workbook: "
+            f"economy={economy}, activity_source_mode={activity_source_mode}, "
+            f"output_fuel_scope={output_fuel_scope or OTHER_LOSS_OWN_USE_OUTPUT_FUEL_SCOPE}"
+        )
+        output_path = other_loss_own_use_proxy_workflow.assemble_proxy_workbook(
+            economy=str(economy),
+            scenarios=scenario_list,
+            import_scenario=import_scenarios,
+            include_leap_import=False,
+            activity_source_mode=activity_source_mode,
+            leap_balance_workbook_path=resolved_balance_workbook,
+            leap_balance_scenario=leap_balance_scenario or OTHER_LOSS_OWN_USE_LEAP_BALANCE_SCENARIO,
+            leap_balance_date_id=leap_balance_date_id,
+            output_fuel_scope=output_fuel_scope or OTHER_LOSS_OWN_USE_OUTPUT_FUEL_SCOPE,
+        )
+        paths.append(Path(output_path))
+    return paths
+
+
+def run_other_loss_own_use_proxy_leap_import(
+    workbook_paths: Iterable[Path],
+    *,
+    scenarios: Iterable[str],
+    import_scenarios: Iterable[str] | str | None = None,
+    region: str = LEAP_IMPORT_REGION,
+    fill_branches: bool = LEAP_IMPORT_FILL_BRANCHES,
+    include_current_accounts: bool = LEAP_IMPORT_INCLUDE_CURRENT_ACCOUNTS,
+) -> list[Path]:
+    """Import other loss/own-use proxy workbooks into LEAP from LEAP_WITH_IDS."""
+    paths = [Path(item) for item in workbook_paths if item and Path(item).exists()]
+    if not paths:
+        return []
+    if not bool(OTHER_LOSS_OWN_USE_INCLUDE_IN_LEAP_IMPORT):
+        print(
+            "[INFO] Skipping other loss/own-use LEAP import; workbook(s) were "
+            "still generated for manual LEAP import."
+        )
+        return []
+    if get_analysis_input_write_mode() == "api" and not leap_api.is_available():
+        print("[INFO] LEAP API unavailable; skipping other loss/own-use LEAP import.")
+        return []
+    if not bool(fill_branches):
+        print("[INFO] Skipping other loss/own-use LEAP import because fill_branches=False.")
+        return []
+
+    scenario_choices = workflow_common.resolve_import_scenarios(
+        [str(item) for item in scenarios if str(item).strip()],
+        import_scenarios,
+    )
+    if not scenario_choices:
+        return []
+
+    from codebase.functions.leap_core import connect_to_leap, fill_branches_from_export_file
+
+    leap_app = connect_to_leap()
+    imported: list[Path] = []
+    for workbook_path in paths:
+        for index, scenario in enumerate(scenario_choices):
+            try:
+                fill_branches_from_export_file(
+                    leap_app,
+                    workbook_path,
+                    sheet_name="LEAP_WITH_IDS",
+                    scenario=scenario,
+                    region=region,
+                    RAISE_ERROR_ON_FAILED_SET=True,
+                    HANDLE_CURRENT_ACCOUNTS_TOO=include_current_accounts and index == 0,
+                    RUN_FUEL_CATALOG_PREFLIGHT=False,
+                )
+                imported.append(workbook_path)
+            except Exception as exc:
+                print(
+                    "[WARN] Other loss/own-use LEAP import failed for "
+                    f"{workbook_path.name} ({scenario}): {exc}"
+                )
+    return imported
 
 
 def run_results_linked_leap_import(
@@ -7800,7 +8195,7 @@ def _build_conventional_row_backbone() -> list[str]:
         "Interproduct transfers",
         "Products transferred",
         "Gas separation",
-        "Transformation nonspecified",
+        "Transfers nonspecified",
         "Total transformation sector",
         "Main activity producer",
         "Electricity plants",
@@ -7919,7 +8314,7 @@ def _get_conventional_section_layout() -> list[tuple[str, list[str]]]:
                 "Interproduct transfers",
                 "Products transferred",
                 "Gas separation",
-                "Transformation nonspecified",
+                "Transfers nonspecified",
             ],
         ),
         (
@@ -8928,6 +9323,7 @@ def save_results_linked_single_workbook(
     transformation_export_paths: Iterable[Path],
     transfer_export_paths: Iterable[Path],
     combined_export_path: Path | None,
+    other_loss_own_use_proxy_paths: Iterable[Path] | None,
     probe_catalog_path: Path | None,
     leap_import_result: dict[str, object],
     output_dir: Path | str = OUTPUT_DIR,
@@ -8963,6 +9359,7 @@ def save_results_linked_single_workbook(
         export_paths,
         transformation_export_paths,
         transfer_export_paths,
+        other_loss_own_use_proxy_paths,
         probe_catalog_path,
         leap_import_result,
     )
@@ -10015,6 +10412,45 @@ def save_results_linked_single_workbook(
             header=False,
             startrow=len(preamble) + 1,
         )
+        manifest_rows = []
+        for workbook_type, paths in (
+            ("supply", export_paths),
+            ("transformation", transformation_export_paths),
+            ("transfer", transfer_export_paths),
+            ("other_loss_own_use_proxy", other_loss_own_use_proxy_paths or []),
+        ):
+            for path in [Path(item) for item in paths if item]:
+                manifest_rows.append(
+                    {
+                        "workbook_type": workbook_type,
+                        "path": str(path),
+                        "exists": bool(path.exists()),
+                    }
+                )
+        if combined_export_path is not None:
+            combined_manifest_path = Path(combined_export_path)
+            manifest_rows.append(
+                {
+                    "workbook_type": "combined_supply_transformation_transfer",
+                    "path": str(combined_manifest_path),
+                    "exists": bool(combined_manifest_path.exists()),
+                }
+            )
+        if probe_catalog_path is not None:
+            probe_manifest_path = Path(probe_catalog_path)
+            manifest_rows.append(
+                {
+                    "workbook_type": "fuel_branch_probe",
+                    "path": str(probe_manifest_path),
+                    "exists": bool(probe_manifest_path.exists()),
+                }
+            )
+        if manifest_rows:
+            pd.DataFrame(manifest_rows).to_excel(
+                writer,
+                sheet_name="RUN_MANIFEST",
+                index=False,
+            )
     if bool(archive_every_run):
         _archive_results_file_snapshot(
             workbook_path,
@@ -10281,7 +10717,7 @@ def run_results_linked_transformation_supply_workflow(
         scrape_leap_results = bool(SCRAPE_LEAP_RESULTS)
     if _use_capacity_unmet_iterative_any_mode() and get_analysis_input_write_mode() != "workbook":
         raise ValueError(
-            "TRADE_TARGET_EXPORT_MODE iterative unmet modes require "
+            "The balanced iterative supply-link method requires "
             "ANALYSIS_INPUT_WRITE_MODE='workbook' so Analysis-view writes stay manual-import only."
         )
     if _use_capacity_unmet_iterative_any_mode() and scrape_leap_results:
@@ -10434,10 +10870,10 @@ def run_results_linked_transformation_supply_workflow(
             allow_same_results_reuse=bool(CAPACITY_UNMET_ALLOW_SAME_RESULTS_REUSE),
         )
     elif _use_capacity_unmet_iterative_balanced_mode():
-        if _is_capacity_unmet_first_clean_run_mode():
+        if _is_capacity_unmet_baseline_seed_pass():
             seeded_state = _read_capacity_unmet_state(
                 state_path=CAPACITY_UNMET_STATE_PATH,
-                run_mode="first_clean",
+                run_mode="baseline_seed",
             )
             seeded_state_path = _write_capacity_unmet_state(
                 seeded_state, state_path=CAPACITY_UNMET_STATE_PATH
@@ -10445,7 +10881,7 @@ def run_results_linked_transformation_supply_workflow(
             _CAPACITY_UNMET_RUNTIME_PASS_SUMMARY = {
                 "timestamp_utc": datetime.now(timezone.utc).isoformat(),
                 "mode": "capacity_unmet_iterative_balanced",
-                "iteration_run_mode": "first_clean",
+                "pass_mode": "baseline_seed",
                 "state_path": str(_resolve(CAPACITY_UNMET_STATE_PATH)),
                 "state_seeded_path": str(seeded_state_path),
                 "seed_action": (
@@ -10454,11 +10890,11 @@ def run_results_linked_transformation_supply_workflow(
                 ),
                 "next_manual_step": (
                     "Import generated workbook into LEAP, recalculate, refresh results tables, "
-                    "set CAPACITY_UNMET_ITERATION_RUN_MODE='consecutive', rerun."
+                    "set CAPACITY_UNMET_PASS_MODE='results_update', rerun."
                 ),
             }
             print(
-                "[CAPACITY_UNMET_ITERATIVE_BALANCED] first_clean baseline pass: "
+                "[CAPACITY_UNMET_ITERATIVE_BALANCED] baseline_seed pass: "
                 "skipping residual allocation and using imports=0 with baseline exports/capacity."
             )
         else:
@@ -10546,6 +10982,19 @@ def run_results_linked_transformation_supply_workflow(
         economy_label=economy_list[0] if economy_list else "economy",
         scenarios=export_scenario_list,
     )
+    other_loss_own_use_proxy_paths: list[Path] = []
+    if RUN_OTHER_LOSS_OWN_USE_PROXY:
+        other_loss_own_use_proxy_paths = build_other_loss_own_use_proxy_workbooks_for_results_supply(
+            economies=economy_list,
+            scenarios=export_scenario_list,
+            import_scenarios=import_scenarios,
+            proxy_stage=OTHER_LOSS_OWN_USE_PROXY_STAGE,
+            iteration_run_mode=CAPACITY_UNMET_PASS_MODE,
+            output_fuel_scope=OTHER_LOSS_OWN_USE_OUTPUT_FUEL_SCOPE,
+            leap_balance_workbook_path=OTHER_LOSS_OWN_USE_LEAP_BALANCE_WORKBOOK_PATH,
+            leap_balance_scenario=OTHER_LOSS_OWN_USE_LEAP_BALANCE_SCENARIO,
+            leap_balance_date_id=OTHER_LOSS_OWN_USE_LEAP_BALANCE_DATE_ID,
+        )
     fuel_branch_catalog_df = _build_transformation_supply_fuel_catalog_df(
         transformation_export_paths=transformation_export_paths,
         supply_export_paths=[path for _, path in export_paths],
@@ -10559,7 +11008,12 @@ def run_results_linked_transformation_supply_workflow(
             supply_export_paths=[path for _, path in export_paths],
             output_dir=OUTPUT_DIR,
         )
-    leap_import_result = {"supply_imported": [], "transformation_imported": [], "transfer_imported": []}
+    leap_import_result = {
+        "supply_imported": [],
+        "transformation_imported": [],
+        "transfer_imported": [],
+        "other_loss_own_use_imported": [],
+    }
     if include_leap_import:
         leap_import_result = run_results_linked_leap_import(
             [path for _, path in export_paths],
@@ -10578,14 +11032,25 @@ def run_results_linked_transformation_supply_workflow(
             import_transformation_to_leap=LEAP_IMPORT_TRANSFORMATION_TO_LEAP,
             import_transfers_to_leap=LEAP_IMPORT_TRANSFERS_TO_LEAP,
         )
+        leap_import_result["other_loss_own_use_imported"] = run_other_loss_own_use_proxy_leap_import(
+            other_loss_own_use_proxy_paths,
+            scenarios=export_scenario_list,
+            import_scenarios=import_scenarios,
+            region=LEAP_IMPORT_REGION,
+            fill_branches=LEAP_IMPORT_FILL_BRANCHES,
+            include_current_accounts=(
+                LEAP_IMPORT_INCLUDE_CURRENT_ACCOUNTS
+                or RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT
+            ),
+        )
         timer.lap("run LEAP import")
 
     results_workbook_path: Path | None = None
     if RESULTS_SINGLE_FILE_OUTPUT:
         resolved_single_file_name = _resolve_results_single_file_name(
             RESULTS_SINGLE_FILE_NAME,
-            trade_mode=TRADE_TARGET_EXPORT_MODE,
-            iteration_run_mode=CAPACITY_UNMET_ITERATION_RUN_MODE,
+            trade_mode=ACTIVE_SUPPLY_LINK_METHOD,
+            iteration_run_mode=CAPACITY_UNMET_PASS_MODE,
         )
         results_workbook_path = save_results_linked_single_workbook(
             reconciliation_table=reconciliation_table,
@@ -10605,6 +11070,7 @@ def run_results_linked_transformation_supply_workflow(
             transformation_export_paths=transformation_export_paths,
             transfer_export_paths=transfer_export_paths,
             combined_export_path=combined_export_path,
+            other_loss_own_use_proxy_paths=other_loss_own_use_proxy_paths,
             probe_catalog_path=probe_catalog_path,
             leap_import_result=leap_import_result,
             output_dir=OUTPUT_DIR,
@@ -10689,6 +11155,7 @@ def run_results_linked_transformation_supply_workflow(
         "transformation_export_paths": transformation_export_paths,
         "transfer_export_paths": transfer_export_paths,
         "combined_export_path": combined_export_path,
+        "other_loss_own_use_proxy_paths": other_loss_own_use_proxy_paths,
         "fuel_branch_probe_path": probe_catalog_path,
         "fuel_branch_catalog_path": fuel_branch_catalog_path,
         "demand_mapping_issues_csv": balance_demand_issue_path,
@@ -10728,7 +11195,7 @@ def run_results_linked_supply_workflow(
 # Edit these values in notebooks before calling `run_with_config()`.
 # ECONOMIES = ["20_USA"]
 # SCENARIOS = list(workflow_cfg.SUPPLY_NOTEBOOK_SCENARIOS)
-# TRADE_TARGET_EXPORT_MODE = "capacity_unmet_iterative_balanced"  # Options: "legacy_trade_split", "capacity_unmet_iterative", "capacity_unmet_iterative_balanced"
+# CAPACITY_UNMET_PASS_MODE = "results_update"  # baseline_seed|results_update
 # SCRAPE_LEAP_RESULTS = False
 # RUN_LEAP_FUEL_BRANCH_PROBE_AT_START = True
 # RESULTS_SINGLE_FILE_OUTPUT = True
@@ -10740,12 +11207,18 @@ def run_results_linked_supply_workflow(
 # RESULTS_SINGLE_FILE_ARCHIVE_MIN_HOURS = 24
 # RESULTS_SINGLE_FILE_ARCHIVE_EVERY_RUN = True
 # RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT = False
+# RUN_OTHER_LOSS_OWN_USE_PROXY = True
+# OTHER_LOSS_OWN_USE_PROXY_STAGE = "auto"  # auto|first|second
+# OTHER_LOSS_OWN_USE_OUTPUT_FUEL_SCOPE = "economy"  # economy|all_economies
+# OTHER_LOSS_OWN_USE_INCLUDE_IN_LEAP_IMPORT = True
+# OTHER_LOSS_OWN_USE_LEAP_BALANCE_WORKBOOK_PATH = None
+# OTHER_LOSS_OWN_USE_LEAP_BALANCE_SCENARIO = "Target"
+# OTHER_LOSS_OWN_USE_LEAP_BALANCE_DATE_ID = None
 #%%
 ECONOMIES = ["20_USA"]
 SCENARIOS = ['Target', 'Current Accounts']#list(workflow_cfg.SUPPLY_NOTEBOOK_SCENARIOS)#'Target', 
-TRADE_TARGET_EXPORT_MODE = "capacity_unmet_iterative_balanced"  # "legacy_split" | "capacity_unmet_iterative" | "capacity_unmet_iterative_balanced"
 
-CAPACITY_UNMET_ITERATION_RUN_MODE = "consecutive"  # consecutive|first_clean
+CAPACITY_UNMET_PASS_MODE = "results_update"  # baseline_seed|results_update
 SCRAPE_LEAP_RESULTS = False
 RUN_LEAP_FUEL_BRANCH_PROBE_AT_START = False
 RESULTS_SINGLE_FILE_OUTPUT = True
@@ -10763,6 +11236,13 @@ COMPLETION_BEEP_PAUSE_SECONDS = 0.12
 RESULTS_SINGLE_FILE_ARCHIVE_MIN_HOURS = 24
 RESULTS_SINGLE_FILE_ARCHIVE_EVERY_RUN = True
 RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT = False
+RUN_OTHER_LOSS_OWN_USE_PROXY = True
+OTHER_LOSS_OWN_USE_PROXY_STAGE = "auto"  # auto|first|second
+OTHER_LOSS_OWN_USE_OUTPUT_FUEL_SCOPE = "economy"  # economy|all_economies
+OTHER_LOSS_OWN_USE_INCLUDE_IN_LEAP_IMPORT = True
+OTHER_LOSS_OWN_USE_LEAP_BALANCE_WORKBOOK_PATH = None
+OTHER_LOSS_OWN_USE_LEAP_BALANCE_SCENARIO = "Target"
+OTHER_LOSS_OWN_USE_LEAP_BALANCE_DATE_ID = None
 
 def run_with_config() -> dict[str, object]:
     """Run the notebook-configured results-linked transformation+supply workflow."""
@@ -10770,8 +11250,8 @@ def run_with_config() -> dict[str, object]:
     include_leap_import = analysis_write_mode == "api"
     resolved_single_file_name = _resolve_results_single_file_name(
         RESULTS_SINGLE_FILE_NAME,
-        trade_mode=TRADE_TARGET_EXPORT_MODE,
-        iteration_run_mode=CAPACITY_UNMET_ITERATION_RUN_MODE,
+        trade_mode=ACTIVE_SUPPLY_LINK_METHOD,
+        iteration_run_mode=CAPACITY_UNMET_PASS_MODE,
     )
     if int(supply_data_pipeline.EXPORT_FINAL_YEAR) > int(LEAP_IMPORT_MAX_YEAR):
         print(
@@ -10781,8 +11261,8 @@ def run_with_config() -> dict[str, object]:
         )
     print(
         "[INFO] run_with_config toggles: "
-        f"TRADE_TARGET_EXPORT_MODE={TRADE_TARGET_EXPORT_MODE}, "
-        f"CAPACITY_UNMET_ITERATION_RUN_MODE={CAPACITY_UNMET_ITERATION_RUN_MODE}, "
+        f"ACTIVE_SUPPLY_LINK_METHOD={ACTIVE_SUPPLY_LINK_METHOD}, "
+        f"CAPACITY_UNMET_PASS_MODE={CAPACITY_UNMET_PASS_MODE}, "
         "RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT="
         f"{RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT}, "
         f"ANALYSIS_INPUT_WRITE_MODE={analysis_write_mode}, "
@@ -10798,6 +11278,10 @@ def run_with_config() -> dict[str, object]:
         f"RESULTS_WRITE_LEGACY_SIDECAR_FILES={RESULTS_WRITE_LEGACY_SIDECAR_FILES}, "
         f"RESULTS_SINGLE_FILE_NAME={resolved_single_file_name}, "
         f"RESULTS_SINGLE_FILE_ARCHIVE_EVERY_RUN={RESULTS_SINGLE_FILE_ARCHIVE_EVERY_RUN}, "
+        f"RUN_OTHER_LOSS_OWN_USE_PROXY={RUN_OTHER_LOSS_OWN_USE_PROXY}, "
+        f"OTHER_LOSS_OWN_USE_PROXY_STAGE={OTHER_LOSS_OWN_USE_PROXY_STAGE}, "
+        f"OTHER_LOSS_OWN_USE_OUTPUT_FUEL_SCOPE={OTHER_LOSS_OWN_USE_OUTPUT_FUEL_SCOPE}, "
+        f"OTHER_LOSS_OWN_USE_INCLUDE_IN_LEAP_IMPORT={OTHER_LOSS_OWN_USE_INCLUDE_IN_LEAP_IMPORT}, "
         f"BALANCE_DEMAND_FAIL_ON_MAPPING_ISSUES={BALANCE_DEMAND_FAIL_ON_MAPPING_ISSUES}, "
         f"ENABLE_WORKFLOW_TIMING={ENABLE_WORKFLOW_TIMING}, "
         f"WRITE_WORKFLOW_TIMING_CSV={WRITE_WORKFLOW_TIMING_CSV}, "

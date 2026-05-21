@@ -135,29 +135,29 @@ esto_missing,esto_flow,esto_product,08.03 Products transferred,07.15 Paraffin  w
 esto_missing,esto_flow,esto_product,08.03 Products transferred,07.16 Petroleum coke,12.031507
 esto_missing,esto_flow,esto_product,08.03 Products transferred,07.17 Other products,2693.663026
 esto_missing,esto_flow,esto_product,08.03 Products transferred,19 Total,5333.7922579999995
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,06 Crude oil & NGL,6094.482931
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,06.01 Crude oil,0.448239
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,06.02 Natural gas liquids,7352.5642880000005
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,06.03 Refinery feedstocks,1776.262377
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,06.05 Other hydrocarbons,518.6292569999999
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07 Petroleum products,6766.003993
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.01 Motor gasoline,407.435887
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.02 Aviation gasoline,0.15604200000000001
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.03 Naphtha,289.78906800000004
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.05 Kerosene type jet fuel,16.936066
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.06 Kerosene,143.849069
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.07 Gas/diesel oil,224.57442500000002
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.08 Fuel oil,257.354056
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.09 LPG,4178.952221
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.10 Refinery gas (not liquefied),275.780287
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.11 Ethane,2831.04198
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.12 White spirit SBP,2.399455
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.13 Lubricants,13.582942
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.14 Bitumen,8.094131
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.15 Paraffin  waxes,0.34532700000000005
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.16 Petroleum coke,168.672397
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,07.17 Other products,649.29715
-esto_missing,esto_flow,esto_product,08.99 Transformation nonspecified,19 Total,671.5206860000001
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,06 Crude oil & NGL,6094.482931
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,06.01 Crude oil,0.448239
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,06.02 Natural gas liquids,7352.5642880000005
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,06.03 Refinery feedstocks,1776.262377
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,06.05 Other hydrocarbons,518.6292569999999
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07 Petroleum products,6766.003993
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.01 Motor gasoline,407.435887
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.02 Aviation gasoline,0.15604200000000001
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.03 Naphtha,289.78906800000004
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.05 Kerosene type jet fuel,16.936066
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.06 Kerosene,143.849069
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.07 Gas/diesel oil,224.57442500000002
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.08 Fuel oil,257.354056
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.09 LPG,4178.952221
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.10 Refinery gas (not liquefied),275.780287
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.11 Ethane,2831.04198
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.12 White spirit SBP,2.399455
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.13 Lubricants,13.582942
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.14 Bitumen,8.094131
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.15 Paraffin  waxes,0.34532700000000005
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.16 Petroleum coke,168.672397
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,07.17 Other products,649.29715
+esto_missing,esto_flow,esto_product,08.99 Transfers nonspecified,19 Total,671.5206860000001
 esto_missing,esto_flow,esto_product,09 Total transformation sector,01 Coal,106586.87864000001
 esto_missing,esto_flow,esto_product,09 Total transformation sector,02 Coal products,13374.842437000001
 esto_missing,esto_flow,esto_product,09 Total transformation sector,02.06 Patent fuel,7.366675

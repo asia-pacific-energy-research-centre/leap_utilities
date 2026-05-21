@@ -71,8 +71,9 @@ def test_current_accounts_resolves_to_target_when_reference_absent() -> None:
     )
 
 
-def test_build_supply_overrides_capacity_unmet_iterative(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(workflow, "TRADE_TARGET_EXPORT_MODE", "capacity_unmet_iterative", raising=False)
+def test_build_supply_overrides_balanced_pins_exports_to_projection(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(workflow, "CAPACITY_UNMET_PASS_MODE", "results_update", raising=False)
+    monkeypatch.setattr(workflow, "CAPACITY_UNMET_PIN_EXPORTS_TO_9TH_PROJECTIONS", True, raising=False)
     reconciliation = pd.DataFrame(
         [
             {
@@ -89,21 +90,22 @@ def test_build_supply_overrides_capacity_unmet_iterative(monkeypatch: pytest.Mon
     overrides = workflow.build_supply_overrides(reconciliation)
     payload = overrides["20_USA"]["Reference"]["17 Electricity"]
     assert payload["imports"][2030] == pytest.approx(0.0)
-    assert payload["exports"][2030] == pytest.approx(3.5)
+    assert payload["exports"][2030] == pytest.approx(4.0)
 
 
 def test_build_supply_overrides_capacity_unmet_iterative_balanced(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(workflow, "TRADE_TARGET_EXPORT_MODE", "capacity_unmet_iterative_balanced", raising=False)
+    monkeypatch.setattr(workflow, "CAPACITY_UNMET_PASS_MODE", "results_update", raising=False)
+    monkeypatch.setattr(workflow, "CAPACITY_UNMET_PIN_EXPORTS_TO_9TH_PROJECTIONS", False, raising=False)
     monkeypatch.setattr(
         workflow,
         "_CAPACITY_UNMET_RUNTIME_EXPORT_ADJUSTMENTS",
-        {"20_usa|reference|17 electricity|2030": 1.25},
+        {"20_usa|reference|01 coal|2030": 1.25},
         raising=False,
     )
     monkeypatch.setattr(
         workflow,
         "_CAPACITY_UNMET_RUNTIME_PRIMARY_ADDITIONS",
-        {"20_usa|reference|17 electricity|2030": 2.0},
+        {"20_usa|reference|01 coal|2030": 2.0},
         raising=False,
     )
     reconciliation = pd.DataFrame(
@@ -111,7 +113,7 @@ def test_build_supply_overrides_capacity_unmet_iterative_balanced(monkeypatch: p
             {
                 "economy": "20_USA",
                 "scenario": "Reference",
-                "esto_product": "17 Electricity",
+                "esto_product": "01 Coal",
                 "year": 2030,
                 "adjusted_imports": 12.0,
                 "adjusted_exports": 3.5,
@@ -122,39 +124,165 @@ def test_build_supply_overrides_capacity_unmet_iterative_balanced(monkeypatch: p
         ]
     )
     overrides = workflow.build_supply_overrides(reconciliation)
-    payload = overrides["20_USA"]["Reference"]["17 Electricity"]
+    payload = overrides["20_USA"]["Reference"]["01 Coal"]
     assert payload["imports"][2030] == pytest.approx(0.0)
     assert payload["exports"][2030] == pytest.approx(4.75)
-    assert payload["production"][2030] == pytest.approx(7.0)
     assert payload["max_production"][2030] == pytest.approx(20.0)
 
 
-def test_capacity_unmet_iterative_requires_workbook_mode(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(workflow, "TRADE_TARGET_EXPORT_MODE", "capacity_unmet_iterative", raising=False)
-    monkeypatch.setattr(workflow_cfg, "ANALYSIS_INPUT_WRITE_MODE", "api", raising=False)
-    with pytest.raises(ValueError, match="iterative unmet modes require"):
-        workflow.run_results_linked_transformation_supply_workflow(
-            economies=["20_USA"],
-            scenario_names=["Reference"],
-            include_leap_import=False,
-            use_direct_leap_results_for_demand=False,
-            scrape_leap_results_for_demand=False,
-        )
-
-
-def test_capacity_unmet_iterative_balanced_requires_workbook_mode(
+def test_balanced_supply_link_requires_workbook_mode(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(workflow, "TRADE_TARGET_EXPORT_MODE", "capacity_unmet_iterative_balanced", raising=False)
     monkeypatch.setattr(workflow_cfg, "ANALYSIS_INPUT_WRITE_MODE", "api", raising=False)
-    with pytest.raises(ValueError, match="iterative unmet modes require"):
+    with pytest.raises(ValueError, match="balanced iterative supply-link method requires"):
         workflow.run_results_linked_transformation_supply_workflow(
             economies=["20_USA"],
             scenario_names=["Reference"],
             include_leap_import=False,
             use_direct_leap_results_for_demand=False,
-            scrape_leap_results_for_demand=False,
+            scrape_leap_results=False,
         )
+
+
+def test_other_loss_own_use_proxy_stage_resolver(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert (
+        workflow._resolve_other_loss_own_use_proxy_activity_source_mode(
+            proxy_stage="auto",
+            iteration_run_mode="baseline_seed",
+        )
+        == "esto_ninth"
+    )
+    assert (
+        workflow._resolve_other_loss_own_use_proxy_activity_source_mode(
+            proxy_stage="auto",
+            iteration_run_mode="results_update",
+        )
+        == "leap_balance"
+    )
+    assert (
+        workflow._resolve_other_loss_own_use_proxy_activity_source_mode(
+            proxy_stage="first",
+            iteration_run_mode="results_update",
+        )
+        == "esto_ninth"
+    )
+    assert (
+        workflow._resolve_other_loss_own_use_proxy_activity_source_mode(
+            proxy_stage="second",
+            iteration_run_mode="baseline_seed",
+        )
+        == "leap_balance"
+    )
+
+
+def test_other_loss_own_use_second_stage_requires_balance_workbook(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _raise_missing(**kwargs):
+        raise FileNotFoundError("missing balance export")
+
+    monkeypatch.setattr(
+        workflow.other_loss_own_use_proxy_workflow,
+        "resolve_leap_balance_workbook_path",
+        _raise_missing,
+    )
+    with pytest.raises(FileNotFoundError, match="second-stage mode needs a LEAP balance workbook"):
+        workflow._resolve_other_loss_own_use_leap_balance_workbook_path(
+            economy="20_USA",
+            activity_source_mode="leap_balance",
+            scenario="Target",
+        )
+
+
+def test_results_supply_runner_builds_other_loss_proxy_paths(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    captured: dict[str, object] = {}
+    proxy_path = tmp_path / "other_loss_proxy.xlsx"
+    combined_path = tmp_path / "combined.xlsx"
+    proxy_path.write_text("proxy", encoding="utf-8")
+    combined_path.write_text("combined", encoding="utf-8")
+
+    monkeypatch.setattr(workflow, "RUN_OTHER_LOSS_OWN_USE_PROXY", True, raising=False)
+    monkeypatch.setattr(workflow, "OTHER_LOSS_OWN_USE_PROXY_STAGE", "first", raising=False)
+    monkeypatch.setattr(workflow, "CAPACITY_UNMET_PASS_MODE", "baseline_seed", raising=False)
+    monkeypatch.setattr(workflow, "CAPACITY_UNMET_STATE_PATH", tmp_path / "state.json", raising=False)
+    monkeypatch.setattr(workflow, "RESULTS_SINGLE_FILE_OUTPUT", False, raising=False)
+    monkeypatch.setattr(workflow, "RESULTS_WRITE_LEGACY_SIDECAR_FILES", False, raising=False)
+    monkeypatch.setattr(workflow, "RUN_LEAP_FUEL_BRANCH_PROBE_AT_START", False, raising=False)
+    monkeypatch.setattr(workflow, "SCRAPE_LEAP_RESULTS", False, raising=False)
+    monkeypatch.setattr(workflow, "OUTPUT_DIR", tmp_path, raising=False)
+    monkeypatch.setattr(workflow, "RESULTS_CHECKS_DIR", tmp_path / "checks", raising=False)
+    monkeypatch.setattr(workflow, "RESULTS_RUNTIME_DIR", tmp_path / "runtime", raising=False)
+    monkeypatch.setattr(workflow_cfg, "ANALYSIS_INPUT_WRITE_MODE", "workbook", raising=False)
+
+    empty = pd.DataFrame()
+    demand = pd.DataFrame([{"economy": "20_USA"}])
+    reconciliation = pd.DataFrame(
+        [
+            {
+                "economy": "20_USA",
+                "scenario": "Target",
+                "esto_product": "17 Electricity",
+                "year": 2030,
+            }
+        ]
+    )
+    assets = ({}, {}, {}, None, empty)
+
+    monkeypatch.setattr(workflow, "archive_config_dir_once_per_day", lambda: None)
+    monkeypatch.setattr(
+        workflow,
+        "load_balance_demand_inputs",
+        lambda **kwargs: (empty, empty, empty, empty),
+    )
+    monkeypatch.setattr(workflow, "load_results_sector_demand_table", lambda **kwargs: demand.copy())
+    monkeypatch.setattr(workflow, "load_results_demand_table", lambda **kwargs: demand.copy())
+    monkeypatch.setattr(workflow, "build_transformation_balance_table", lambda **kwargs: empty)
+    monkeypatch.setattr(workflow, "build_transformation_sector_table", lambda **kwargs: empty)
+    monkeypatch.setattr(workflow, "build_transformation_trade_target_rows", lambda **kwargs: (empty, []))
+    monkeypatch.setattr(workflow, "prepare_projected_supply_table", lambda **kwargs: (empty, assets))
+    monkeypatch.setattr(workflow, "prepare_supply_primary_table", lambda *args, **kwargs: empty)
+    monkeypatch.setattr(workflow, "load_leap_constraint_tables", lambda **kwargs: (empty, empty))
+    monkeypatch.setattr(workflow, "build_reconciliation_table", lambda *args, **kwargs: reconciliation)
+    monkeypatch.setattr(workflow, "apply_trade_split_between_transformation_and_supply", lambda table, **kwargs: table)
+    monkeypatch.setattr(workflow, "save_year_balance_tables", lambda *args, **kwargs: [])
+    monkeypatch.setattr(workflow, "build_supply_overrides", lambda table: {})
+    monkeypatch.setattr(
+        workflow.supply_data_pipeline,
+        "generate_supply_exports",
+        lambda *args, **kwargs: [("20_USA", tmp_path / "supply.xlsx")],
+    )
+    monkeypatch.setattr(workflow, "_build_transformation_supply_fuel_catalog_df", lambda **kwargs: empty)
+    monkeypatch.setattr(workflow, "save_transformation_exports_with_split_targets", lambda *args, **kwargs: [tmp_path / "transformation.xlsx"])
+    monkeypatch.setattr(workflow, "save_transfer_exports_with_supply_overrides", lambda *args, **kwargs: [tmp_path / "transfer.xlsx"])
+    monkeypatch.setattr(workflow, "save_combined_supply_transformation_export", lambda **kwargs: combined_path)
+
+    def _fake_build_other_loss(**kwargs):
+        captured.update(kwargs)
+        return [proxy_path]
+
+    monkeypatch.setattr(
+        workflow,
+        "build_other_loss_own_use_proxy_workbooks_for_results_supply",
+        _fake_build_other_loss,
+    )
+
+    result = workflow.run_results_linked_transformation_supply_workflow(
+        economies=["20_USA"],
+        scenario_names=["Target", "Current Accounts"],
+        include_leap_import=False,
+        import_scenarios=["target"],
+        scrape_leap_results=False,
+    )
+
+    assert captured["economies"] == ["20_USA"]
+    assert captured["scenarios"] == ["Target", "Current Accounts"]
+    assert captured["import_scenarios"] == ["target"]
+    assert captured["proxy_stage"] == "first"
+    assert result["other_loss_own_use_proxy_paths"] == [proxy_path]
+    assert "other_loss_own_use_imported" in result["leap_import_result"]
 
 
 def test_capacity_unmet_iterative_same_results_guard(

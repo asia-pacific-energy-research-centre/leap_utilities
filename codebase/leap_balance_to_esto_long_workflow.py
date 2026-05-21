@@ -117,10 +117,11 @@ def run_workflow() -> dict[str, object]:
         max_output_year=MAX_OUTPUT_YEAR,
         explicit_pair_mappings_only=True,
     )
+    ingestion = conversion["ingestion"]
 
     comparison = build_balance_comparison_esto_axis(
-        leap_long=conversion["leap_long"],
-        mapping_status=conversion["mapping_status"],
+        leap_long=ingestion["leap_long"],
+        mapping_status=ingestion["mapping_status"],
         base_year=BASE_YEAR,
         projection_years=tuple(PROJECTION_YEARS),
         base_economy=BASE_ECONOMY,
@@ -136,6 +137,7 @@ def run_workflow() -> dict[str, object]:
         esto_table_path=BASE_TABLE_PATH,
         projection_table_path=PROJECTION_TABLE_PATH,
         chart_navigation_guide_path=CHART_NAVIGATION_GUIDE_PATH,
+        balance_mapping_workbook_path=_mapping_workbook(LEAP_TO_ESTO_MAPPING),
         known_issues=known_issues,
     )
     comparison_long = comparison["comparison_long"].copy()
@@ -163,7 +165,7 @@ def run_workflow() -> dict[str, object]:
 
     conversion["esto_long"].to_csv(esto_long_path, index=False)
     ninth_esto_long.to_csv(ninth_esto_long_path, index=False)
-    conversion["leap_long"].to_csv(leap_long_path, index=False)
+    ingestion["leap_long"].to_csv(leap_long_path, index=False)
     mapping_status.to_csv(mapping_status_path, index=False)
     comparison_long.to_csv(comparison_long_path, index=False)
     ninth_balance.to_csv(ninth_balance_path, index=False)

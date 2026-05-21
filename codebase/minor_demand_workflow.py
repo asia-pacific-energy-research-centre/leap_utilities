@@ -135,6 +135,20 @@ FUEL_INTENSITY_OVERRIDES: dict[tuple[str, str], float] = {}
 INTENSITY_CALIBRATION_MODE = "disabled"
 RELATIVE_INTENSITY_OVERRIDES: dict[tuple[str, str], float] = {}
 
+# --- Intensity Adjustment user variable ---
+# Variable name as it appears in LEAP (must match the LEAP user variable name exactly).
+INTENSITY_ADJUSTMENT_VARIABLE = "Intensity Adjustment"
+# Set True to emit an Intensity Adjustment row for every fuel branch.
+# Values encode the efficiency improvement implied by the 9th projection relative to a
+# flat-GDP-intensity baseline: IA[year] = (ninth_tgt[year] / gdp_derived[year]) - 1.
+# At base year IA = 0 by construction; negative = efficiency gain over time.
+# Requires GDP_DATA_PATH_FOR_IA to be a valid path.
+INCLUDE_INTENSITY_ADJUSTMENT = False
+# Path to the macro data CSV (long format: Economy, Scenario, Date, Gdp columns).
+GDP_DATA_PATH_FOR_IA = "data/9th_macro_data.csv"
+# Which GDP scenario to use when computing the adjustment.
+GDP_SCENARIO_FOR_IA = "Reference"
+
 # --- Minor demand sector config ---
 # Keep this list explicit and obvious so future edits are easy.
 MINOR_DEMAND_FLOW_CONFIG = [
@@ -1203,6 +1217,78 @@ def build_fuel_activity_series(
     )
 
 
+def _load_gdp_wide_for_ia(path: str, scenario: str) -> pd.DataFrame:
+    """
+    Load the macro CSV (long format) and return a wide DataFrame.
+
+    Index = economy_key, columns = int years, values = Gdp.
+    Expected columns: Economy, Scenario, Date, Gdp.
+    """
+    df = pd.read_csv(path)
+    df.columns = [str(c).strip() for c in df.columns]
+    required = {"Economy", "Scenario", "Date", "Gdp"}
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"GDP file '{path}' missing columns: {missing}")
+    df = df[df["Scenario"] == scenario].copy()
+    if df.empty:
+        raise ValueError(f"No rows for scenario '{scenario}' in '{path}'.")
+    df["economy_key"] = df["Economy"].apply(normalize_economy_key)
+    df["year"] = pd.to_numeric(df["Date"], errors="coerce").astype("Int64")
+    df["Gdp"] = pd.to_numeric(df["Gdp"], errors="coerce")
+    df = df.dropna(subset=["year", "Gdp"])
+    wide = df.pivot_table(index="economy_key", columns="year", values="Gdp", aggfunc="first")
+    wide.columns = [int(c) for c in wide.columns]
+    return wide
+
+
+def _build_gdp_index_series(
+    gdp_wide: pd.DataFrame,
+    economy_key: str,
+    projection_years: Sequence[int],
+    base_year: int,
+) -> dict[int, float]:
+    """Return GDP indexed to base_year = 1.0, keyed by int year."""
+    if economy_key not in gdp_wide.index:
+        print(f"[WARN] Economy '{economy_key}' not in GDP data; using flat index (1.0).")
+        return {int(year): 1.0 for year in projection_years}
+    series = gdp_wide.loc[economy_key].dropna().astype(float)
+    base = float(series.get(base_year, 0.0))
+    if base == 0.0:
+        print(f"[WARN] GDP base-year ({base_year}) is zero for '{economy_key}'; using flat index.")
+        return {int(year): 1.0 for year in projection_years}
+    return {
+        int(year): (float(series[year]) / base if year in series.index else float("nan"))
+        for year in projection_years
+    }
+
+
+def build_intensity_adjustment_series(
+    ninth_sector_activity: dict[int, float],
+    base_sector_energy: float,
+    gdp_index: dict[int, float],
+    projection_years: Sequence[int],
+    base_year: int,
+) -> dict[int, float]:
+    """
+    IA[year] = (ninth_tgt[year] / (gdp_index[year] * base_sector_energy)) - 1
+
+    At base_year = 0.0 by construction (ninth = base_energy, gdp_index = 1.0).
+    Negative values mean the 9th projects efficiency gains relative to flat-GDP intensity.
+    Applied per fuel branch but computed at sector level (same value for all fuels in sector).
+    """
+    result: dict[int, float] = {}
+    for year in projection_years:
+        ninth_val = float(ninth_sector_activity.get(int(year), 0.0))
+        gdp_idx = float(gdp_index.get(int(year), 1.0))
+        if pd.isna(gdp_idx):
+            gdp_idx = 1.0
+        gdp_derived = gdp_idx * base_sector_energy
+        result[int(year)] = 0.0 if gdp_derived == 0.0 else (ninth_val / gdp_derived) - 1.0
+    result[int(base_year)] = 0.0
+    return result
+
+
 def build_branch_path(parts: Sequence[str]) -> str:
     """Join branch path segments after sanitizing each name."""
     cleaned = [sanitize_leap_name(part) for part in parts if part]
@@ -1334,6 +1420,7 @@ def build_minor_demand_rows(
     projection_years: Sequence[int] | None = None,
     scenario: str | None = None,
     measure_units: Mapping[str, Mapping[str, object]] | None = None,
+    gdp_wide: pd.DataFrame | None = None,
 ) -> list[dict]:
     """
     Build log-style rows (for finalise_export_df) for minor demand sectors.
@@ -1444,6 +1531,25 @@ def build_minor_demand_rows(
             )
         )
 
+        # Intensity Adjustment: pre-compute once per sector; applied to every fuel branch.
+        # IA[year] = (ninth_tgt[year] / (gdp_index[year] * base_energy)) - 1
+        # At base year = 0; negative = efficiency gain vs flat-GDP intensity baseline.
+        ia_series: dict[int, float] | None = None
+        if gdp_wide is not None:
+            _gdp_idx = _build_gdp_index_series(
+                gdp_wide, economy_key, list(projection_years), EXPORT_BASE_YEAR
+            )
+            _base_sector_energy = build_base_year_activity_value(
+                esto_data, flow, economy_key, EXPORT_BASE_YEAR
+            )
+            ia_series = build_intensity_adjustment_series(
+                activity_series,
+                _base_sector_energy,
+                _gdp_idx,
+                projection_years,
+                EXPORT_BASE_YEAR,
+            )
+
         # Final Energy Intensity per fuel (uses ESTO product names).
         fuels = flow_to_fuels.get(flow, [])
         if not fuels:
@@ -1551,6 +1657,18 @@ def build_minor_demand_rows(
                     intensity_units["per"],
                 )
             )
+            if ia_series is not None:
+                rows.extend(
+                    build_year_rows(
+                        fuel_path,
+                        INTENSITY_ADJUSTMENT_VARIABLE,
+                        scenario,
+                        ia_series,
+                        "Unspecified Unit",
+                        "",
+                        "",
+                    )
+                )
     return rows
 
 
@@ -1627,6 +1745,14 @@ def assemble_minor_demand_workbook(
     mapping = load_mapping()
     mapping = filter_mapping_for_minor_demand(mapping, esto_data, MINOR_DEMAND_FLOW_CONFIG)
 
+    # --- Load GDP for Intensity Adjustment user variable (optional) ---
+    gdp_wide: pd.DataFrame | None = None
+    if INCLUDE_INTENSITY_ADJUSTMENT:
+        try:
+            gdp_wide = _load_gdp_wide_for_ia(GDP_DATA_PATH_FOR_IA, GDP_SCENARIO_FOR_IA)
+        except Exception as _exc:
+            print(f"[WARN] Could not load GDP data for Intensity Adjustment: {_exc}")
+
     # --- Build log rows ---
     rows = build_minor_demand_rows(
         esto_data=esto_data,
@@ -1635,6 +1761,7 @@ def assemble_minor_demand_workbook(
         economy=run_economy,
         scenario=scenario_list[0],
         measure_units=measure_units,
+        gdp_wide=gdp_wide,
     )
     if not rows:
         raise ValueError("No log rows generated; check mappings and filters.")

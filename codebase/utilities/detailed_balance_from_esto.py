@@ -113,7 +113,7 @@ FLOW_ALIASES = _expand_alias_key_map(
         "Blast furnaces": "09.08.02 Blast furnaces",
         "Upstream liquids transfers": "08.04 Gas separation",
         "Refinery and blending transfers": "08.03 Products transferred",
-        "Transfers unallocated": "08.99 Transformation nonspecified",
+        "Transfers unallocated": "08.99 Transfers nonspecified",
         "Liquefaction coal to oil": "09.08.05 Liquefaction (coal to oil)",
         "Charcoal processing": "09.11 Charcoal processing",
         "Non specified transformation": "09.12 Non-specified transformation",

@@ -1177,8 +1177,8 @@ def _filter_ninth_by_sector_fuel(
     if working.empty:
         return working
     sign_role = str(value_sign_role or "").strip().lower()
-    is_transformation_sector = str(sector_code or "").strip().lower().startswith("09_")
-    if sign_role in {"input", "output"} and is_transformation_sector:
+    is_directional_balance_sector = str(sector_code or "").strip().lower().startswith(("08_", "09_"))
+    if sign_role in {"input", "output"} and is_directional_balance_sector:
         if prepared and {"__has_negative", "__has_positive"}.issubset(working.columns):
             if sign_role == "input":
                 working = working[working["__has_negative"]]
@@ -1295,11 +1295,12 @@ def pull_projection_series(
     )
     series = _extract_year_series(filtered, projection_years)
     sign_role = str(value_sign_role or "").strip().lower()
-    # Directional sign filtering is only valid for transformation-input sectors
-    # (`09_*`). Power-output sectors (`18_*`) can carry positive series even
-    # when the dashboard sheet is conceptually "inputs" after remapping.
-    is_transformation_input_sector = str(sector_code or "").strip().lower().startswith("09_")
-    if is_transformation_input_sector:
+    # Directional sign filtering is valid for signed transfer/transformation
+    # balance sectors (`08_*` and `09_*`). Power-output sectors (`18_*`) can
+    # carry positive series even when the dashboard sheet is conceptually
+    # "inputs" after remapping.
+    is_directional_balance_sector = str(sector_code or "").strip().lower().startswith(("08_", "09_"))
+    if is_directional_balance_sector:
         if sign_role == "input":
             # Keep structural zeros for directional transformation charts;
             # dropping them to NaN creates false "missing comparator" holes.
@@ -1449,8 +1450,8 @@ def pull_base_year_value(
                 fallback = fallback[fallback["flows"].astype(str).str.lower().str.startswith(parent + ".")]
         working = fallback
     sign_role = str(value_sign_role or "").strip().lower()
-    is_transformation_flow = str(esto_flow or "").strip().lower().startswith("09")
-    if sign_role in {"input", "output"} and is_transformation_flow:
+    is_directional_balance_flow = str(esto_flow or "").strip().lower().startswith(("08", "09"))
+    if sign_role in {"input", "output"} and is_directional_balance_flow:
         if prepared and "__base_value_num" in working.columns:
             base_values = working["__base_value_num"]
         elif str(base_year) in working.columns:
@@ -1969,8 +1970,9 @@ def build_comparisons(
             return False
         if "tpes" in flow or "total primary energy supply" in flow:
             return True
-        # ESTO numbering conventions: 07.* supply, 09.* transformation, 10.* own use.
-        if flow.startswith(("07", "09", "10")):
+        # ESTO numbering conventions: 07.* supply, 08.* transfers,
+        # 09.* transformation, 10.* own use.
+        if flow.startswith(("07", "08", "09", "10")):
             return True
         if "transformation" in flow:
             return True

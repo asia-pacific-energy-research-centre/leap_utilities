@@ -128,7 +128,7 @@ ESTO_FLOW_LABEL_FALLBACKS = {
     "08.02": "Interproduct transfers",
     "08.03": "Products transferred",
     "08.04": "Gas separation",
-    "08.99": "Transformation nonspecified",
+    "08.99": "Transfers nonspecified",
     "09": "Total transformation sector",
     "09.01": "Main activity producer",
     "09.02": "Autoproducers",
@@ -3260,7 +3260,7 @@ def attach_chart_groups_to_mapping_lineage_audit(
         base.loc[missing_sheet, "sheet"] = base.loc[missing_sheet, "esto_flow"].map(_sheet_key_from_esto_flow)
         value = pd.to_numeric(base.get("value_pj", pd.Series(index=base.index)), errors="coerce")
         flow_text = base["esto_flow"].fillna("").astype(str).str.strip()
-        is_transformation = flow_text.str.startswith("09") | flow_text.str.startswith("08.99")
+        is_transformation = flow_text.str.startswith("09") | flow_text.str.startswith("08.")
         normal = base[~is_transformation].copy()
         normal["measure"] = "Energy balance (PJ)"
         transform = base[is_transformation].copy()
@@ -4487,11 +4487,24 @@ def build_balance_comparison(
     comparison_long = _backfill_dashboard_hierarchy(comparison_long, sheet_catalog=hierarchy_sheet_catalog)
     comparison_long = _add_dashboard_context_aliases(_add_esto_flow_context_columns(comparison_long))
     comparison_long = _collapse_template_multi_flow_comparison_rows(comparison_long, template_groups)
+    comparison_long = _add_leap_parent_transfer_rows_to_template(comparison_long)
+    comparison_long = _fill_template_transfer_base_values(
+        comparison_long,
+        base_df=base_df,
+        base_year=base_year,
+        base_economy=base_economy,
+    )
     comparison_long = (
         comparison_long.groupby(group_cols, as_index=False)["value"]
         .sum(min_count=1)
         .sort_values(group_cols, kind="mergesort")
         .reset_index(drop=True)
+    )
+    comparison_long = _fill_template_transfer_base_values(
+        comparison_long,
+        base_df=base_df,
+        base_year=base_year,
+        base_economy=base_economy,
     )
     comparison_long = comparison_long.merge(
         flag_meta,
@@ -7768,6 +7781,148 @@ def _collapse_template_multi_flow_comparison_rows(
     return out
 
 
+def _add_leap_parent_transfer_rows_to_template(comparison_long: pd.DataFrame) -> pd.DataFrame:
+    """
+    Add LEAP parent 08 transfer rows to the template transfer chart only.
+
+    ESTO and 9th treat parent 08 Transfers as a subtotal, so the dashboard template
+    is authored against the active 08.xx transfer rows. The LEAP export, however,
+    carries real non-subtotal transfer values on the parent 08 row too. Without
+    this bridge, the template transfer charts show only the 08.xx LEAP portion.
+    """
+    if comparison_long.empty:
+        return comparison_long.copy()
+
+    required_cols = {"sheet", "source", "measure", "fuel_label", "scenario", "year", "value"}
+    if not required_cols.issubset(comparison_long.columns):
+        return comparison_long.copy()
+
+    frame = comparison_long.copy()
+    parent_mask = frame["sheet"].fillna("").astype(str).str.strip().eq("esto__08__Transfers")
+    parent_mask &= frame["source"].fillna("").astype(str).str.strip().eq("leap")
+    parent_rows = frame.loc[parent_mask].copy()
+    if parent_rows.empty:
+        return frame
+
+    template_mask = frame["sheet"].fillna("").astype(str).str.strip().eq("template__Other_transformation__Transfers")
+    template_rows = frame.loc[template_mask].copy()
+    if template_rows.empty:
+        return frame
+
+    meta_cols = [
+        "scenario",
+        "measure",
+        "fuel_label",
+        "sheet",
+        "page_key",
+        "page_label",
+        "chart_group_key",
+        "chart_group_label",
+        "dashboard_page_key",
+        "dashboard_page_label",
+        "dashboard_section_key",
+        "dashboard_section_label",
+        "chart_kind",
+        "esto_flow_key",
+        "esto_flow_group_key",
+        "esto_flow_group_label",
+        "ninth_pairs_label",
+    ]
+    for col in meta_cols:
+        if col not in template_rows.columns:
+            template_rows[col] = ""
+        if col not in parent_rows.columns:
+            parent_rows[col] = ""
+
+    template_meta = (
+        template_rows[meta_cols]
+        .drop_duplicates(subset=["scenario", "measure", "fuel_label"])
+        .reset_index(drop=True)
+    )
+    if template_meta.empty:
+        return frame
+
+    value_cols = ["economy", "scenario", "measure", "fuel_label", "source", "year", "value"]
+    parent_for_template = parent_rows[value_cols].merge(
+        template_meta,
+        on=["scenario", "measure", "fuel_label"],
+        how="inner",
+        suffixes=("", "_template"),
+    )
+    if parent_for_template.empty:
+        return frame
+
+    parent_for_template = parent_for_template.reindex(columns=frame.columns, fill_value="")
+    return pd.concat([frame, parent_for_template], ignore_index=True, sort=False)
+
+
+def _fill_template_transfer_base_values(
+    comparison_long: pd.DataFrame,
+    *,
+    base_df: pd.DataFrame,
+    base_year: int,
+    base_economy: str,
+) -> pd.DataFrame:
+    """Fill template transfer ESTO base rows from their explicit 08.xx pairs."""
+    if comparison_long.empty or base_df is None or base_df.empty:
+        return comparison_long.copy()
+    required_cols = {"sheet", "source", "fuel_label", "value"}
+    if not required_cols.issubset(comparison_long.columns):
+        return comparison_long.copy()
+
+    out = comparison_long.copy()
+    out["value"] = pd.to_numeric(out["value"], errors="coerce")
+    transfer_template = out["sheet"].fillna("").astype(str).str.strip().eq("template__Other_transformation__Transfers")
+    base_source = out["source"].fillna("").astype(str).str.strip().eq("base")
+    target = transfer_template & base_source
+    if not target.any():
+        return out
+
+    transfer_child_flows = [
+        "08.01 Recycled products",
+        "08.02 Interproduct transfers",
+        "08.03 Products transferred",
+        "08.04 Gas separation",
+        "08.99 Transfers nonspecified",
+    ]
+    product_lookup: dict[str, str] = {}
+    if {"flows", "products"}.issubset(base_df.columns):
+        base_products = base_df[
+            base_df["flows"].fillna("").astype(str).str.strip().isin(transfer_child_flows)
+        ].copy()
+        if "is_subtotal" in base_products.columns:
+            base_products = base_products[~base_products["is_subtotal"].map(_to_bool)].copy()
+        for product in base_products["products"].dropna().astype(str).str.strip().unique():
+            if product and not _product_is_total(product):
+                product_lookup.setdefault((_strip_esto_code_prefix(product) or product).strip(), product)
+
+    cache: dict[tuple[str, str], float] = {}
+    for idx, row in out.loc[target].iterrows():
+        flow = _clean_token(row.get("esto_flow", "")) if "esto_flow" in out.columns else ""
+        product = _clean_token(row.get("esto_product", "")) if "esto_product" in out.columns else ""
+        if flow.startswith("08.") and product:
+            flow_product_pairs = [(flow, product)]
+        else:
+            fuel_label = _clean_token(row.get("fuel_label", ""))
+            product = product_lookup.get(fuel_label, "")
+            flow_product_pairs = [(flow_item, product) for flow_item in transfer_child_flows if product]
+        values: list[float] = []
+        for flow_item, product_item in flow_product_pairs:
+            key = (flow_item, product_item)
+            if key not in cache:
+                cache[key] = pull_base_year_value(
+                    base_df,
+                    base_year=base_year,
+                    economy_code=base_economy,
+                    esto_flow=flow_item,
+                    esto_product=product_item,
+                    value_sign_role="",
+                )
+            values.append(cache[key])
+        out.at[idx, "value"] = sum(value for value in values if pd.notna(value)) if values else float("nan")
+    return out
+
+
 def _build_page_tree_from_paths(paths: list[list[str]]) -> list[dict[str, Any]]:
     root: dict[str, Any] = {"children": {}}
     for path in paths:
@@ -9059,11 +9214,24 @@ def build_balance_comparison_esto_axis(
     comparison_long = _backfill_dashboard_hierarchy(comparison_long, sheet_catalog=hierarchy_sheet_catalog)
     comparison_long = _add_dashboard_context_aliases(_add_esto_flow_context_columns(comparison_long))
     comparison_long = _collapse_template_multi_flow_comparison_rows(comparison_long, template_groups)
+    comparison_long = _add_leap_parent_transfer_rows_to_template(comparison_long)
+    comparison_long = _fill_template_transfer_base_values(
+        comparison_long,
+        base_df=base_df,
+        base_year=base_year,
+        base_economy=base_economy,
+    )
     comparison_long = (
         comparison_long.groupby(group_cols, as_index=False)["value"]
         .sum(min_count=1)
         .sort_values(group_cols, kind="mergesort")
         .reset_index(drop=True)
+    )
+    comparison_long = _fill_template_transfer_base_values(
+        comparison_long,
+        base_df=base_df,
+        base_year=base_year,
+        base_economy=base_economy,
     )
     # Attach compact 9th-pairs annotation for chart rendering (only when cardinality is not one-to-one)
     if ninth_pairs_label_map:

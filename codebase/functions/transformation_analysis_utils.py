@@ -233,6 +233,12 @@ MAJOR_SECTOR_CONFIG = {
         "transformation_flow_codes": ["09.09 Petrochemical industry"],
         "loss_flow_codes": [],
     },
+    "gas_to_liquids_plants": {
+        "dataset_key": "esto",
+        "title": "Gas to liquids plants",
+        "transformation_flow_codes": ["09.06.04 Gas-to-liquids plants"],
+        "loss_flow_codes": [],
+    },
     "biofuels_processing": {
         "dataset_key": "esto",
         "title": "Biofuels processing",
@@ -289,7 +295,10 @@ TRANSFORMATION_OUTPUT_VARIABLES = {
 FEEDSTOCK_METHOD_SINGLE_AUX = "single_feedstock_aux_others"
 FEEDSTOCK_METHOD_SPLIT = "split_processes_per_feedstock"
 FEEDSTOCK_METHOD_MULTI = "multi_feedstock_single_process"
-FEEDSTOCK_METHOD = FEEDSTOCK_METHOD_SINGLE_AUX
+FEEDSTOCK_METHOD = FEEDSTOCK_METHOD_MULTI
+# When False, loss/own-use fuels always go to aux even if they match a feedstock fuel.
+# When True, loss fuels that match a feedstock label are excluded from aux.
+LOSS_AUX_EXCLUDE_FEEDSTOCKS = False
 #%%
 # Available sectors (with non zero data) in the ESTO dataset:
 # 10.01 Own Use
@@ -4081,7 +4090,7 @@ def analyze_lng_liquefaction_regas(
                 auxiliary_fuels, auxiliary_ratios = build_auxiliary_from_losses_by_year(
                     loss_values_by_year,
                     output_series,
-                    feedstock_labels=list(input_series_by_label.keys()),
+                    feedstock_labels=list(input_series_by_label.keys()) if LOSS_AUX_EXCLUDE_FEEDSTOCKS else None,
                 )
                 efficiency_series = compute_efficiency_by_year(
                     output_series,
@@ -4441,7 +4450,7 @@ def analyze_gas_processing(
                 auxiliary_fuels, auxiliary_ratios = build_auxiliary_from_losses_by_year(
                     loss_values_by_year,
                     output_series,
-                    feedstock_labels=list(input_series_map.keys()),
+                    feedstock_labels=list(input_series_map.keys()) if LOSS_AUX_EXCLUDE_FEEDSTOCKS else None,
                 )
                 efficiency_series = compute_efficiency_by_year(
                     output_series,
@@ -4931,7 +4940,7 @@ def summarize_transformation_flows(
                 auxiliary_fuels, auxiliary_ratios = build_auxiliary_from_losses_by_year(
                     loss_values_by_year,
                     output_series,
-                    feedstock_labels=list(input_series_map.keys()),
+                    feedstock_labels=list(input_series_map.keys()) if LOSS_AUX_EXCLUDE_FEEDSTOCKS else None,
                 )
                 loss_total_for_eff = total_loss_by_year
                 efficiency_series = compute_efficiency_by_year(

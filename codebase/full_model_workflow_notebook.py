@@ -134,8 +134,7 @@ SUPPLY_EXPORT_DATASET_KEY = workflow_cfg.FULL_MODEL_SUPPLY_EXPORT_DATASET_KEY
 # --- Results supply-link workflow config (replaces supply step when enabled) ---
 RESULTS_SUPPLY_LINK_ECONOMIES = ["20_USA"]
 RESULTS_SUPPLY_LINK_SCENARIOS = list(workflow_cfg.SUPPLY_NOTEBOOK_SCENARIOS)
-RESULTS_SUPPLY_LINK_TRADE_TARGET_EXPORT_MODE = "capacity_unmet_iterative_balanced"
-RESULTS_SUPPLY_LINK_CAPACITY_UNMET_ITERATION_RUN_MODE = "first_clean"
+RESULTS_SUPPLY_LINK_CAPACITY_UNMET_PASS_MODE = "baseline_seed"  # baseline_seed|results_update
 RESULTS_SUPPLY_LINK_SCRAPE_LEAP_RESULTS = False
 RESULTS_SUPPLY_LINK_RUN_LEAP_FUEL_BRANCH_PROBE_AT_START = False
 RESULTS_SUPPLY_LINK_RESULTS_SINGLE_FILE_OUTPUT = True
@@ -268,11 +267,8 @@ def run_results_supply_link_workflow():
 
     results_supply_link_workflow.ECONOMIES = list(RESULTS_SUPPLY_LINK_ECONOMIES)
     results_supply_link_workflow.SCENARIOS = list(RESULTS_SUPPLY_LINK_SCENARIOS)
-    results_supply_link_workflow.TRADE_TARGET_EXPORT_MODE = (
-        RESULTS_SUPPLY_LINK_TRADE_TARGET_EXPORT_MODE
-    )
-    results_supply_link_workflow.CAPACITY_UNMET_ITERATION_RUN_MODE = (
-        RESULTS_SUPPLY_LINK_CAPACITY_UNMET_ITERATION_RUN_MODE
+    results_supply_link_workflow.CAPACITY_UNMET_PASS_MODE = (
+        RESULTS_SUPPLY_LINK_CAPACITY_UNMET_PASS_MODE
     )
     results_supply_link_workflow.SCRAPE_LEAP_RESULTS = (
         RESULTS_SUPPLY_LINK_SCRAPE_LEAP_RESULTS

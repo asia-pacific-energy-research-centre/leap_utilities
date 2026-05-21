@@ -55,7 +55,7 @@ TRANSFER_FLOW_CODES = [
     "08.01 Recycled products",
     "08.02 Interproduct transfers",
     "08.03 Products transferred",
-    "08.99 Transformation nonspecified"
+    "08.99 Transfers nonspecified"
 ]
 
 # Prefer subflows when they have nonzero data.
@@ -63,7 +63,7 @@ TRANSFER_SUBFLOWS = [
     "08.01 Recycled products",
     "08.02 Interproduct transfers",
     "08.03 Products transferred",
-    "08.99 Transformation nonspecified"
+    "08.99 Transfers nonspecified"
 ]
 
 # If True, filter subtotal rows immediately before transfer calculations.

@@ -162,7 +162,7 @@ ESTO_SECTORS = [
     '08.02 Interproduct transfers',
     '08.03 Products transferred',
     '08.04 Gas separation',
-    '08.99 Transformation nonspecified',
+    '08.99 Transfers nonspecified',
     '09 Total transformation sector',
     '09.01 Main activity producer',
     '09.01.01 Electricity plants',
@@ -833,7 +833,7 @@ NINTH_SUB4SECTORS = [
 # 10_01_17_nonspecified_own_uses	sub2sectors	10.01.17 Non-specified own uses	flows	Non-specified own uses
 # 		07.99 Non-specified Petroleum Products	products	Non-specified Petroleum Products
 # 		12.02 Non-specified Solar	products	Non-specified Solar
-# 		08.99 Transformation nonspecified	flows	Transformation nonspecified
+# 		08.99 Transfers nonspecified	flows	Transfers nonspecified
 # 09_12_nonspecified_transformation	sub1sectors	09.12 Non-specified transformation	flows	Non-specified transformation
 # 15_06_nonspecified_transport	sub1sectors	15.06 Non-specified transport	flows	Non-specified transport
 # 09_nuclear	fuels	09 Nuclear	products	Nuclear

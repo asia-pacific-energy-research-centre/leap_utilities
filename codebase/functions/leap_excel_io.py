@@ -105,6 +105,8 @@ def finalise_export_df(log_df, scenario, region, base_year, final_year
         )
         log_df = log_df.copy()
         log_df.loc[negative_mask, "Value"] = 0.0
+    log_df = log_df.copy()
+    log_df["Value"] = pd.to_numeric(log_df["Value"], errors="coerce")
     
     # --- Pivot to wide format ---
     #just so we dont get an empty pivot, if any cols are fully None or na, fille them with str version of na then repalce once pivoted
@@ -118,9 +120,31 @@ def finalise_export_df(log_df, scenario, region, base_year, final_year
         elif (log_df[col] == None).all():
             log_df[col] = 'None'
        
+    pivot_index_cols = ["Branch_Path", "Scenario", "Measure", "Units", "Scale", "Per..."]
+    pivot_key_cols = pivot_index_cols + ["Date"]
+    duplicate_mask = log_df.duplicated(subset=pivot_key_cols, keep=False)
+    if duplicate_mask.any():
+        duplicate_count = int(duplicate_mask.sum())
+        duplicate_groups = (
+            log_df.loc[duplicate_mask, pivot_key_cols + ["Value"]]
+            .groupby(pivot_key_cols, dropna=False, as_index=False)
+            .agg(row_count=("Value", "size"), summed_value=("Value", "sum"))
+            .sort_values(["row_count", "Branch_Path", "Measure", "Date"], ascending=[False, True, True, True])
+        )
+        print(
+            "[WARN] Found "
+            f"{duplicate_count} duplicate export log row(s) across "
+            f"{len(duplicate_groups)} branch/scenario/variable/year key(s); summing before pivot."
+        )
+        print(duplicate_groups.head(10).to_string(index=False))
+        log_df = (
+            log_df.groupby(pivot_key_cols, dropna=False, as_index=False)
+            .agg(Value=("Value", "sum"))
+        )
+
     pivot_df = (
         log_df.pivot(
-            index=["Branch_Path",'Scenario', "Measure", "Units", "Scale", "Per..."],
+            index=pivot_index_cols,
             columns="Date",
             values="Value"
         )

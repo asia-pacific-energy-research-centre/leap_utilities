@@ -3417,7 +3417,7 @@
     "aggregate": {
       "fuel": "Total",
       "source_esto_flows": [
-        "08.99 Transformation nonspecified",
+        "08.99 Transfers nonspecified",
         "09 Total transformation sector",
         "09.06.01 Gas works plants",
         "09.06.02 Liquefaction/regasification plants",
