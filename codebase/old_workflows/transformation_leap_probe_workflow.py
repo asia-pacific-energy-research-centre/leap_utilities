@@ -222,7 +222,7 @@ LEAP_IMPORT_WORKBOOK_PATH = (
     / "transformation_leap_imports_20_USA_Reference.xlsx"
 )
 LEAP_IMPORT_SCENARIO = "Reference"
-LEAP_IMPORT_REGION_NAME = "United States of America"
+LEAP_IMPORT_REGION_NAME = "United States"
 LEAP_IMPORT_BRANCH_FILTER = "blast furnaces"
 LEAP_IMPORT_VARIABLE_FILTER = None
 LEAP_IMPORT_LIMIT = 20
@@ -231,7 +231,7 @@ def inspect_transformation_leap_workbook(
     export_path: Path | str,
     *,
     scenario: str = "Reference",
-    region: str = "United States of America",
+    region: str = "United States",
     branch_filter: str | None = None,
     variable_filter: str | None = None,
     limit: int | None = 20,
@@ -340,7 +340,7 @@ def probe_transformation_workbook(
     export_path: Path | str,
     *,
     scenario: str = "Reference",
-    region: str = "United States of America",
+    region: str = "United States",
     branch_filter: str | None = None,
     variable_filter: str | None = None,
     limit: int | None = 20,

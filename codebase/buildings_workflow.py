@@ -49,7 +49,7 @@ SHEET_NAME = "Export"
 ECONOMY = "20_USA"
 BASE_YEAR = 2022
 SCENARIOS = ["Reference"]
-REGION = "United States of America"
+REGION = "United States"
 
 REMAP_FUELS = True
 SERIES_FORMAT_POLICY = "preserve"  # preserve | expression | year_columns

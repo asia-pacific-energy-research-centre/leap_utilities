@@ -10,6 +10,7 @@ These are project-level instructions for Codex (and similar agents).
 
 - Put instructions here that you want Codex to follow every time it edits this repo.
 - Keep rules short and specific; avoid large, complex policies.
+- Do not use this repo for LEAP dashboard implementation or dashboard template edits. Use `C:\Users\Work\github\leap_dashboard` for LEAP dashboard work unless the user explicitly asks for shared `leap_utilities` code changes.
 - For file-specific rules, include path globs like `docs/leap-system*.drawio`.
 - Workflow-file pattern for small projects: create/maintain one `*_workflow.py` entry script per task area and make it notebook-safe.
 - In workflow scripts, always define `REPO_ROOT = Path(__file__).resolve().parents[1]` (or correct repo level), add it to `sys.path` only if missing, and resolve all relative paths via a `_resolve()` helper against `REPO_ROOT`.
@@ -30,71 +31,6 @@ These are project-level instructions for Codex (and similar agents).
 - Keep primary outputs narrow: include important columns only.
 - Put debug-heavy or trace-heavy artifacts in `extra_detail` or `diagnostics`, not beside the main outputs.
 - Make sure there is a clear file for inspecting errors when needed.
-
-## Dashboard Comparison Policies (Scoped)
-
-Apply this section only when editing dashboard mapping/comparison code
-(`codebase/leap_results_dashboard*_workflow.py`, `codebase/utilities/leap_results_dashboard*.py`).
-
-### Purpose
-
-- Build a dashboard that compares LEAP results, 9th projections, and ESTO base-year values with transparent mapping lineage.
-- Treat mapping quality as a core output, not a side artifact, because these mappings are reused for future analysis.
-
-### Mapping Model
-
-- Maintain explicit mapping logic for each dataset path (LEAP, 9th, ESTO), then reconcile into comparable series.
-- Allow one-to-many and many-to-one mappings when they are intentional and auditable.
-- Raise an error on many-to-many mapping situations (ambiguous crosswalks that cannot be deterministically resolved).
-- Prefer unique sector+product canonical resolution before aggregated canonical fallback.
-- Use aggregated canonical mappings only as fallback when unique product-level resolution is unavailable.
-
-### Hierarchy and Display Level
-
-- Dashboard pages should follow sector hierarchy (sector, subsector, deeper subsectors) and fuels, including total charts.
-- Include total-by-fuel-set charts for each subsector grouping and overall sector totals.
-- Show the lowest category level that exists across all compared datasets for that charted group.
-- If one dataset is only available at a parent level, aggregate children from the other datasets up to that parent level.
-- When parent level is shown for comparability, do not also show conflicting child-level lines for that same comparison group.
-
-### Aggregation and Totals
-
-- Aggregation to parent must be comprehensive and non-duplicative.
-- Totals should be computed by summing the displayed child components at the resolved comparison level.
-- Do not use `max`-based bucket dedupe for totals once child values are allocated/disaggregated.
-- Resolve duplicate-assignment risk upstream in mapping/allocation logic, not by suppressing totals downstream.
-
-### Diagnostics and Auditability
-
-- Always produce mapping diagnostics and line-level ledgers so each plotted value can be traced to mapping decisions.
-- Keep outputs that make aggregate composition auditable (for example, total-component ledgers and mapping-status artifacts).
-- Distinguish mapping differences from methodological differences in interpretation; mismatches are expected in some cases and should be explainable.
-- For ESTO-axis balance dashboards, do not rely only on `comparison_long.csv` for rendered chart semantics: transformation input/output splitting can happen in the render input. When debugging plotted values, check `supporting_files/charting/chart_line_mapping_ledger.csv` and the rendered chart exposure files.
-- Positive transformation values are outputs and must not appear as non-zero values in `Inputs (incl. losses & own-use) (PJ)` charts. Negative transformation values are inputs and are displayed as absolute values.
-- Multi-flow template charts, such as Power electricity plants combining `09.01.01` and `09.02.01`, can duplicate direct ESTO-sheet rows if not suppressed. Ensure template virtual rows and direct rows do not both expose the same comparator key in one chart group.
-- `mapping_lineage_audit.csv` can miss rows if lineage is filtered only to rendered chart groups. Keep unmatched lineage rows when chart metadata attachment fails, so missing chart exposure does not hide mappings.
-- For Power/Electricity spot checks: a large positive 9th `17 Electricity` value belongs in `Outputs (PJ)`, while the corresponding Inputs chart should have only a zero placeholder for that fuel if no negative electricity input exists.
-
-### Validation Checklist
-
-- Run the dashboard workflow and require successful completion:
-  - `python3 codebase/leap_results_dashboard_v2_workflow.py`
-- Confirm required outputs exist:
-  - `outputs/dashboards/leap_results_dashboard_v2/USA/comparison_long.csv`
-  - `outputs/dashboards/leap_results_dashboard_v2/USA/mapping_status.xlsx`
-  - `outputs/dashboards/leap_results_dashboard_v2/USA/chart_line_mapping_ledger.csv`
-  - `outputs/dashboards/leap_results_dashboard_v2/USA/chart_total_component_ledger.csv`
-  - `outputs/dashboards/leap_results_dashboard_v2/USA/comparison_gap_diagnostics.csv`
-  - `outputs/dashboards/leap_results_dashboard_v2/USA/mapping_rundown_by_sheet.csv`
-- Confirm no unresolved mapping policy violations:
-  - no many-to-many mapping situations left unresolved
-  - no parent/child double-display conflicts for the same comparison group
-- Confirm totals logic:
-  - comparator `Total` series equals sum of displayed child comparator rows at the resolved comparison level
-  - no `max`-based bucket suppression used as a total-construction shortcut after child allocation/disaggregation
-- Spot-check at least one known-problem sheet (for example `Non-specified industry`) using ledgers:
-  - verify mapping rows are explainable
-  - verify total component sums match plotted totals
 
 ## LEAP Export File Structure
 
@@ -148,7 +84,6 @@ Keep this structure in mind when adding new transformations or debugging data is
 
 ## Python Environment
 
-- For dashboard chart rendering from Windows PowerShell, `C:\Users\Work\miniconda3\python.exe` may lack `plotly`/`matplotlib`. Use `C:\Users\Work\github\codex_notebook_testing_environment\env_leap\python.exe` or `C:\Users\Work\github\9th_edition_visualisation\env_9th_visualisation\python.exe` when chart HTML files need to be regenerated.
 - This repo's `.venv` is a WSL-created venv (`home = /usr/bin` in `pyvenv.cfg`) and cannot be used from Windows shells (PowerShell, cmd, or the Bash tool when running in a Git-Bash context on Windows).
 - Use `/c/Users/Work/miniconda3/python.exe` for all Python scripts run via the Bash tool (Git-Bash on Windows).
 - Do **not** attempt to activate `.venv/bin/activate` from the Bash tool — it will fail silently or error.

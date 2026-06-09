@@ -749,7 +749,7 @@ def run_favorite_tables_probe(
     *,
     favorite_names: list[str],
     scenario: str = "Reference",
-    region: str = "United States of America",
+    region: str = "United States",
     probe_year: int = 2022,
     preview_rows: int = 12,
 ) -> None:
@@ -893,7 +893,7 @@ def run_input_style_sum_probe(
     *,
     sector_prefixes: list[str],
     scenario: str = "Reference",
-    region: str = "United States of America",
+    region: str = "United States",
     probe_year: int = 2022,
     compare_to_suffix: str | None = "_inputs",
     preview_rows: int = 18,
@@ -1001,7 +1001,7 @@ def build_inputs_by_fuel_from_favorites(
     *,
     sector_prefixes: list[str],
     scenario: str = "Reference",
-    region: str = "United States of America",
+    region: str = "United States",
     output_workbook: Path | str = Path("outputs/leap_results_replica/inputs_by_fuel_from_favorites.xlsx"),
 ) -> Path:
     """
@@ -1376,7 +1376,7 @@ if __name__ == "__main__":
         run_favorite_tables_probe(
             favorite_names=FAVORITE_TABLES_TO_TEST,
             scenario="Reference",
-            region="United States of America",
+            region="United States",
             probe_year=2022,
             preview_rows=12,
         )
@@ -1393,7 +1393,7 @@ if __name__ == "__main__":
         run_input_style_sum_probe(
             sector_prefixes=INPUT_STYLE_SUM_PREFIXES,
             scenario="Reference",
-            region="United States of America",
+            region="United States",
             probe_year=2022,
             compare_to_suffix="_inputs",
             preview_rows=18,
@@ -1410,7 +1410,7 @@ if __name__ == "__main__":
         build_inputs_by_fuel_from_favorites(
             sector_prefixes=BUILD_INPUTS_BY_FUEL_PREFIXES,
             scenario="Reference",
-            region="United States of America",
+            region="United States",
             output_workbook=Path("outputs/leap_results_replica/inputs_by_fuel_from_favorites.xlsx"),
         )
 

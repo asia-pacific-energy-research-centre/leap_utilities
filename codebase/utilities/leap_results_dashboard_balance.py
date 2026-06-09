@@ -813,6 +813,7 @@ def convert_leap_balances_to_esto_long_table(
     projection_economy: str = "20_USA",
     max_output_year: int | None = None,
     explicit_pair_mappings_only: bool = False,
+    allow_descendant_mapping_expansion: bool = True,
 ) -> dict[str, Any]:
     """
     Convert REF/TGT LEAP balance exports into an ESTO-pair long balance table.
@@ -831,6 +832,7 @@ def convert_leap_balances_to_esto_long_table(
         known_issues=known_issues,
         projection_economy=projection_economy,
         explicit_pair_mappings_only=explicit_pair_mappings_only,
+        allow_descendant_mapping_expansion=allow_descendant_mapping_expansion,
     )
     leap_long = ingestion["leap_long"].copy()
     if max_output_year is not None and not leap_long.empty:
@@ -3807,6 +3809,7 @@ def _extract_balance_workbook(
     mapping_pairs_path: ConfigTableRef,
     codebook_path: Path,
     explicit_pair_mappings_only: bool = False,
+    allow_descendant_mapping_expansion: bool = True,
 ) -> dict[str, Any]:
     chosen_template = _pick_template_sheet(workbook_path, template_sheet)
     extractor = TemplateBalanceExtractor(
@@ -3815,6 +3818,7 @@ def _extract_balance_workbook(
         codebook_path=codebook_path,
         reinterpret_fuel_rows_as_parent_sector=False,
         explicit_pair_mappings_only=explicit_pair_mappings_only,
+        allow_descendant_mapping_expansion=allow_descendant_mapping_expansion,
     )
     extractor.load_mappings()
     selected_sheets = _list_balance_sheets(workbook_path)
@@ -3847,6 +3851,7 @@ def load_balance_leap_long(
     known_issues: dict[str, Any] | None = None,
     projection_economy: str = "20_USA",
     explicit_pair_mappings_only: bool = False,
+    allow_descendant_mapping_expansion: bool = True,
 ) -> dict[str, Any]:
     """
     Load LEAP balance exports (REF/TGT), map them, keep fully mapped rows only,
@@ -3875,6 +3880,7 @@ def load_balance_leap_long(
         mapping_pairs_path=mapping_pairs,
         codebook_path=codebook,
         explicit_pair_mappings_only=explicit_pair_mappings_only,
+        allow_descendant_mapping_expansion=allow_descendant_mapping_expansion,
     )
     extracted_tgt = _extract_balance_workbook(
         tgt_path,
@@ -3882,6 +3888,7 @@ def load_balance_leap_long(
         mapping_pairs_path=mapping_pairs,
         codebook_path=codebook,
         explicit_pair_mappings_only=explicit_pair_mappings_only,
+        allow_descendant_mapping_expansion=allow_descendant_mapping_expansion,
     )
 
     combined = pd.concat(
@@ -8028,6 +8035,7 @@ def load_balance_leap_long_esto_axis(
     known_issues: dict[str, Any] | None = None,
     projection_economy: str = "20_USA",
     explicit_pair_mappings_only: bool = False,
+    allow_descendant_mapping_expansion: bool = True,
 ) -> dict[str, Any]:
     structure = structure_config or {}
     issues_cfg = known_issues or {}
@@ -8051,6 +8059,7 @@ def load_balance_leap_long_esto_axis(
         mapping_pairs_path=mapping_pairs,
         codebook_path=codebook,
         explicit_pair_mappings_only=explicit_pair_mappings_only,
+        allow_descendant_mapping_expansion=allow_descendant_mapping_expansion,
     )
     extracted_tgt = _extract_balance_workbook(
         tgt_path,
@@ -8058,6 +8067,7 @@ def load_balance_leap_long_esto_axis(
         mapping_pairs_path=mapping_pairs,
         codebook_path=codebook,
         explicit_pair_mappings_only=explicit_pair_mappings_only,
+        allow_descendant_mapping_expansion=allow_descendant_mapping_expansion,
     )
 
     combined = pd.concat([extracted_ref["mapped_long"], extracted_tgt["mapped_long"]], ignore_index=True, sort=False)

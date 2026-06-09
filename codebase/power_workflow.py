@@ -70,7 +70,7 @@ SOURCE_SCENARIO_FOR_MISSING = {
     "Reference": "Optimization",
     "Target": "Optimization",
 }
-REGION = "United States of America"
+REGION = "United States"
 ESTO_DATA_PATH = "../data/00APEC_2024_low.csv"
 SUBTOTAL_MAPPING_PATH = "../config/ESTO_subtotal_mapping.xlsx"
 SYNTHETIC_RULES_PATH = "../config/synthetic_reference_rows.csv"

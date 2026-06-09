@@ -23,7 +23,7 @@ from codebase.functions.leap_excel_io import finalise_export_df
 ######### CONSTANTS (UNLIKELY TO CHANGE) #########
 BASE_YEAR = 2023
 FINAL_YEAR = 2023
-DEFAULT_REGION = "United States of America"
+DEFAULT_REGION = "United States"
 DEFAULT_SCENARIO = "Current Accounts"
 DEFAULT_UNITS = "Petajoule"
 DEFAULT_SCALE = ""

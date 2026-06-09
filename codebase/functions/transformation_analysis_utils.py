@@ -103,7 +103,7 @@ def resolve_projection_sign_stable_flows(mode, selected_flows):
     )
 LOSS_SECTOR_CODE_9TH = "10_losses_and_own_use"
 # DEFAULT_SCENARIO = "Target"
-DEFAULT_REGION = "United States of America"
+DEFAULT_REGION = "United States"
 DEFAULT_OUTPUT_UNITS = "Petajoule"
 DEFAULT_EFFICIENCY_UNITS = "Percent"
 DEFAULT_FEEDSTOCK_UNITS = ""
@@ -159,7 +159,7 @@ MAJOR_SECTOR_CONFIG = {
         "dataset_key": "ninth",
         "title": "NG Liquefaction",
         "liquefaction_title": "NG Liquefaction",
-        "regasification_title": "NG Regasification",
+        "regasification_title": "LNG regasification",
         "transformation_sub1": "09_06_gas_processing_plants",
         "transformation_sub2": ["09_06_02_liquefaction_regasification_plants"],
         "loss_sub2": ["10_01_03_liquefaction_regasification_plants"],
@@ -205,7 +205,7 @@ MAJOR_SECTOR_CONFIG = {
     },
     "coal_bkb_pb_plants": {
         "dataset_key": "esto",
-        "title": "BKB/PB plants",
+        "title": "BKB and PB plants",
         "transformation_flow_codes": ["09.08.04 BKB/PB plants"],
         "loss_flow_codes": [],
     },
@@ -263,9 +263,18 @@ MAJOR_SECTOR_CONFIG = {
         "transformation_flow_codes": ["09.12 Non-specified transformation"],
         "loss_flow_codes": ["10.01.17 Non-specified own uses"],
     },
+    # Oil refineries: multi-output sector (gasoline, diesel, jet fuel, etc.).
+    # run_flow_sector_analysis handles the primary output only — a full multi-output
+    # analysis (similar to hydrogen) is needed to capture all product streams.
+    "oil_refineries": {
+        "dataset_key": "esto",
+        "title": "Oil Refining",
+        "transformation_flow_codes": ["09.07 Oil refineries"],
+        "loss_flow_codes": ["10.01.11 Oil refineries"],
+    },
     "hydrogen_transformation": {
         "dataset_key": "ninth",
-        "title": "09_13_hydrogen_transformation",
+        "title": "Hydrogen transformation",
         "transformation_sub1": "09_13_hydrogen_transformation",
         "output_fuels": ["16_others"],
         "output_subfuels": list(HYDROGEN_OUTPUT_SUBFUELS),
@@ -299,6 +308,20 @@ FEEDSTOCK_METHOD = FEEDSTOCK_METHOD_MULTI
 # When False, loss/own-use fuels always go to aux even if they match a feedstock fuel.
 # When True, loss fuels that match a feedstock label are excluded from aux.
 LOSS_AUX_EXCLUDE_FEEDSTOCKS = False
+# When True, input fuels detected as negative in the source data are always written to the
+# export even if their values sum to zero over the export year range (e.g. data only exists
+# outside the export window, such as pre-2022 historical lignite for AUS BKB/PB).
+# Setting False drops these zero-sum fuels — if all inputs are dropped the process is
+# skipped entirely, which is correct for sectors with no export-window activity.
+# Root cause of phantom rows: the all-years fallback in summarize_fuel_totals can detect
+# historical fuels as "inputs" even when the sector has zero activity in 2022+.
+INCLUDE_ALL_DETECTED_INPUT_FUELS = False
+
+_dropped_input_fuel_log: list[dict] = []
+# Tracks LEAP-mapped sector titles for every sector run_analysis_for_sector visits,
+# even those where all economies returned no data.  Used by zero-fill to clear catalog
+# branches for sectors this workflow owns but had no ESTO data for.
+_analyzed_sector_titles: set[str] = set()
 #%%
 # Available sectors (with non zero data) in the ESTO dataset:
 # 10.01 Own Use
@@ -586,8 +609,16 @@ def normalize_esto_economy_codes(df):
 
 
 def filter_total_energy_rows(df):
-    """Drop total/renewables summary rows from fuels or products."""
+    """Drop total/aggregate summary rows from fuels or products.
+
+    Removes:
+    - Named total rows (19 Total, 20 Total Renewables, 21 Modern renewables)
+    - ESTO aggregate product codes that have no decimal point (e.g. '08 Gas',
+      '01 Coal', '07 Petroleum products'). These are subtotals of their
+      sub-product groups and should never appear as LEAP branch fuels.
+    """
     try:
+        import re as _re
         updated = df.copy()
         total_codes = {"19_total", "20_total_renewables", "21_modern_renewables"}
         total_labels = {
@@ -600,7 +631,14 @@ def filter_total_energy_rows(df):
         if "subfuels" in updated.columns:
             updated = updated[~updated["subfuels"].astype(str).isin(total_codes)]
         if "products" in updated.columns:
-            updated = updated[~updated["products"].astype(str).isin(total_labels)]
+            # Drop named totals
+            mask_named = updated["products"].astype(str).isin(total_labels)
+            # Drop aggregate codes: two-digit number + space + name, no decimal
+            # e.g. "08 Gas", "01 Coal", "07 Petroleum products"
+            mask_aggregate = updated["products"].astype(str).str.match(
+                r"^\d{2} ", na=False
+            ) & ~updated["products"].astype(str).str.contains(r"\.", na=False)
+            updated = updated[~(mask_named | mask_aggregate)]
         return updated
     except Exception as exc:
         print(f"Failed to filter total energy rows: {exc}")
@@ -1253,11 +1291,17 @@ def resolve_feedstock_method(method=None):
 
 
 def build_input_series_map(timeseries, negative_labels, base_year, final_year):
-    """Return input series per label for negative fuels."""
+    """Return (series_map, zero_sum_labels) for negative fuels.
+
+    zero_sum_labels lists fuels that had no input values in the export year range.
+    When INCLUDE_ALL_DETECTED_INPUT_FUELS is True those fuels are still included in
+    series_map (with zero values); otherwise they are omitted.
+    """
     try:
         series_map = {}
+        zero_sum_labels = []
         if timeseries is None or negative_labels is None:
-            return series_map
+            return series_map, zero_sum_labels
         for label in negative_labels:
             if label not in timeseries.index:
                 continue
@@ -1267,13 +1311,100 @@ def build_input_series_map(timeseries, negative_labels, base_year, final_year):
                 final_year,
             )
             if series.sum() == 0:
-                continue
+                zero_sum_labels.append(label)
+                if not INCLUDE_ALL_DETECTED_INPUT_FUELS:
+                    continue
             series_map[label] = series
-        return series_map
+        return series_map, zero_sum_labels
     except Exception as exc:
         print(f"Failed to build input series map: {exc}")
         try_debug_breakpoint()
         raise
+
+
+def log_dropped_input_fuels(economy, flow_code, zero_sum_labels, export_base_year, export_final_year):
+    """Append zero-sum input fuel events to the module-level log."""
+    for label in zero_sum_labels:
+        included = INCLUDE_ALL_DETECTED_INPUT_FUELS
+        _dropped_input_fuel_log.append(
+            {
+                "economy": economy,
+                "flow_code": flow_code,
+                "fuel_label": label,
+                "export_base_year": export_base_year,
+                "export_final_year": export_final_year,
+                "outcome": "force_included_with_zeros" if included else "dropped",
+            }
+        )
+        action = "force-included with zero values (INCLUDE_ALL_DETECTED_INPUT_FUELS=True)" if included else "dropped"
+        print(
+            f"[WARN] {flow_code} ({economy}): input fuel '{label}' has no usable values in "
+            f"{export_base_year}–{export_final_year}; {action}."
+        )
+
+
+def get_dropped_fuel_log() -> list[dict]:
+    """Return the current dropped-input-fuel log."""
+    return list(_dropped_input_fuel_log)
+
+
+def reset_dropped_fuel_log() -> None:
+    """Clear the dropped-input-fuel log."""
+    _dropped_input_fuel_log.clear()
+
+
+def get_analyzed_sector_titles() -> set[str]:
+    """Return the set of LEAP-mapped sector titles visited during the current run."""
+    return set(_analyzed_sector_titles)
+
+
+def reset_analyzed_sector_titles() -> None:
+    """Clear the analyzed-sector-titles tracking set."""
+    _analyzed_sector_titles.clear()
+
+
+def print_dropped_fuel_summary() -> None:
+    """Print a consolidated end-of-run summary of all dropped/force-included input fuels."""
+    if not _dropped_input_fuel_log:
+        print("[INFO] No input fuels were dropped or force-included during this run.")
+        return
+    dropped = [r for r in _dropped_input_fuel_log if r["outcome"] == "dropped"]
+    forced = [r for r in _dropped_input_fuel_log if r["outcome"] == "force_included_with_zeros"]
+    print(
+        f"\n{'='*70}\n"
+        f"INPUT FUEL SUMMARY ({len(_dropped_input_fuel_log)} event(s) total)\n"
+        f"  Dropped (no export-range data):          {len(dropped)}\n"
+        f"  Force-included with zero values:         {len(forced)}\n"
+        f"{'='*70}"
+    )
+    if dropped:
+        print("  DROPPED fuels:")
+        for r in dropped:
+            print(f"    [{r['economy']}] {r['flow_code']} -> {r['fuel_label']}")
+    if forced:
+        print("  FORCE-INCLUDED (zero values) fuels:")
+        for r in forced:
+            print(f"    [{r['economy']}] {r['flow_code']} -> {r['fuel_label']}")
+    print(f"{'='*70}\n")
+
+
+def save_dropped_fuel_report(path) -> None:
+    """Save the dropped/force-included fuel log to a CSV and print summary."""
+    print_dropped_fuel_summary()
+    if not _dropped_input_fuel_log:
+        return
+    try:
+        import csv as _csv
+        path = str(path)
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        fieldnames = ["economy", "flow_code", "fuel_label", "export_base_year", "export_final_year", "outcome"]
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = _csv.DictWriter(f, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(_dropped_input_fuel_log)
+        print(f"[INFO] Dropped/force-included fuel report saved to: {path}")
+    except Exception as exc:
+        print(f"[WARN] Failed to save dropped fuel report: {exc}")
 
 
 def build_total_input_series(input_series_map, years):
@@ -2430,6 +2561,40 @@ def build_export_filename(template, fallback, economy, scenario):
         try_debug_breakpoint()
         return fallback or template
 
+def compute_own_use_ratios_for_record(loss_values_by_year, input_series_map, years):
+    """Return {fuel_label: scalar_ratio} for fuels that appear in BOTH losses and feedstock inputs.
+
+    ratio = mean_own_use / (mean_own_use + mean_feedstock_input) over years.
+
+    Only fuels where 0 < ratio < 1 are returned — i.e. fuels that are ambiguously used as
+    both feedstock and own-use.  Pure-feedstock fuels (ratio=0) and pure-own-use fuels
+    (ratio=1, not in input_series_map) are omitted.
+
+    These ratios are stored on the process record so that on subsequent LEAP results
+    readbacks, the reported feedstock 'Inputs' can be split into true feedstock vs
+    estimated own-use, allowing auxiliary_ratios to be recalibrated.
+    """
+    try:
+        ratios = {}
+        year_index = pd.Index(years)
+        for fuel, loss_by_year in (loss_values_by_year or {}).items():
+            input_series = (input_series_map or {}).get(fuel)
+            if input_series is None:
+                continue
+            loss_mean = float(
+                pd.Series(loss_by_year, dtype=float).reindex(year_index, fill_value=0.0).mean()
+            )
+            input_mean = float(input_series.reindex(year_index, fill_value=0.0).mean())
+            total_mean = loss_mean + input_mean
+            if total_mean > 0 and loss_mean > 0:
+                ratios[fuel] = loss_mean / total_mean
+        return ratios
+    except Exception as exc:
+        print(f"Failed to compute own-use ratios: {exc}")
+        try_debug_breakpoint()
+        raise
+
+
 def build_process_record(
     economy,
     sector_title,
@@ -2446,6 +2611,7 @@ def build_process_record(
     output_import_targets=None,
     output_export_targets=None,
     efficiency_scale="ratio",
+    own_use_ratios=None,
 ):
     """Return a standardized record for a transformation process."""
     try:
@@ -2465,6 +2631,7 @@ def build_process_record(
             "input_total": input_total,
             "output_import_targets": dict(output_import_targets or {}),
             "output_export_targets": dict(output_export_targets or {}),
+            "own_use_ratios": dict(own_use_ratios or {}),
         }
     except Exception as exc:
         print(f"Failed to build process record for {process_name}: {exc}")
@@ -3009,7 +3176,8 @@ def build_transformation_log_rows(
                 )
             )
 
-            capacity_units = str(record.get("capacity_units") or "Petajoule/Year")
+            capacity_units = str(record.get("capacity_units") or "Gigajoules/Year")
+            capacity_scale = str(record.get("capacity_scale") or "")
             historical_production_by_year = record.get("historical_production_by_year")
             if isinstance(historical_production_by_year, dict) and historical_production_by_year:
                 historical_values = clip_value_by_year_range(
@@ -3023,7 +3191,7 @@ def build_transformation_log_rows(
                         "Historical Production",
                         scenario,
                         historical_values,
-                        capacity_units,
+                        "Petajoule",
                         "",
                         "",
                     )
@@ -3043,7 +3211,7 @@ def build_transformation_log_rows(
                         scenario,
                         exogenous_values,
                         capacity_units,
-                        "",
+                        capacity_scale,
                         "",
                     )
                 )
@@ -3062,7 +3230,7 @@ def build_transformation_log_rows(
                         scenario,
                         endogenous_values,
                         capacity_units,
-                        "",
+                        capacity_scale,
                         "",
                     )
                 )
@@ -3304,9 +3472,7 @@ def build_data_expression(row, year_cols):
         for year in year_cols:
             value = row.get(year)
             if value is None or pd.isna(value):
-                if is_current_accounts:
-                    continue
-                value = 0.0
+                continue
             parts.append(f"{int(year)},{float(value)}")
         if is_current_accounts and not parts:
             fallback_year = int(year_cols[0]) if year_cols else int(EXPORT_BASE_YEAR)
@@ -3461,54 +3627,247 @@ def build_aux_fuel_zero_rows(
     scenarios,
     base_year,
     final_year,
+    in_scope_sector_titles: set[str] | None = None,
 ):
     """
-    Return zero-value Auxiliary Fuel Use rows for any catalog branches not already set.
+    Return zero-value rows for any catalog fuel branches not already set.
 
-    Scans existing_rows for (scenario, Branch_Path) pairs already written with variable
-    'Auxiliary Fuel Use'.  For every 'Auxiliary Fuels' branch in full_branch_catalog_df
-    that is not covered for a given scenario, generates rows with value 0 spanning
-    base_year..final_year.  This ensures stale aux-fuel values left in LEAP from
-    previous runs are explicitly cleared.
+    Covers Auxiliary Fuels (Auxiliary Fuel Use) and Feedstock Fuels (Feedstock Fuel Share).
+
+    Two tiers of zero-fill:
+
+    1. Measure-specific process prefixes (derived from existing_rows): only branches under
+       processes where we actually wrote that specific measure this run.  Feedstock Fuel Share
+       zero-fill also applies the 100.0 fallback so LEAP doesn't reject an all-zero process.
+       Data written by other researchers is never touched here.
+
+    2. In-scope sector titles (from in_scope_sector_titles): sectors this workflow is
+       responsible for but where some or all economies had no ESTO data (so no process records
+       were produced).  All catalog branches under these sectors that weren't written in tier 1
+       are cleared to 0.  No 100.0 fallback here — we have no data to anchor a share.
+
+    NOTE (part-2 limitation): On re-runs after a LEAP model solve, auxiliary fuel use
+    values are reported by LEAP as transformation inputs in the energy balance, not as
+    separate own-use rows.  There is currently no reliable way to extract them back out
+    and feed them into the ESTO-based auxiliary ratio calculation for the next iteration.
+    This is a known gap — the auxiliary ratios used here always derive from ESTO loss data
+    regardless of what LEAP reports.
     """
     if full_branch_catalog_df is None or (
         hasattr(full_branch_catalog_df, "empty") and full_branch_catalog_df.empty
     ):
         return []
 
-    # Collect (scenario, branch_path) pairs already written for Auxiliary Fuel Use.
-    existing: set[tuple[str, str]] = set()
-    for row in existing_rows:
-        if str(row.get("Measure", "")).strip() == "Auxiliary Fuel Use":
-            existing.add((str(row.get("Scenario", "")), str(row.get("Branch_Path", ""))))
+    # Derive allowed process branch prefixes per measure from rows already written this run.
+    # A branch path containing "\Processes\" gives us the process prefix up to and
+    # including the process name, e.g. "Transformation\LNG\Processes\Liquefaction".
+    # We use measure-specific sets so that, e.g., writing Process Share for a sector
+    # does NOT entitle us to zero-fill that sector's Feedstock Fuel Share branches —
+    # only processes for which we actually wrote Feedstock Fuel Share rows are touched.
+    _processes_marker = "\\Processes\\"
 
-    aux_catalog = full_branch_catalog_df[
-        full_branch_catalog_df["fuel_group"].astype(str).str.strip() == "Auxiliary Fuels"
-    ]
-    if aux_catalog.empty:
-        return []
+    def _extract_process_prefix(bp: str) -> str | None:
+        idx = bp.find(_processes_marker)
+        if idx == -1:
+            return None
+        after_marker = idx + len(_processes_marker)
+        next_sep = bp.find("\\", after_marker)
+        return bp[:next_sep] if next_sep != -1 else bp
+
+    # measure_name → set of process prefixes we wrote rows for
+    allowed_prefixes_by_measure: dict[str, set[str]] = {}
+    for row in existing_rows:
+        measure = str(row.get("Measure", "")).strip()
+        bp = str(row.get("Branch_Path", "")).strip()
+        prefix = _extract_process_prefix(bp)
+        if prefix:
+            allowed_prefixes_by_measure.setdefault(measure, set()).add(prefix)
+
+    # Map fuel_group label → (LEAP variable name, units, scale, per)
+    fuel_group_spec = {
+        "Auxiliary Fuels": ("Auxiliary Fuel Use", DEFAULT_AUXILIARY_UNITS, "", DEFAULT_AUXILIARY_PER),
+        "Feedstock Fuels": ("Feedstock Fuel Share", DEFAULT_FEEDSTOCK_UNITS, "", ""),
+    }
+
+    # Collect (measure, scenario, branch_path) triples already written.
+    existing: set[tuple[str, str, str]] = set()
+    for row in existing_rows:
+        existing.add((
+            str(row.get("Measure", "")).strip(),
+            str(row.get("Scenario", "")),
+            str(row.get("Branch_Path", "")),
+        ))
 
     zero_rows = []
     years = list(range(int(base_year), int(final_year) + 1))
-    for scenario in scenarios:
-        for _, catalog_row in aux_catalog.iterrows():
-            branch_path = str(catalog_row.get("branch_path", "")).strip()
-            if not branch_path:
+    for group, (measure, units, scale, per) in fuel_group_spec.items():
+        # Only operate on processes where we actually wrote this specific measure.
+        # This prevents zeroing feedstock branches for sectors where we only wrote
+        # Process Share / Efficiency, and avoids touching any data set by others.
+        allowed_prefixes = allowed_prefixes_by_measure.get(measure, set())
+        if not allowed_prefixes:
+            continue
+
+        group_catalog = full_branch_catalog_df[
+            full_branch_catalog_df["fuel_group"].astype(str).str.strip() == group
+        ]
+        if group_catalog.empty:
+            continue
+
+        is_feedstock = measure == "Feedstock Fuel Share"
+
+        # Pre-compute which process prefixes have at least one written row for this measure,
+        # keyed by (scenario). This catches branches written but absent from the catalog
+        # (e.g. Lignite for BKB when only Other bituminous coal is in the catalog), so
+        # those processes are not incorrectly treated as having no written rows.
+        written_prefixes_by_scenario: dict[str, set[str]] = {}
+        for ex_m, ex_sc, ex_bp in existing:
+            if ex_m != measure:
                 continue
-            if (scenario, branch_path) not in existing:
-                for year in years:
-                    zero_rows.append(
-                        {
-                            "Branch_Path": branch_path,
-                            "Scenario": scenario,
-                            "Measure": "Auxiliary Fuel Use",
-                            "Units": DEFAULT_AUXILIARY_UNITS,
-                            "Scale": "",
-                            "Per...": DEFAULT_AUXILIARY_PER,
-                            "Date": year,
-                            "Value": 0.0,
-                        }
+            ex_prefix = _extract_process_prefix(ex_bp)
+            if ex_prefix:
+                written_prefixes_by_scenario.setdefault(ex_sc, set()).add(ex_prefix)
+
+        for scenario in scenarios:
+            # process_prefix → list of (branch_path, is_already_set) — for feedstock grouping
+            process_branch_map: dict[str, list[tuple[str, bool]]] = {}
+
+            for _, catalog_row in group_catalog.iterrows():
+                branch_path = str(catalog_row.get("branch_path", "")).strip()
+                if not branch_path:
+                    continue
+                matched_prefix = next(
+                    (p for p in allowed_prefixes if branch_path.startswith(p + "\\")),
+                    None,
+                )
+                if matched_prefix is None:
+                    continue
+                already_set = (measure, scenario, branch_path) in existing
+                if is_feedstock:
+                    process_branch_map.setdefault(matched_prefix, []).append(
+                        (branch_path, already_set)
                     )
+                elif not already_set:
+                    for year in years:
+                        zero_rows.append(
+                            {
+                                "Branch_Path": branch_path,
+                                "Scenario": scenario,
+                                "Measure": measure,
+                                "Units": units,
+                                "Scale": scale,
+                                "Per...": per,
+                                "Date": year,
+                                "Value": 0.0,
+                            }
+                        )
+
+            if is_feedstock:
+                for prefix, branches in process_branch_map.items():
+                    # any_already_set is True when at least one catalog branch was written
+                    # OR when any row for this process prefix was written (even branches
+                    # absent from the catalog — e.g. Lignite for BKB when only Other
+                    # bituminous coal is catalogued). Without the second check, the first
+                    # catalog branch incorrectly receives the 100.0 anchor.
+                    any_already_set = (
+                        any(already_set for _, already_set in branches)
+                        or prefix in written_prefixes_by_scenario.get(scenario, set())
+                    )
+                    first_unset = True
+                    for branch_path, already_set in branches:
+                        if already_set:
+                            continue
+                        if not any_already_set and first_unset:
+                            value = 100.0
+                            first_unset = False
+                        else:
+                            value = 0.0
+                        for year in years:
+                            zero_rows.append(
+                                {
+                                    "Branch_Path": branch_path,
+                                    "Scenario": scenario,
+                                    "Measure": measure,
+                                    "Units": units,
+                                    "Scale": scale,
+                                    "Per...": per,
+                                    "Date": year,
+                                    "Value": value,
+                                }
+                            )
+
+    # Tier-2: clear branches for in-scope sectors where we had no data this run.
+    # These are sectors this workflow owns but produced no process records for.
+    # All catalog branches under them that weren't already handled in tier 1 are zeroed,
+    # except Feedstock Fuel Share which gets the same 100.0 anchor as tier 1 so LEAP
+    # doesn't reject an all-zero process.
+    if in_scope_sector_titles:
+        for group, (measure, units, scale, per) in fuel_group_spec.items():
+            group_catalog = full_branch_catalog_df[
+                full_branch_catalog_df["fuel_group"].astype(str).str.strip() == group
+            ]
+            if group_catalog.empty:
+                continue
+            tier1_prefixes = allowed_prefixes_by_measure.get(measure, set())
+            is_feedstock = measure == "Feedstock Fuel Share"
+            for scenario in scenarios:
+                # For feedstock, group by process prefix so we can anchor the first branch
+                # at 100.0.  For non-feedstock, collect directly for zeroing.
+                tier2_process_map: dict[str, list[str]] = {}
+                for _, catalog_row in group_catalog.iterrows():
+                    branch_path = str(catalog_row.get("branch_path", "")).strip()
+                    if not branch_path:
+                        continue
+                    # Skip if already handled by tier 1 (under a process we wrote).
+                    if any(branch_path.startswith(p + "\\") for p in tier1_prefixes):
+                        continue
+                    # Skip if already explicitly set this run.
+                    if (measure, scenario, branch_path) in existing:
+                        continue
+                    # Check if this branch is under an in-scope sector.
+                    under_in_scope = any(
+                        branch_path.startswith("Transformation\\" + title + "\\")
+                        for title in in_scope_sector_titles
+                    )
+                    if not under_in_scope:
+                        continue
+                    if is_feedstock:
+                        prefix = _extract_process_prefix(branch_path)
+                        if prefix:
+                            tier2_process_map.setdefault(prefix, []).append(branch_path)
+                            continue
+                    for year in years:
+                        zero_rows.append(
+                            {
+                                "Branch_Path": branch_path,
+                                "Scenario": scenario,
+                                "Measure": measure,
+                                "Units": units,
+                                "Scale": scale,
+                                "Per...": per,
+                                "Date": year,
+                                "Value": 0.0,
+                            }
+                        )
+
+                if is_feedstock:
+                    for prefix, branches in tier2_process_map.items():
+                        for i, branch_path in enumerate(branches):
+                            value = 100.0 if i == 0 else 0.0
+                            for year in years:
+                                zero_rows.append(
+                                    {
+                                        "Branch_Path": branch_path,
+                                        "Scenario": scenario,
+                                        "Measure": measure,
+                                        "Units": units,
+                                        "Scale": scale,
+                                        "Per...": per,
+                                        "Date": year,
+                                        "Value": value,
+                                    }
+                                )
+
     return zero_rows
 
 
@@ -3523,6 +3882,7 @@ def save_transformation_export(
     model_name,
     scenarios,
     full_branch_catalog_df=None,
+    in_scope_sector_titles: set[str] | None = None,
 ):
     """Save a LEAP import file built from process records across scenarios."""
     try:
@@ -3561,6 +3921,7 @@ def save_transformation_export(
                 scenarios,
                 combined_base_year,
                 combined_final_year,
+                in_scope_sector_titles=in_scope_sector_titles,
             )
             if zero_rows:
                 combined_rows = zero_rows + combined_rows
@@ -3981,7 +4342,7 @@ def analyze_lng_liquefaction_regas(
             if output_series.sum() == 0 and not input_series_by_label:
                 return
             sector_title = (
-                lng_config.get("regasification_title", "NG Regasification")
+                lng_config.get("regasification_title", "LNG regasification")
                 if str(process_name).strip().lower() == "regasification"
                 else lng_config.get("liquefaction_title", lng_config.get("title", "NG Liquefaction"))
             )
@@ -4155,6 +4516,9 @@ def analyze_lng_liquefaction_regas(
                         input_total=float(total_input_series.sum()),
                         output_import_targets=output_import_targets_total,
                         output_export_targets=output_export_targets_total,
+                        own_use_ratios=compute_own_use_ratios_for_record(
+                            loss_values_by_year, input_series_by_label, export_years
+                        ),
                     ),
                 )
                 return
@@ -4340,12 +4704,14 @@ def analyze_gas_processing(
             if output_series.sum() == 0:
                 print(f"{process_name}: no output series available.")
                 return
-            input_series_map = build_input_series_map(
+            input_series_map, zero_sum_labels = build_input_series_map(
                 timeseries,
                 list(negative.index),
                 export_base_year,
                 export_final_year,
             )
+            if zero_sum_labels:
+                log_dropped_input_fuels(economy, str(process_name), zero_sum_labels, export_base_year, export_final_year)
             if not input_series_map:
                 print(f"{process_name}: no input series after normalization.")
                 return
@@ -4507,6 +4873,9 @@ def analyze_gas_processing(
                     input_total=float(total_input_series.sum()),
                     output_import_targets=output_import_targets_total,
                     output_export_targets=output_export_targets_total,
+                    own_use_ratios=compute_own_use_ratios_for_record(
+                        loss_values_by_year, input_series_map, export_years
+                    ),
                 )
                 append_process_record(process_records, record)
             else:
@@ -4807,14 +5176,16 @@ def summarize_transformation_flows(
                 export_final_year,
             )
             output_series_by_label = {primary_output: output_series}
-            input_series_map = build_input_series_map(
+            input_series_map, zero_sum_labels = build_input_series_map(
                 timeseries,
                 list(negative.index),
                 export_base_year,
                 export_final_year,
             )
+            if zero_sum_labels:
+                log_dropped_input_fuels(economy, flow_code, zero_sum_labels, export_base_year, export_final_year)
             if not input_series_map:
-                print(f"{flow_code}: no input series available after normalization")
+                print(f"[WARN] {flow_code}: no input series available after normalization")
                 continue
             total_input_series = build_total_input_series(input_series_map, export_years)
             total_loss_by_year = sum_loss_values_by_year(loss_values_by_year, export_years)
@@ -4998,6 +5369,9 @@ def summarize_transformation_flows(
                     input_total=float(total_input_series.sum()),
                     output_import_targets=output_import_targets_total,
                     output_export_targets=output_export_targets_total,
+                    own_use_ratios=compute_own_use_ratios_for_record(
+                        loss_values_by_year, input_series_map, export_years
+                    ),
                 )
                 append_process_record(process_records, record)
             else:
@@ -5322,12 +5696,14 @@ def analyze_hydrogen_transformation(
 
             process_inputs = {}
             negative_labels = list(totals[totals < 0].index)
-            input_series_map_all = build_input_series_map(
+            input_series_map_all, zero_sum_labels = build_input_series_map(
                 timeseries,
                 negative_labels,
                 export_base_year,
                 export_final_year,
             )
+            if zero_sum_labels:
+                log_dropped_input_fuels(economy, "hydrogen_transformation", zero_sum_labels, export_base_year, export_final_year)
             for cfg in group_configs:
                 input_series_by_label = dict(input_series_map_all)
                 input_total_series = build_total_input_series(
@@ -5505,7 +5881,7 @@ def analyze_hydrogen_transformation(
                     auxiliary_fuels, auxiliary_ratios = build_auxiliary_from_losses_by_year(
                         loss_values_by_year,
                         total_output_series,
-                        feedstock_labels=list(input_series_by_label.keys()),
+                        feedstock_labels=list(input_series_by_label.keys()) if LOSS_AUX_EXCLUDE_FEEDSTOCKS else None,
                     )
                     efficiency_series = compute_efficiency_by_year(
                         total_output_series,
@@ -5573,6 +5949,9 @@ def analyze_hydrogen_transformation(
                             input_total=input_total_series.sum(),
                             output_import_targets=output_import_targets_total,
                             output_export_targets=output_export_targets_total,
+                            own_use_ratios=compute_own_use_ratios_for_record(
+                                loss_values_by_year, input_series_by_label, export_years
+                            ),
                         ),
                     )
                 else:
@@ -5672,6 +6051,11 @@ def run_analysis_for_sector(run_flag, sector_key, analysis_callback, process_rec
             return
         sector_config = dict(resolve_sector_config(sector_key))
         sector_config["sector_key"] = sector_key
+        # Register this sector so zero-fill can clear its catalog branches even for
+        # economies that had no ESTO data (no process record produced).
+        sector_title = map_code_label(sector_config.get("title", ""), code_to_name_mapping)
+        if sector_title:
+            _analyzed_sector_titles.add(sector_title)
         data, year_cols = resolve_dataset(DATASET_MAP, sector_config["dataset_key"])
         loss_data, loss_year_cols = data, year_cols
         for economy in get_economy_list(data, ECONOMIES_TO_ANALYZE):
@@ -5833,6 +6217,7 @@ RUN_CHARCOAL_PROCESSING_ANALYSIS = workflow_cfg.TRANSFORMATION_RUN_CHARCOAL_PROC
 RUN_NONSPECIFIED_TRANSFORMATION_ANALYSIS = (
     workflow_cfg.TRANSFORMATION_RUN_NONSPECIFIED_TRANSFORMATION_ANALYSIS
 )
+RUN_OIL_REFINERY_ANALYSIS = workflow_cfg.TRANSFORMATION_RUN_OIL_REFINERY_ANALYSIS
 RUN_HYDROGEN_TRANSFORMATION_ANALYSIS = (
     workflow_cfg.TRANSFORMATION_RUN_HYDROGEN_TRANSFORMATION_ANALYSIS
 )
@@ -5994,9 +6379,9 @@ ESTO_IMPORT_EXPORT_YEAR_COLS = esto_year_cols
 #%%
 
 #%%
-# Transformation\NG Liquefaction\Processes\Regasification\Auxiliary Fuels\Electricity Auxiliary Fuel Use Current Accounts United States of America Petajoule Petajoule 0.00428 Transformation NG Liquefaction Processes Regasification Auxiliary Fuels Electricity
-# Transformation\NG Liquefaction\Processes\Regasification\Auxiliary Fuels\Electricity Auxiliary Fuel Use Reference United States of America Petajoule Petajoule 0.00428 Transformation NG Liquefaction Processes Regasification Auxiliary Fuels Electricity
-# Transformation\NG Liquefaction\Processes\Regasification\Auxiliary Fuels\Electricity Auxiliary Fuel Use Target United States of America Petajoule Petajoule 0.00428 Transformation NG Liquefaction Processes Regasification Auxiliary Fuels Electricity
+# Transformation\NG Liquefaction\Processes\Regasification\Auxiliary Fuels\Electricity Auxiliary Fuel Use Current Accounts United States Petajoule Petajoule 0.00428 Transformation NG Liquefaction Processes Regasification Auxiliary Fuels Electricity
+# Transformation\NG Liquefaction\Processes\Regasification\Auxiliary Fuels\Electricity Auxiliary Fuel Use Reference United States Petajoule Petajoule 0.00428 Transformation NG Liquefaction Processes Regasification Auxiliary Fuels Electricity
+# Transformation\NG Liquefaction\Processes\Regasification\Auxiliary Fuels\Electricity Auxiliary Fuel Use Target United States Petajoule Petajoule 0.00428 Transformation NG Liquefaction Processes Regasification Auxiliary Fuels Electricity
 #%%
 
 #%%

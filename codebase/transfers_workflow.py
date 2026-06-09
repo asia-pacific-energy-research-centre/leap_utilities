@@ -173,6 +173,8 @@ TRANSFER_PROCESS_CONFIG: dict[str, dict[str, list[dict]]] = {
                 "outputs": [
                     "07.01 Motor gasoline",
                     "07.02 Aviation gasoline",
+                    "07.03 Naphtha",
+                    "07.06 Kerosene",
                     "07.07 Gas/diesel oil",
                     "06.03 Refinery feedstocks",
                     "07.10 Refinery gas (not liquefied)",
@@ -241,6 +243,8 @@ TRANSFER_PROCESS_CONFIG: dict[str, dict[str, list[dict]]] = {
                 ],
                 "outputs": [
                     "07.01 Motor gasoline",
+                    "07.03 Naphtha",
+                    "07.06 Kerosene",
                     "07.07 Gas/diesel oil",
                     "06.03 Refinery feedstocks",
                     "07.10 Refinery gas (not liquefied)",
@@ -344,6 +348,8 @@ TRANSFER_PROCESS_CONFIG: dict[str, dict[str, list[dict]]] = {
                 ],
                 "outputs": [
                     "06.03 Refinery feedstocks",
+                    "07.03 Naphtha",
+                    "07.06 Kerosene"
                 ]
             }
         ]
@@ -371,6 +377,8 @@ TRANSFER_PROCESS_CONFIG: dict[str, dict[str, list[dict]]] = {
                 ],
                 "outputs": [
                     "06.03 Refinery feedstocks",
+                    "07.03 Naphtha",
+                    "07.06 Kerosene"
                 ]
             }
         ]
@@ -427,9 +435,9 @@ TRANSFER_PROCESS_CONFIG: dict[str, dict[str, list[dict]]] = {
                     "07.06 Kerosene",
                     "07.07 Gas/diesel oil",
                     "07.08 Fuel oil",
-                    "06.03 Refinery feedstocks"
+                    "06.03 Refinery feedstocks",
                     "07.12 White spirit SBP",
-                    "07.13 Lubricants"
+                    "07.13 Lubricants",
                     "07.09 LPG"
                 ],
                 "outputs": [
@@ -462,7 +470,9 @@ TRANSFER_PROCESS_CONFIG: dict[str, dict[str, list[dict]]] = {
                 ],
                 "outputs": [
                     "07.01 Motor gasoline",
+                    "07.03 Naphtha",
                     "07.05 Kerosene type jet fuel",
+                    "07.06 Kerosene",
                     "07.07 Gas/diesel oil",
                     "06.03 Refinery feedstocks",
                     "07.14 Bitumen",
@@ -1701,6 +1711,26 @@ DEFAULT_TRANSFER_UNALLOCATED_POLICY = {
     "merge_all_when_triggered": True,
 }
 LEAP_API_AVAILABLE = leap_api.is_available()
+
+
+def get_transfer_sector_titles() -> set[str]:
+    """Return all possible LEAP sector titles that the transfers workflow can produce.
+
+    Used by zero-fill logic to identify catalog branches that belong to transfers
+    even when a specific economy had no transfer data in the current run.
+    """
+    titles: set[str] = set()
+    # Generic fallback title (SPLIT_TRANSFER_SECTORS = False)
+    titles.add("Transfers")
+    # All named category/process titles (SPLIT_TRANSFER_SECTORS = True)
+    titles.update(TRANSFER_PROCESS_NAMES.values())
+    # Any category names declared in the templates that fall outside TRANSFER_PROCESS_NAMES
+    for template in TRANSFER_CATEGORY_TEMPLATES:
+        cat = template.get("category")
+        if cat:
+            titles.add(str(cat))
+    return titles
+
 
 #%%
 # Simple notebook-focused configuration block.

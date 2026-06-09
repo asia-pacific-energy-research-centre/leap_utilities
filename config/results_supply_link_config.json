@@ -1,0 +1,353 @@
+{
+    "_instructions": {
+        "description": "Configuration for the CAPACITY_UNMET iterative balanced pass in results_supply_link_workflow.py. Edit this file to adjust which transformation modules can grow, how much production is allowed, and which module gets priority when multiple modules supply the same fuel.",
+        "sentinel_values": {
+            "_note": "Use these string values instead of raw numbers to make intent clear.",
+            "module_cap_sentinels": {
+                "UNLIMITED": "No cap — module may grow freely. Same as omitting the entry entirely.",
+                "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT": "Cap = ESTO base-year output. Module cannot grow beyond its current level.",
+                "DECREASE_TO_ZERO": "Cap = 0. Block all capacity additions for this module.",
+                "INCREASE_BY_PCT(x)": "Cap = base-year output × (1 + x/100). Example: \"INCREASE_BY_PCT(20)\" allows 20% growth.",
+                "DECREASE_BY_PCT(x)": "Cap = base-year output × (1 - x/100). Example: \"DECREASE_BY_PCT(50)\" halves the cap.",
+                "SET_CAP_TO(value)": "Explicit numeric cap in PJ. Use sparingly; prefer the relative sentinels."
+            },
+            "production_cap_sentinels": {
+                "UNLIMITED_PRODUCTION": "No cap — production may grow freely. Same as omitting the entry.",
+                "KEEP_PRODUCTION_AT_BASE_YEAR": "Cap = base-year constrained production. No new production headroom.",
+                "DECREASE_PRODUCTION_TO_ZERO": "Zero out production headroom entirely.",
+                "INCREASE_PRODUCTION_BY_PCT(x)": "Base-year constrained production × (1 + x/100).",
+                "DECREASE_PRODUCTION_BY_PCT(x)": "Base-year constrained production × (1 - x/100).",
+                "SET_PRODUCTION_CAP_TO(value)": "Explicit numeric cap in PJ (same units as the balance table)."
+            }
+        },
+        "priority_by_product": {
+            "_note": "CAPACITY_UNMET_PRIORITY_BY_PRODUCT — required for any ESTO product produced by 2+ transformation modules. First module in the list gets headroom allocated first. Products with only one module do not need an entry. If a multi-module product is missing the workflow raises at startup and prints exactly what to add."
+        },
+        "module_capacity_upper_limits": {
+            "_note": "CAPACITY_UNMET_MODULE_CAPACITY_UPPER_LIMITS — shape: economy → scenario → module_name → sentinel or raw number. Module names must match the 'module' column of process_catalog (case-insensitive). Comment out or delete a line to remove the cap and revert to UNLIMITED."
+        },
+        "production_upper_limits": {
+            "_note": "CAPACITY_UNMET_PRODUCTION_UPPER_LIMITS — shape: economy → scenario → esto_product → sentinel or raw number. Keys are matched with the leading ESTO numeric code stripped, so '08.01 Natural gas' and 'Natural gas' both match. Comment out or delete a line to remove the cap."
+        }
+    },
+
+    "CAPACITY_UNMET_PRIORITY_BY_PRODUCT": {
+        "_note": "Keys are ESTO product codes. Values are ordered module lists — first module gets priority headroom.",
+
+        "17 Electricity": [
+            "Electricity generation",
+            "Main activity producer CHP plants",
+            "Autoproducer CHP plants",
+            "Chemical heat for electricity production",
+            "Hydrogen transformation"
+        ],
+        "18 Heat": [
+            "Main activity producer CHP plants",
+            "Autoproducer CHP plants",
+            "Heat plants",
+            "Electric boilers"
+        ],
+
+        "08.01 Natural gas": [
+            "Natural gas blending plants",
+            "LNG regasification"
+        ],
+        "08.03 Gas works gas": [
+            "Gas works plants"
+        ],
+
+        "16.04 Biogas": [
+            "Biogas production",
+            "Biogas processing"
+        ],
+        "16 Hydrogen": [
+            "Hydrogen transformation"
+        ],
+        "16 Efuel": [
+            "Hydrogen transformation"
+        ],
+
+        "07.01 Motor gasoline": [
+            "Oil Refining",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.02 Aviation gasoline": [
+            "Oil Refining",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.03 Naphtha": [
+            "Oil Refining",
+            "NG Liquefaction",
+            "LNG regasification",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.05 Kerosene type jet fuel": [
+            "Oil Refining",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.06 Kerosene": [
+            "Oil Refining",
+            "Gas to liquids plants",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.07 Gas/diesel oil": [
+            "Oil Refining",
+            "Gas to liquids plants",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.08 Fuel oil": [
+            "Oil Refining",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.09 LPG": [
+            "Oil Refining",
+            "NG Liquefaction",
+            "LNG regasification",
+            "Gas to liquids plants",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.10 Refinery gas (not liquefied)": [
+            "Oil Refining",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.11 Ethane": [
+            "Oil Refining",
+            "Non specified transformation",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.13 Lubricants": [
+            "Oil Refining",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.14 Bitumen": [
+            "Oil Refining",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.16 Petroleum coke": [
+            "Oil Refining",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.17 Other products": [
+            "Oil Refining",
+            "Gas to liquids plants",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.19 Additives and oxygenates": [
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "07.99 PetProd nonspecified": [
+            "Oil Refining",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+
+        "06.01 Crude oil": [
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "06.02 Natural gas liquids": [
+            "Upstream liquids transfers",
+            "Refinery and blending transfers",
+            "Transfers unallocated"
+        ],
+        "06.03 Refinery feedstocks": [
+            "Petrochemical industry",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+        "06.05 Other hydrocarbons": [
+            "Non specified transformation",
+            "Refinery and blending transfers",
+            "Upstream liquids transfers",
+            "Transfers unallocated"
+        ],
+
+        "02.01 Coke oven coke": [
+            "Coke ovens",
+            "Blast furnaces"
+        ],
+        "02.03 Coke oven gas": [
+            "Coke ovens"
+        ],
+        "02.04 Blast furnace gas": [
+            "Blast furnaces"
+        ],
+        "02.05 Coal tar": [
+            "Coke ovens",
+            "Liquefaction coal to oil"
+        ]
+    },
+
+    "CAPACITY_UNMET_MODULE_CAPACITY_UPPER_LIMITS": {
+        "20_USA": {
+            "reference": {
+                "_note": "Modules locked at base-year output (legacy/fixed tech). Comment out a line to allow growth.",
+                "Blast furnaces":                                 "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "BKB and PB plants":                              "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Charcoal processing":                            "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Coke ovens":                                     "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Gas works plants":                               "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Liquefaction coal to oil":                       "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Natural gas blending plants":                    "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Non-specified transformation":                   "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Patent fuel plants":                             "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Petrochemical industry":                         "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Refinery and blending transfers":                "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Transfers unallocated":                          "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Upstream liquids transfers":                     "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+
+                "_note2": "Modules allowed to grow freely. Comment out a line to restrict, or change to a different sentinel.",
+                "CHP plants":                                     "UNLIMITED",
+                "Chemical heat for electricity production":       "UNLIMITED",
+                "Electric boilers":                               "UNLIMITED",
+                "Electricity Generation":                         "UNLIMITED",
+                "Gas to liquids plants":                          "UNLIMITED",
+                "Heat plants":                                    "UNLIMITED",
+                "Hydrogen transformation":                        "UNLIMITED",
+                "LNG regasification":                             "UNLIMITED",
+                "NG Liquefaction":                                "UNLIMITED",
+                "Non specified transformation":                   "UNLIMITED",
+                "Oil Refining":                                   "UNLIMITED",
+                "Transmission and Distribution":                  "UNLIMITED"
+            },
+            "target": {
+                "_note": "Modules locked at base-year output (legacy/fixed tech).",
+                "Blast furnaces":                                 "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "BKB and PB plants":                              "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Charcoal processing":                            "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Coke ovens":                                     "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Gas works plants":                               "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Liquefaction coal to oil":                       "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Natural gas blending plants":                    "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Non-specified transformation":                   "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Patent fuel plants":                             "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Petrochemical industry":                         "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Refinery and blending transfers":                "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Transfers unallocated":                          "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+                "Upstream liquids transfers":                     "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT",
+
+                "_note2": "Modules allowed to grow freely.",
+                "CHP plants":                                     "UNLIMITED",
+                "Chemical heat for electricity production":       "UNLIMITED",
+                "Electric boilers":                               "UNLIMITED",
+                "Electricity Generation":                         "UNLIMITED",
+                "Gas to liquids plants":                          "UNLIMITED",
+                "Heat plants":                                    "UNLIMITED",
+                "Hydrogen transformation":                        "UNLIMITED",
+                "LNG regasification":                             "UNLIMITED",
+                "NG Liquefaction":                                "UNLIMITED",
+                "Non specified transformation":                   "UNLIMITED",
+                "Oil Refining":                                   "UNLIMITED",
+                "Transmission and Distribution":                  "UNLIMITED"
+            }
+        }
+    },
+
+    "CAPACITY_UNMET_PRODUCTION_UPPER_LIMITS": {
+        "20_USA": {
+            "reference": {
+                "_note": "Keys are ESTO product codes (leading numeric prefix stripped for matching). Change UNLIMITED_PRODUCTION to KEEP_PRODUCTION_AT_BASE_YEAR to freeze a fuel's production.",
+                "08.01 Natural gas":              "UNLIMITED_PRODUCTION",
+                "06.01 Crude oil":                "UNLIMITED_PRODUCTION",
+                "06.02 Natural gas liquids":      "UNLIMITED_PRODUCTION",
+                "01.01 Hard coal":                "UNLIMITED_PRODUCTION",
+                "01.01 Coking coal":              "UNLIMITED_PRODUCTION",
+                "01.02 Other bituminous coal":    "UNLIMITED_PRODUCTION",
+                "01.03 Sub-bituminous coal":      "UNLIMITED_PRODUCTION",
+                "01.04 Anthracite":               "UNLIMITED_PRODUCTION",
+                "01.05 Lignite":                  "UNLIMITED_PRODUCTION",
+                "06.03 Refinery feedstocks":      "UNLIMITED_PRODUCTION",
+                "06.05 Other hydrocarbons":       "UNLIMITED_PRODUCTION",
+                "12 Nuclear":                     "UNLIMITED_PRODUCTION",
+                "13 Hydro":                       "UNLIMITED_PRODUCTION",
+                "15.01 Wind":                     "UNLIMITED_PRODUCTION",
+                "15.02 Solar":                    "UNLIMITED_PRODUCTION",
+                "15.05 Geothermal":               "UNLIMITED_PRODUCTION",
+                "15.03 Charcoal":                 "UNLIMITED_PRODUCTION",
+                "15.04 Bagasse":                  "UNLIMITED_PRODUCTION",
+                "15.05 Fuelwood and woodwaste":   "UNLIMITED_PRODUCTION",
+                "15.06 Other biomass":            "UNLIMITED_PRODUCTION",
+                "15.07 Municipal solid waste renewable": "UNLIMITED_PRODUCTION",
+                "15.08 Black liquor":             "UNLIMITED_PRODUCTION",
+                "16.04 Biogas":                   "UNLIMITED_PRODUCTION",
+                "16.05 Biogasoline":              "UNLIMITED_PRODUCTION",
+                "16.06 Biodiesel":                "UNLIMITED_PRODUCTION",
+                "16.07 Other liquid biofuels":    "UNLIMITED_PRODUCTION",
+                "16.08 Bio jet kerosene":         "UNLIMITED_PRODUCTION",
+                "16 Hydrogen":                    "UNLIMITED_PRODUCTION",
+                "16 Efuel":                       "UNLIMITED_PRODUCTION",
+                "16 Ammonia":                     "UNLIMITED_PRODUCTION",
+                "04 Peat":                        "UNLIMITED_PRODUCTION",
+                "04 Peat products":               "UNLIMITED_PRODUCTION"
+            },
+            "target": {
+                "_note": "Same structure as reference. Adjust independently if target scenario production policy differs.",
+                "08.01 Natural gas":              "UNLIMITED_PRODUCTION",
+                "06.01 Crude oil":                "UNLIMITED_PRODUCTION",
+                "06.02 Natural gas liquids":      "UNLIMITED_PRODUCTION",
+                "01.01 Hard coal":                "UNLIMITED_PRODUCTION",
+                "01.01 Coking coal":              "UNLIMITED_PRODUCTION",
+                "01.02 Other bituminous coal":    "UNLIMITED_PRODUCTION",
+                "01.03 Sub-bituminous coal":      "UNLIMITED_PRODUCTION",
+                "01.04 Anthracite":               "UNLIMITED_PRODUCTION",
+                "01.05 Lignite":                  "UNLIMITED_PRODUCTION",
+                "06.03 Refinery feedstocks":      "UNLIMITED_PRODUCTION",
+                "06.05 Other hydrocarbons":       "UNLIMITED_PRODUCTION",
+                "12 Nuclear":                     "UNLIMITED_PRODUCTION",
+                "13 Hydro":                       "UNLIMITED_PRODUCTION",
+                "15.01 Wind":                     "UNLIMITED_PRODUCTION",
+                "15.02 Solar":                    "UNLIMITED_PRODUCTION",
+                "15.05 Geothermal":               "UNLIMITED_PRODUCTION",
+                "15.03 Charcoal":                 "UNLIMITED_PRODUCTION",
+                "15.04 Bagasse":                  "UNLIMITED_PRODUCTION",
+                "15.05 Fuelwood and woodwaste":   "UNLIMITED_PRODUCTION",
+                "15.06 Other biomass":            "UNLIMITED_PRODUCTION",
+                "15.07 Municipal solid waste renewable": "UNLIMITED_PRODUCTION",
+                "15.08 Black liquor":             "UNLIMITED_PRODUCTION",
+                "16.04 Biogas":                   "UNLIMITED_PRODUCTION",
+                "16.05 Biogasoline":              "UNLIMITED_PRODUCTION",
+                "16.06 Biodiesel":                "UNLIMITED_PRODUCTION",
+                "16.07 Other liquid biofuels":    "UNLIMITED_PRODUCTION",
+                "16.08 Bio jet kerosene":         "UNLIMITED_PRODUCTION",
+                "16 Hydrogen":                    "UNLIMITED_PRODUCTION",
+                "16 Efuel":                       "UNLIMITED_PRODUCTION",
+                "16 Ammonia":                     "UNLIMITED_PRODUCTION",
+                "04 Peat":                        "UNLIMITED_PRODUCTION",
+                "04 Peat products":               "UNLIMITED_PRODUCTION"
+            }
+        }
+    }
+}

@@ -654,7 +654,7 @@ def build_method_summary(method_tables: dict[str, pd.DataFrame]) -> pd.DataFrame
 # Runtime configuration (edit these before running cells)
 
 PROBE_SCENARIO = "Reference"
-PROBE_REGION = "United States of America"
+PROBE_REGION = "United States"
 PROBE_VARIABLE = "Unmet Requirements"
 PROBE_ROOTS = ("Resources\\Primary", "Resources\\Secondary")
 PROBE_YEARS = [2022, 2023, 2024]#, 2030, 2040, 2050, 2060]

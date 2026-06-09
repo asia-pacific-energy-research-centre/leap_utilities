@@ -230,7 +230,7 @@ def _normalize_export_scenarios(
 
 def _default_export_region() -> str:
     """Return configured export region with a safe fallback."""
-    return str(globals().get("EXPORT_REGION", "United States of America"))
+    return str(globals().get("EXPORT_REGION", "United States"))
 
 
 def _default_export_filename_template() -> str:

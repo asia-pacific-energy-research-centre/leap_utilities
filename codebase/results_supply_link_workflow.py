@@ -34,10 +34,9 @@ How to think about the whole workflow
    Import the workbook into LEAP, recalculate, refresh/export LEAP balance
    results, and rerun so the next pass can respond to the remaining gaps.
 """
-
 from __future__ import annotations
 
-import importlib.util
+import dataclasses
 from functools import lru_cache
 from datetime import datetime, timezone
 import json
@@ -50,9 +49,100 @@ import time
 from pathlib import Path
 from typing import Iterable
 
+
+# ---------------------------------------------------------------------------
+# Module capacity cap sentinels
+# Use these in CAPACITY_UNMET_MODULE_CAPACITY_UPPER_LIMITS instead of raw
+# numbers to make intent clear and reduce the risk of stale hardcoded values.
+# ---------------------------------------------------------------------------
+
+@dataclasses.dataclass(frozen=True)
+class _ModuleCapRule:
+    kind: str       # "zero" | "base_year" | "increase_pct" | "decrease_pct" | "explicit"
+    param: float = 0.0
+
+# Cap = 0: module must not grow beyond where it is (headroom always 0).
+DECREASE_TO_ZERO = _ModuleCapRule("zero")
+
+# Cap = base-year output: no additional capacity beyond ESTO baseline.
+KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT = _ModuleCapRule("base_year")
+
+def INCREASE_BY_PCT(pct: float) -> _ModuleCapRule:
+    """Allow up to `pct` percent growth above the base-year output level."""
+    return _ModuleCapRule("increase_pct", float(pct))
+
+def DECREASE_BY_PCT(pct: float) -> _ModuleCapRule:
+    """Reduce the effective cap to `(1 - pct/100)` of the base-year output."""
+    return _ModuleCapRule("decrease_pct", float(pct))
+
+def SET_CAP_TO(value: float) -> _ModuleCapRule:
+    """Explicit numeric cap — use sparingly; prefer the other sentinels."""
+    return _ModuleCapRule("explicit", float(value))
+
+
+# ---------------------------------------------------------------------------
+# Production cap sentinels
+# Use these in CAPACITY_UNMET_PRODUCTION_UPPER_LIMITS instead of raw numbers.
+# These reuse _ModuleCapRule internally but have production-appropriate names
+# so that config entries are self-documenting about which lever they govern.
+# ---------------------------------------------------------------------------
+
+# Production must not grow beyond the base-year constrained production level.
+KEEP_PRODUCTION_AT_BASE_YEAR = _ModuleCapRule("base_year")
+
+# Zero out production headroom — no new production may be allocated.
+DECREASE_PRODUCTION_TO_ZERO = _ModuleCapRule("zero")
+
+def INCREASE_PRODUCTION_BY_PCT(pct: float) -> _ModuleCapRule:
+    """Allow production to grow up to `pct` percent above the base-year constrained level."""
+    return _ModuleCapRule("increase_pct", float(pct))
+
+def DECREASE_PRODUCTION_BY_PCT(pct: float) -> _ModuleCapRule:
+    """Cap production at `(1 - pct/100)` of the base-year constrained production level."""
+    return _ModuleCapRule("decrease_pct", float(pct))
+
+def SET_PRODUCTION_CAP_TO(value: float) -> _ModuleCapRule:
+    """Explicit production cap in the same energy units as the balance table."""
+    return _ModuleCapRule("explicit", float(value))
+
+
+# ---------------------------------------------------------------------------
+# Shared no-cap sentinel
+# Use UNLIMITED in either config dict to explicitly allow unrestricted growth.
+# Equivalent to omitting the entry, but self-documents the intent.
+# ---------------------------------------------------------------------------
+
+UNLIMITED = _ModuleCapRule("unlimited")
+UNLIMITED_PRODUCTION = _ModuleCapRule("unlimited")
+
+
+def _resolve_module_cap_rule(
+    rule: _ModuleCapRule | float | None,
+    baseline_output: float,
+) -> float | None:
+    """Resolve a cap sentinel to a concrete float given the module's baseline output."""
+    if rule is None:
+        return None
+    if isinstance(rule, (int, float)):
+        return max(float(rule), 0.0)
+    if not isinstance(rule, _ModuleCapRule):
+        return None
+    if rule.kind == "zero":
+        return 0.0
+    if rule.kind == "base_year":
+        return max(float(baseline_output), 0.0)
+    if rule.kind == "increase_pct":
+        return max(float(baseline_output) * (1.0 + rule.param / 100.0), 0.0)
+    if rule.kind == "decrease_pct":
+        return max(float(baseline_output) * (1.0 - rule.param / 100.0), 0.0)
+    if rule.kind == "explicit":
+        return max(rule.param, 0.0)
+    if rule.kind == "unlimited":
+        return None  # no cap
+    return None
+
 import pandas as pd
 from openpyxl.styles import Font, PatternFill
-from openpyxl import load_workbook
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -101,6 +191,7 @@ from codebase.utilities.leap_results_dashboard_balance import (
     build_esto_axis_structure_from_dashboard_template,
     convert_leap_balances_to_esto_long_table,
 )
+from codebase.utilities.leap_balance_export_resolver import resolve_balance_export_workbook
 from codebase.utilities.leap_results_dashboard_utils import (
     DEFAULT_EXPLICIT_LEAP_MAPPINGS,
     DEFAULT_EXPLICIT_LEAP_REASSIGNMENTS,
@@ -121,20 +212,6 @@ def _resolve(path: Path | str) -> Path:
     raw = str(path).replace("\\", "/")
     candidate = Path(raw)
     return candidate if candidate.is_absolute() else (REPO_ROOT / candidate)
-
-
-def _load_leap_results_workflow():
-    """Load the permanently renamed LEAP Results workflow file."""
-    workflow_path = REPO_ROOT / "codebase" / "leap_results_workflow - LEAP API.py"
-    spec = importlib.util.spec_from_file_location("leap_results_workflow_leap_api", workflow_path)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"Could not load LEAP Results workflow from {workflow_path}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-leap_results_workflow = _load_leap_results_workflow()
 
 
 def _emit_completion_beep(*, success: bool = True, style: str = "simple") -> None:
@@ -231,6 +308,193 @@ def _emit_completion_beep(*, success: bool = True, style: str = "simple") -> Non
 # Workflow configuration
 # -----------------------------------------------------------------------------
 
+"""
+HOW THIS WORKFLOW OPERATES
+==========================
+
+The goal of this workflow is to build internally consistent supply and
+transformation LEAP import files, using LEAP's own computed results to
+iteratively close any energy balance gaps.  It runs as a multi-pass loop:
+each pass produces workbooks that are imported into LEAP, LEAP is
+recalculated, its balance results are exported, and the next pass uses
+those results to correct remaining gaps.
+
+-- INPUTS ------------------------------------------------------------------
+
+  Three data sources feed the workflow:
+
+  1. ESTO energy balance data (via supply_data_pipeline and
+     transformation_workflow).  The APEC historical energy balance, used
+     for base-year anchoring and as the starting projection.
+
+  2. 9th Outlook projection data (the 'ninth' dataset).  Supply and
+     transformation projections built from regression models against ESTO.
+     These drive the initial baseline estimates for each scenario year.
+
+  3. LEAP balance results (comparison_long.csv, balance tables in
+     YEARLY_BALANCE_DIR).  Outputs from a previous LEAP calculation run,
+     used in results_update passes to observe what gaps remain after LEAP
+     solves with the previous iteration's imports.
+
+-- PASS 1: BASELINE SEED ---------------------------------------------------
+
+  Set CAPACITY_UNMET_PASS_MODE = 'baseline_seed' for the first run.
+
+  The workflow builds a reconciliation table that merges ESTO demand,
+  transformation sector activity, and supply projections into a single
+  long-format frame indexed by economy / scenario / product / year.  This
+  is the master ledger for the run.
+
+  Supply exports are written with imports set to zero.  The idea is to
+  show LEAP only what the economy produces domestically and let LEAP's
+  own balance calculation reveal where supply falls short of demand.
+  Transformation exports are written with process shares, efficiencies,
+  feedstock allocations, and auxiliary fuel use derived from ESTO and the
+  projection models.  Transfer exports capture upstream/refinery fuel flows.
+
+  Before writing, a zero-reset can be applied
+  (RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT) to clear any stale
+  values from a prior run in the LEAP branches this workflow owns.  Zero-
+  fill rows are also generated for transformation and transfer branches that
+  this workflow is responsible for but for which a given economy has no ESTO
+  data, so those branches are explicitly set to 0 rather than left with
+  whatever was there before.
+
+  The output is a set of LEAP workbooks (supply, transformation, transfers,
+  combined) written to EXPORT_OUTPUT_DIR.  These are imported into LEAP and
+  LEAP is recalculated manually.
+
+-- BETWEEN PASSES: LEAP RECALCULATION --------------------------------------
+
+  After importing the workbooks and recalculating LEAP:
+  - LEAP produces balance results showing, for each product, whether supply
+    met demand or whether there is an unmet requirement (a residual gap that
+    LEAP could not satisfy from the supplied sources).
+  - The results dashboard workflow is run to export those balance results as
+    yearly balance tables (CSV files in YEARLY_BALANCE_DIR).
+  - The workflow is then re-run with CAPACITY_UNMET_PASS_MODE = 'results_update'.
+
+-- PASS 2+: RESULTS UPDATE -------------------------------------------------
+
+  In results_update mode the workflow reads the LEAP balance tables from
+  the previous calculation and, for each economy / scenario / product,
+  computes the remaining gap (the observed import volume that LEAP pulled
+  in because domestic supply was insufficient).
+
+  It then attempts to close each gap by allocating additions across three
+  levers, tried in order:
+
+  1. Transformation capacity additions.  For products with a priority module
+     list (CAPACITY_UNMET_PRIORITY_BY_PRODUCT), the workflow adds exogenous
+     capacity to the relevant transformation modules in priority order.  Each
+     module's headroom is bounded by CAPACITY_UNMET_MODULE_CAPACITY_UPPER_LIMITS
+     (expressed as sentinels like KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_
+     ENERGY_OUTPUT so caps stay meaningful as data updates).  Cumulative
+     additions across passes are persisted in a JSON state file so each pass
+     builds on the previous one rather than starting over.
+
+  2. Primary production additions.  If transformation cannot absorb the full
+     gap (e.g. for primary fuels with no relevant transformation module),
+     the workflow adds to primary resource production directly.  Also bounded
+     by CAPACITY_UNMET_PRODUCTION_UPPER_LIMITS.  Secondary fuels (refined
+     products, processed gases, etc.) are treated as transformation outputs
+     only -- they cannot be provisioned via primary production, so any
+     residual gap for a secondary fuel that exhausts transformation headroom
+     goes straight to the import fallback.
+
+  3. Import fallback.  If neither lever can close the remaining gap and
+     CAPACITY_UNMET_UNRESOLVED_POSITIVE_POLICY = 'imports_fallback', the
+     residual is written as an import.  This is the safety valve -- LEAP
+     will balance correctly even if domestic allocation is incomplete.
+
+  The updated workbooks are written and the process repeats: import into
+  LEAP -> recalculate -> export results -> run workflow in results_update.
+  Repeat until gaps are within tolerance.
+
+-- OWN-USE AND LOSS PROXY --------------------------------------------------
+
+  Not all transformation own-use and losses are modelled directly -- some
+  are approximated with a proxy written to the Demand\Other loss and own use
+  LEAP branch.  These are the sectors whose own-use is handled by the proxy:
+  oil refineries (10.01.11), oil & gas extraction (10.01.12), liquefaction /
+  regasification (10.01.03), patent fuel plants (10.01.08), BKB/PB plants
+  (10.01.09), coal-to-oil liquefaction (10.01.10), charcoal processing
+  (10.01.15), biogas gasification (10.01.16), pump storage (10.01.13),
+  nuclear (10.01.14), and electricity/CHP/heat plants (10.01.01).
+  Transmission & distribution losses (10.02) are also proxied for all fuels
+  except electricity itself.
+
+  By contrast, the following sectors have their own-use embedded directly as
+  auxiliary fuel use rows in their Transformation module processes (via the
+  loss_flow_codes mechanism in transformation_analysis_utils.py): gas works
+  (10.01.02), coke ovens (10.01.05), blast furnaces (10.01.07), coal mines
+  (10.01.06), oil refineries (10.01.11), and non-specified transformation
+  (10.01.17).  These are all disabled in the proxy config.
+
+  Electricity distribution losses are handled separately in the Transmission
+  & Distribution transformation module rather than via the proxy, because the
+  activity driver is production rather than distribution output.
+
+  In the 'first' stage (baseline_seed) the proxy uses ESTO base-year own-use
+  ratios extrapolated with 9th projection activity scaling.  In the 'second'
+  stage (results_update) the proxy switches to using LEAP balance table values
+  for other losses and own use, so the proxy tracks what LEAP actually
+  computed in the previous pass rather than the ESTO-derived estimate.
+
+-- TRANSFORMATION REFRESH (CURRENTLY DISABLED -- LEAP API BUGS) ------------
+
+  If REFRESH_TRANSFORMATION_MEASURES_FROM_LEAP_RESULTS = True, the workflow
+  queries LEAP's Results layer via the COM API before building transformation
+  exports and replaces ESTO-derived efficiency and process share values with
+  what LEAP last computed.  Useful in principle when LEAP has been calibrated
+  by hand, but currently kept False because of reliability issues in the
+  LEAP COM API results layer.
+
+-- CONSTRAINT TABLES (CURRENTLY DORMANT) -----------------------------------
+
+  load_leap_constraint_tables() can read additional fuel-level capacity caps
+  from LEAP-format workbooks listed in CONSTRAINT_TEMPLATE_PATHS.  That list
+  is currently empty so no file-based caps are active.  The system exists so
+  future constraints can be added without code changes.
+
+-- FEEDSTOCK FUEL SHARE ZERO-FILL AND THE 100.0 FALLBACK ------------------
+
+  After transformation rows are built, build_aux_fuel_zero_rows() in
+  transformation_analysis_utils.py writes zero-value rows for any catalog
+  feedstock fuel branches that were not explicitly set this run.  For LEAP to
+  accept an import, at least one Feedstock Fuel Share value per process must be
+  non-zero.  The function handles this in two tiers:
+
+  Tier 1 — processes where we actually wrote Feedstock Fuel Share rows (i.e.
+  the process had ESTO activity data).  For any sibling feedstock branches that
+  were NOT set this run, the first one is written as 100.0 and the rest as 0.0.
+  This ensures no process ends up with all-zero shares.
+
+  Tier 2 — in-scope sectors where we had NO ESTO data at all (the workflow
+  produced zero process records for that sector).  All catalog branches under
+  those sectors are zeroed out, but the 100.0 fallback is intentionally NOT
+  applied, because there is no data to anchor which fuel should hold the share.
+
+  Tier 2 now applies the same 100.0 anchor for Feedstock Fuel Share: branches
+  are grouped by process prefix and the first branch per process gets 100.0,
+  the rest 0.0.  This covers sectors like Gas works plants that exist in LEAP's
+  catalog but have zero ESTO activity — previously these fell through to
+  all-zero shares which LEAP rejected on import.
+
+-- OUTPUTS -----------------------------------------------------------------
+
+  Each run writes:
+  - Supply workbook:           LEAP imports for Resources\\ branches
+  - Transformation workbook:   LEAP imports for Transformation\\ branches
+  - Transfers workbook:        LEAP imports for Transformation\\Transfers\\ branches
+  - Combined workbook:         all three merged for easier review
+  - Yearly balance CSVs:       per-product reconciliation tables (also used as
+                               input for the next results_update pass)
+  - Consolidated run workbook: everything bundled into one Excel for QA
+  - Diagnostic reports:        unmatched rows, metadata mismatches, demand
+                               issues, timing -- written to RESULTS_CHECKS_DIR
+"""
+
 # Scope settings that are applied from the bottom notebook runtime block.
 EXPORT_DATASET_KEY = workflow_cfg.SUPPLY_EXPORT_DATASET_KEY  # "ninth" or "esto"
 
@@ -255,7 +519,7 @@ LEAP_RESULTS_TABLES_DIR = REPO_ROOT / "data" / "leap results tables"
 REFINERY_RESULTS_FILENAME_TEMPLATE = "transformation_and_supply_results_{economy}_{scenario}.xlsx"
 TRANSFORMATION_RESULTS_FILENAME_TEMPLATE = "transformation_results_{economy}_{scenario}.xlsx"
 REFINERY_RESULTS_SHEET_NAME = "refining output"
-REFINERY_SECTOR_NAME = "Oil refineries"
+REFINERY_SECTOR_NAME = "Oil Refining"
 REFINERY_FUEL_LABEL_ALIASES = {
     "Gas and diesel oil": "Gas/diesel oil",
 }
@@ -266,6 +530,7 @@ BASE_YEAR = supply_data_pipeline.EXPORT_BASE_YEAR
 LEAP_IMPORT_MAX_YEAR = 2060
 FINAL_YEAR = min(int(supply_data_pipeline.EXPORT_FINAL_YEAR), LEAP_IMPORT_MAX_YEAR)  # LEAP-safe horizon
 BALANCE_EXPORT_YEARS = [BASE_YEAR, 2030, 2050]
+
 
 # Optional external cap templates (LEAP-format workbooks). Leave empty to disable.
 CONSTRAINT_TEMPLATE_PATHS: list[Path | str] = []
@@ -329,6 +594,7 @@ LEAP_FUEL_BRANCH_PROBE_OUTPUT_PATH = (
 USE_RESULTS_VERIFICATION_EXPORT_SOURCE = True
 RESULTS_VERIFICATION_EXPORT_PATH = REPO_ROOT / "data" / "full model export.xlsx"
 RESULTS_VERIFICATION_EXPORT_SHEET = "Export"
+AGGREGATED_DEMAND_ID_LOOKUP_PATH = REPO_ROOT / "data" / "international area full export.xlsx"
 
 # Backward-compatible aliases used by existing catalog helpers.
 USE_FULL_MODEL_EXPORT_CATALOG_SOURCE = USE_RESULTS_VERIFICATION_EXPORT_SOURCE
@@ -346,10 +612,14 @@ REFRESH_TRANSFORMATION_MEASURE_REGION = LEAP_IMPORT_REGION
 # transformation capacity, primary production, or export adjustments.
 ACTIVE_SUPPLY_LINK_METHOD = "capacity_unmet_iterative_balanced"
 DEMAND_SECTOR_PREFIXES = ("04_", "05_", "14_", "15_", "16_")
+DEMAND_NON_ACTIONABLE_FUEL_PHRASES = (
+    "do not use",
+)
 
 # Capacity-constrained mode knobs.
 CAPACITY_CONSTRAINT_FACTOR = 1.0
-CAPACITY_CONSTRAINT_UNITS = "Petajoule/Year"
+CAPACITY_CONSTRAINT_UNITS = "Gigajoules/Year"
+CAPACITY_CONSTRAINT_SCALE = "Million"
 CAPACITY_MAX_AVAILABILITY = 100.0
 CAPACITY_CREDIT = 100.0
 CAPACITY_ENDOGENOUS = 0.0
@@ -371,28 +641,93 @@ CAPACITY_UNMET_STATE_PATH = RESULTS_RUNTIME_DIR / "capacity_unmet_iterative_stat
 CAPACITY_UNMET_RESULTS_DIR = YEARLY_BALANCE_DIR
 CAPACITY_UNMET_IMPORT_SHEETS: tuple[str, ...] = ("imports primary", "imports secondary")
 CAPACITY_UNMET_EXPORT_SHEETS: tuple[str, ...] = ("exports primary", "exports secondary")
-CAPACITY_UNMET_PRIORITY_BY_PRODUCT: dict[str, list[str]] = {
-    "17 Electricity": [
-        "Electricity generation",
-        "Main activity producer CHP plants",
-        "Autoproducer CHP plants",
-    ],
-    "18 Heat": [
-        "Main activity producer CHP plants",
-        "Autoproducer CHP plants",
-        "Heat plants",
-    ],
-    "16.04 Biogas": [
-        "Biogas production",
-        "Biogas processing",
-    ],
-    "07.06 Kerosene type jet fuel": [
-        "Oil refineries",
-    ],
-    "07.07 Gas/diesel oil": [
-        "Oil refineries",
-    ],
+# ---------------------------------------------------------------------------
+# Sentinel resolver and JSON config loader
+# The three large config dicts (PRIORITY_BY_PRODUCT, MODULE_CAPACITY_UPPER_LIMITS,
+# PRODUCTION_UPPER_LIMITS) live in capacity_unmet_config.json in this directory.
+# Sentinel values are stored as strings in JSON and resolved back to _ModuleCapRule
+# objects here.  Raw numbers in the JSON are passed through directly.
+# ---------------------------------------------------------------------------
+
+_SENTINEL_STRING_MAP: dict[str, _ModuleCapRule] = {
+    "UNLIMITED":                                         UNLIMITED,
+    "UNLIMITED_PRODUCTION":                              UNLIMITED_PRODUCTION,
+    "KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT": KEEP_EXOGENOUS_CAP_SAME_AS_BASE_YEAR_ENERGY_OUTPUT,
+    "DECREASE_TO_ZERO":                                  DECREASE_TO_ZERO,
+    "KEEP_PRODUCTION_AT_BASE_YEAR":                      KEEP_PRODUCTION_AT_BASE_YEAR,
+    "DECREASE_PRODUCTION_TO_ZERO":                       DECREASE_PRODUCTION_TO_ZERO,
 }
+
+_SENTINEL_FUNC_MAP = {
+    "INCREASE_BY_PCT":          INCREASE_BY_PCT,
+    "DECREASE_BY_PCT":          DECREASE_BY_PCT,
+    "SET_CAP_TO":               SET_CAP_TO,
+    "INCREASE_PRODUCTION_BY_PCT":  INCREASE_PRODUCTION_BY_PCT,
+    "DECREASE_PRODUCTION_BY_PCT":  DECREASE_PRODUCTION_BY_PCT,
+    "SET_PRODUCTION_CAP_TO":    SET_PRODUCTION_CAP_TO,
+}
+
+
+def _parse_cap_sentinel(value: object) -> object:
+    """Resolve a JSON sentinel string (or raw number) to a _ModuleCapRule or float."""
+    if value is None or isinstance(value, _ModuleCapRule):
+        return value
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if text in _SENTINEL_STRING_MAP:
+        return _SENTINEL_STRING_MAP[text]
+    # Parameterised form: NAME(x)
+    m = re.fullmatch(r"([A-Z_]+)\(\s*([0-9.+-]+)\s*\)", text)
+    if m:
+        func_name, param = m.group(1), m.group(2)
+        if func_name in _SENTINEL_FUNC_MAP:
+            return _SENTINEL_FUNC_MAP[func_name](float(param))
+    raise ValueError(
+        f"Unrecognised cap sentinel in capacity_unmet_config.json: {value!r}. "
+        f"Valid constants: {sorted(_SENTINEL_STRING_MAP)}. "
+        f"Valid functions: {sorted(_SENTINEL_FUNC_MAP)} (pass a numeric arg, e.g. INCREASE_BY_PCT(20))."
+    )
+
+
+def _resolve_json_cap_dict(raw: object) -> dict:
+    """Recursively walk a nested dict, resolving sentinel strings at leaf level."""
+    if not isinstance(raw, dict):
+        return {}
+    out = {}
+    for key, value in raw.items():
+        if str(key).startswith("_"):
+            continue  # skip _note / _instructions keys
+        if isinstance(value, dict):
+            out[key] = _resolve_json_cap_dict(value)
+        elif isinstance(value, list):
+            out[key] = value  # priority lists — no resolution needed
+        else:
+            out[key] = _parse_cap_sentinel(value)
+    return out
+
+
+def _load_capacity_unmet_config_from_json() -> tuple[dict, dict, dict]:
+    """Load the three CAPACITY_UNMET config dicts from config/results_supply_link_config.json."""
+    json_path = REPO_ROOT / "config" / "results_supply_link_config.json"
+    if not json_path.exists():
+        return {}, {}, {}
+    with open(json_path, encoding="utf-8") as fh:
+        raw = json.load(fh)
+    priority   = _resolve_json_cap_dict(raw.get("CAPACITY_UNMET_PRIORITY_BY_PRODUCT", {}))
+    module_cap = _resolve_json_cap_dict(raw.get("CAPACITY_UNMET_MODULE_CAPACITY_UPPER_LIMITS", {}))
+    prod_cap   = _resolve_json_cap_dict(raw.get("CAPACITY_UNMET_PRODUCTION_UPPER_LIMITS", {}))
+    return priority, module_cap, prod_cap
+
+
+_json_priority, _json_module_cap, _json_prod_cap = _load_capacity_unmet_config_from_json()
+
+CAPACITY_UNMET_PRIORITY_BY_PRODUCT: dict[str, list[str]] = _json_priority
+# ^ Required for any ESTO product produced by 2+ transformation modules.
+#   Edit config/results_supply_link_config.json to change priority ordering.
+#   If a multi-module product is missing the workflow raises at startup and prints
+#   exactly which entries to add.
+
 CAPACITY_UNMET_ALLOW_SAME_RESULTS_REUSE = False
 CAPACITY_UNMET_FIRST_CLEAN_ARCHIVE_EXISTING_STATE = True
 CAPACITY_UNMET_UNRESOLVED_POSITIVE_POLICY = "imports_fallback"  # fail|imports_fallback|track_only
@@ -400,51 +735,20 @@ CAPACITY_UNMET_PIN_EXPORTS_TO_9TH_PROJECTIONS = True
 CAPACITY_UNMET_UNRESOLVED_POSITIVE_ALLOWLIST: set[str] = {
     "02.02 Gas coke",
 }
-CAPACITY_UNMET_MODULE_CAPACITY_UPPER_LIMITS: dict[str, dict[str, dict[str, float]]] = {
-    "20_USA": {
-        "reference": {
-            # Base-year (2022) module output caps for requested sectors.
-            # Values here are 2022 process-record output values (not multi-year sums).
-            # Units must match CAPACITY_CONSTRAINT_UNITS.
-            "Blast furnaces": 78.96,
-            "Upstream liquids transfers": 0.0,
-            "Refinery and blending transfers": 0.0,
-            "Transfers unallocated": 0.0,
-            "Liquefaction coal to oil": 0.0,
-            "Charcoal processing": 0.0,
-            "BKB and PB plants": 0.0,
-            "Non-specified transformation": 211.367768,
-            "Coke ovens": 298.348638,
-            "Patent fuel plants": 0.0,
-            "Natural gas blending plants": 46.94349,
-            "Gas works plants": 46.943101,
-        },
-        "target": {
-            "Blast furnaces": 78.96,
-            "Upstream liquids transfers": 0.0,
-            "Refinery and blending transfers": 0.0,
-            "Transfers unallocated": 0.0,
-            "Liquefaction coal to oil": 0.0,
-            "Charcoal processing": 0.0,
-            "BKB and PB plants": 0.0,
-            "Non-specified transformation": 211.367768,
-            "Coke ovens": 298.348638,
-            "Patent fuel plants": 0.0,
-            "Natural gas blending plants": 46.94349,
-            "Gas works plants": 46.943101,
-        },
-    },
+# Products for which only indigenous production is eligible as a domestic
+# gap-closing lever.  After the production lever is exhausted any remaining
+# gap goes straight to import fallback — the transformation lever is skipped.
+# Use this for primary fuels where increasing a transformation module's
+# capacity would be physically wrong (e.g. LNG regasification filling a
+# natural-gas gap that should come from the well, not a terminal).
+CAPACITY_UNMET_PRODUCTION_ONLY_PRODUCTS: set[str] = {
+    "08.01 Natural gas",
 }
-CAPACITY_UNMET_PRODUCTION_UPPER_LIMITS: dict[str, dict[str, dict[str, float]]] = {
-    # Optional product-level production caps for balanced iterative mode.
-    # Shape: economy -> scenario -> esto_product -> max production value.
-    # Example:
-    # "20_USA": {
-    #     "reference": {
-    #         "01.01 Hard coal": 123.0,
-    #     },
-    # }
-}
+CAPACITY_UNMET_MODULE_CAPACITY_UPPER_LIMITS: dict[str, dict[str, dict]] = _json_module_cap
+# ^ Edit config/results_supply_link_config.json to add/remove module caps.
+#   Sentinel strings resolved at load time via _parse_cap_sentinel().
+CAPACITY_UNMET_PRODUCTION_UPPER_LIMITS: dict[str, dict[str, dict[str, object]]] = _json_prod_cap
+# ^ Edit config/results_supply_link_config.json to add/remove production caps.
 
 _CAPACITY_UNMET_RUNTIME_CAPACITY_ADDITIONS: dict[str, float] = {}
 _CAPACITY_UNMET_RUNTIME_PRIMARY_ADDITIONS: dict[str, float] = {}
@@ -651,8 +955,49 @@ DIRECT_DEMAND_USE_ESTO_AGG_ONLY = False
 DIRECT_DEMAND_SIBLING_COMPARATOR_MODE = "aggregate_to_parent"
 DIRECT_DEMAND_INCLUDE_SIBLING_PARENT_TOTALS = True
 
+# Aggregated demand as dummy: when True, load_results_demand_table() returns ESTO/ninth
+# aggregated demand (from aggregated_demand_workflow) instead of LEAP balance exports.
+# Useful for a first baseline_seed pass on a new economy with no balance exports yet.
+# Only works for single-economy runs; for multi-economy runs, normal LEAP balance paths
+# are used and this flag is ignored.
+USE_AGGREGATED_DEMAND_AS_DUMMY = True
+
+# When True (requires USE_AGGREGATED_DEMAND_AS_DUMMY), also write a LEAP import
+# workbook containing the Demand\All demand aggregated\{fuel} branches so LEAP
+# has the correct demand values after import.  Without this the aggregated-demand
+# branches are used internally for reconciliation but are never written to LEAP.
+WRITE_AGGREGATED_DEMAND_WORKBOOK = True
+
+# Controls whether the aggregated-demand workbook is automatically imported into
+# LEAP via the API.  When False the file is still written for manual import.
+AGGREGATED_DEMAND_INCLUDE_IN_LEAP_IMPORT = True
+
+# When True (and WRITE_AGGREGATED_DEMAND_WORKBOOK is True), own-use (10_01) and
+# T&D losses (10_02) sectors are excluded from the Demand\All demand aggregated
+# sum.  Use this when RUN_OTHER_LOSS_OWN_USE_PROXY=True so the proxy handles
+# those amounts and they are not double-counted in the aggregated total.
+AGGREGATED_DEMAND_EXCLUDE_OWN_USE_TD_LOSSES = False
+
+# When True (and ZERO_OTHER_DEMAND_BRANCHES_FROM_EXPORT is True), the
+# Demand\Other loss and own use branches are excluded from zeroing because they
+# are already being populated by the other_loss_own_use proxy in the same pass.
+ZERO_OTHER_DEMAND_EXCLUDE_OWN_USE_PROXY_BRANCHES = False
+
+# When True (and USE_AGGREGATED_DEMAND_AS_DUMMY is True), generate a LEAP import
+# workbook that zeros every non-share Demand branch from the full model export,
+# so those branches produce no energy use.  Share variables (Device Share, Sales
+# Share, Stock Share) are left untouched to avoid "shares don't sum to 100" errors.
+ZERO_OTHER_DEMAND_BRANCHES_FROM_EXPORT = False
+
+# Controls whether the demand-zeroing workbook is automatically imported into LEAP
+# via the API.  When False the workbook is still written for manual LEAP import.
+ZERO_OTHER_DEMAND_INCLUDE_IN_LEAP_IMPORT = True
+
 BALANCE_DEMAND_REF_WORKBOOK_PATH = DEFAULT_BALANCE_REF_WORKBOOK_PATH
 BALANCE_DEMAND_TGT_WORKBOOK_PATH = DEFAULT_BALANCE_TGT_WORKBOOK_PATH
+BALANCE_DEMAND_EXPORTS_ROOT = REPO_ROOT / "data" / "leap balances exports"
+BALANCE_DEMAND_REF_BALANCE_EXPORT_DATE_ID = None
+BALANCE_DEMAND_TGT_BALANCE_EXPORT_DATE_ID = None
 BALANCE_DEMAND_LEAP_TO_ESTO_MAPPING_WORKBOOK = DIRECT_DEMAND_MAPPING_WORKBOOK
 BALANCE_DEMAND_NINTH_TO_ESTO_MAPPING = DEFAULT_BALANCE_MAPPING_PAIRS_PATH
 BALANCE_DEMAND_CODEBOOK_PATH = _resolve(DEFAULT_BALANCE_CODEBOOK_PATH)
@@ -1652,13 +1997,28 @@ def _is_primary_esto_product(esto_product: str) -> bool:
     return True
 
 
+def _is_production_only_product(esto_product: str) -> bool:
+    """Return True when only indigenous production (not transformation) may close a gap.
+
+    Products in CAPACITY_UNMET_PRODUCTION_ONLY_PRODUCTS skip the transformation
+    capacity lever entirely.  Any gap not covered by production headroom goes
+    straight to import fallback so that e.g. LNG regasification is never given
+    additional capacity just to fill a natural-gas shortfall.
+    """
+    allowlist = globals().get("CAPACITY_UNMET_PRODUCTION_ONLY_PRODUCTS", set())
+    if not isinstance(allowlist, (set, list, tuple)):
+        return False
+    token = str(esto_product or "").strip().lower()
+    return any(str(item or "").strip().lower() == token for item in allowlist)
+
+
 def _lookup_module_capacity_upper_limit(
     *,
     economy: str,
     scenario: str,
     module: str,
-) -> float | None:
-    """Return optional module-level output cap for iterative modes."""
+) -> _ModuleCapRule | float | None:
+    """Return raw cap rule or float for a module; caller resolves sentinels via _resolve_module_cap_rule."""
     root = CAPACITY_UNMET_MODULE_CAPACITY_UPPER_LIMITS
     if not isinstance(root, dict):
         return None
@@ -1696,6 +2056,10 @@ def _lookup_module_capacity_upper_limit(
             if val is not None
         }
         value = lower_lookup.get(_state_token(module))
+    if value is None:
+        return None
+    if isinstance(value, _ModuleCapRule):
+        return value
     numeric = pd.to_numeric(value, errors="coerce")
     if pd.isna(numeric):
         return None
@@ -1707,8 +2071,15 @@ def _lookup_production_upper_limit(
     economy: str,
     scenario: str,
     esto_product: str,
+    baseline_production: float = 0.0,
 ) -> float | None:
-    """Return optional product-level production cap for balanced iterative mode."""
+    """Return optional product-level production cap for balanced iterative mode.
+
+    Values may be raw floats or production-cap sentinels
+    (KEEP_PRODUCTION_AT_BASE_YEAR, INCREASE_PRODUCTION_BY_PCT, etc.).
+    When a sentinel is used, ``baseline_production`` (the current constrained
+    production for this economy/product/year) is used as the reference level.
+    """
     root = CAPACITY_UNMET_PRODUCTION_UPPER_LIMITS
     if not isinstance(root, dict):
         return None
@@ -1746,6 +2117,12 @@ def _lookup_production_upper_limit(
             if val is not None
         }
         value = lower_lookup.get(_normalize_esto_product_for_match(esto_product))
+    if value is None:
+        return None
+    # Accept production-cap sentinels (reuse _resolve_module_cap_rule with
+    # baseline_production as the reference level).
+    if isinstance(value, _ModuleCapRule):
+        return _resolve_module_cap_rule(value, float(baseline_production))
     numeric = pd.to_numeric(value, errors="coerce")
     if pd.isna(numeric):
         return None
@@ -2000,39 +2377,15 @@ def _load_transformation_template_variable_sets(
     """
     Load transformation template variables by sector from results workbook.
 
-    Returns:
-    - dict keyed by sector title (second token in Transformation\\<sector>\\...)
-    - each value is a set of requested variables for that sector in the template.
+    The LEAP Results API refresh path has been retired for this workbook-first
+    workflow. This helper is kept only to produce a clear error if an old toggle
+    tries to enter that path.
     """
-    workbook = _resolve_transformation_results_workbook(economy, scenario)
-    if workbook is None:
-        raise FileNotFoundError(
-            "Transformation results template workbook not found for "
-            f"economy={economy}, scenario={scenario} in {LEAP_RESULTS_TABLES_DIR}"
-        )
-    wb = load_workbook(workbook, data_only=False)
-    variables_by_sector: dict[str, set[str]] = {}
-    variables_by_sector_norm: dict[str, set[str]] = {}
-    sector_name_by_norm: dict[str, str] = {}
-    for sheet_name in wb.sheetnames:
-        ws = wb[sheet_name]
-        meta = leap_results_workflow.parse_template_worksheet(ws)
-        branch = str(meta.get("branch") or "").strip()
-        variable = str(meta.get("variable") or "").strip()
-        if not branch or not variable:
-            continue
-        bits = [part for part in branch.split("\\") if part]
-        if len(bits) < 2 or bits[0] != "Transformation":
-            continue
-        sector = bits[1].strip()
-        if not sector:
-            continue
-        variables_by_sector.setdefault(sector, set()).add(variable)
-        norm_key = _normalize_sector_match_key(sector)
-        if norm_key:
-            variables_by_sector_norm.setdefault(norm_key, set()).add(variable)
-            sector_name_by_norm.setdefault(norm_key, sector)
-    return variables_by_sector, variables_by_sector_norm, sector_name_by_norm
+    raise RuntimeError(
+        "Transformation Results template refresh is disabled. "
+        "Keep REFRESH_TRANSFORMATION_MEASURES_FROM_LEAP_RESULTS=False and use "
+        "LEAP balance export workbooks for results_update runs."
+    )
 
 
 def _find_refinery_sheet_header_row(raw: pd.DataFrame) -> int | None:
@@ -2169,6 +2522,14 @@ def _is_demand_sector_mapping(sector_code_text: object) -> bool:
     return False
 
 
+def _is_non_actionable_demand_fuel(fuel_text: object) -> bool:
+    """Return True when a demand fuel label is explicitly marked as non-actionable."""
+    token = str(fuel_text or "").strip().lower()
+    if not token:
+        return False
+    return any(phrase in token for phrase in DEMAND_NON_ACTIONABLE_FUEL_PHRASES)
+
+
 def _sector_code_sequence(value: object) -> tuple[int, ...]:
     """Return the numeric hierarchy sequence from a 9th sector code."""
     token = str(value or "").strip()
@@ -2232,51 +2593,11 @@ ESTO_PARENT_PRODUCT_LOOKUP = _build_esto_parent_product_lookup()
 
 
 def _run_leap_results_template_scrape() -> dict[str, object]:
-    """Refresh LEAP result templates in-place using the LEAP API workflow."""
-    if not leap_api.is_available():
-        raise RuntimeError(
-            "LEAP API is unavailable; cannot scrape LEAP results templates. "
-            "Set SCRAPE_LEAP_RESULTS = False or enable LEAP API."
-        )
-    try:
-        return leap_results_workflow.run_template_fill()
-    except Exception as exc:
-        message = str(exc or "")
-        normalized_message = message.lower()
-        load_shape_error = (
-            "all fuels produced by optimized modules must have load shapes"
-            in normalized_message
-        )
-        if not load_shape_error:
-            raise
-        workbook_dir = _resolve(LEAP_RESULTS_TABLES_DIR)
-        fallback_workbooks = (
-            sorted(workbook_dir.glob("*.xls*")) if workbook_dir.exists() else []
-        )
-        if fallback_workbooks:
-            print(
-                "[WARN] LEAP template scrape skipped because LEAP calculation failed "
-                "with missing optimized-module load-shape requirements."
-            )
-            print(
-                "[WARN] Continuing with existing LEAP results-table files in "
-                f"{workbook_dir} ({len(fallback_workbooks)} workbook(s))."
-            )
-            print(
-                "[WARN] Results may be stale until LEAP load-shape settings are fixed "
-                "and templates are scraped again."
-            )
-            return {
-                "status": "skipped_due_load_shape_calculation_error",
-                "error": message,
-                "fallback_workbooks": [str(path) for path in fallback_workbooks],
-            }
-        raise RuntimeError(
-            "LEAP template scrape failed due missing load-shape requirements and no "
-            "fallback workbooks were found in "
-            f"{workbook_dir}. Fix LEAP load shapes or set "
-            "SCRAPE_LEAP_RESULTS=False and provide pre-scraped workbooks."
-        ) from exc
+    """Disabled legacy LEAP Results API template scrape."""
+    raise RuntimeError(
+        "SCRAPE_LEAP_RESULTS is disabled in results_supply_link_workflow. "
+        "Keep SCRAPE_LEAP_RESULTS=False and use exported LEAP balance workbooks."
+    )
 
 
 def _economy_tokens_for_workbook_match(economy: str) -> set[str]:
@@ -2524,19 +2845,28 @@ def _annotate_balance_demand_issue_scope(balance_demand_issues: pd.DataFrame) ->
         issues["mapping_key_fuel"].ne(""),
         issues["leap_product_name"],
     )
+    issues["issue_fuel_is_do_not_use"] = issues["issue_fuel_key"].map(_is_non_actionable_demand_fuel)
 
     try:
         active_ninth = _load_active_direct_demand_mapping_sheet(DIRECT_DEMAND_NINTH_MAPPING_SHEET)
     except Exception as exc:
         issues["demand_relevant"] = True
+        issues.loc[issues["issue_fuel_is_do_not_use"], "demand_relevant"] = False
         issues["demand_relevance_basis"] = f"fallback_keep_all:{type(exc).__name__}"
+        issues.loc[issues["issue_fuel_is_do_not_use"], "demand_relevance_basis"] = (
+            "excluded_do_not_use_fuel"
+        )
         return issues
 
     required_cols = ["leap_sector_name_full_path", "raw_leap_fuel_name", "ninth_sector"]
     missing_cols = [col for col in required_cols if col not in active_ninth.columns]
     if missing_cols:
         issues["demand_relevant"] = True
+        issues.loc[issues["issue_fuel_is_do_not_use"], "demand_relevant"] = False
         issues["demand_relevance_basis"] = "fallback_keep_all:missing_ninth_columns"
+        issues.loc[issues["issue_fuel_is_do_not_use"], "demand_relevance_basis"] = (
+            "excluded_do_not_use_fuel"
+        )
         return issues
 
     ninth_scope = active_ninth[required_cols].copy()
@@ -2594,6 +2924,11 @@ def _annotate_balance_demand_issue_scope(balance_demand_issues: pd.DataFrame) ->
     )
     issues.loc[sector_only_mask & ~issues["sector_is_demand"], "demand_relevance_basis"] = (
         "sector_match_non_demand_sector"
+    )
+
+    issues.loc[issues["issue_fuel_is_do_not_use"], "demand_relevant"] = False
+    issues.loc[issues["issue_fuel_is_do_not_use"], "demand_relevance_basis"] = (
+        "excluded_do_not_use_fuel"
     )
     return issues
 
@@ -2859,21 +3194,46 @@ def _load_direct_demand_reference_tables() -> tuple[pd.DataFrame, pd.DataFrame]:
     return base_df, ninth_df
 
 
+def _load_projection_only_ninth_table() -> pd.DataFrame:
+    """Load only the 9th columns needed for projection-only demand fallback."""
+    projection_path = _resolve(BALANCE_DEMAND_PROJECTION_TABLE_PATH)
+    stable_cols = [
+        "economy",
+        "scenarios",
+        "sectors",
+        "sub1sectors",
+        "sub2sectors",
+        "sub3sectors",
+        "sub4sectors",
+        "fuels",
+        "subfuels",
+        "subtotal_results",
+    ]
+    year_cols = [str(year) for year in DIRECT_DEMAND_PROJECTION_YEARS if year <= FINAL_YEAR]
+    header = pd.read_csv(projection_path, nrows=0)
+    usecols = [col for col in [*stable_cols, *year_cols] if col in header.columns]
+    return pd.read_csv(projection_path, usecols=usecols, low_memory=False)
+
+
 def _build_projection_rows_from_ninth(
     mapping_status: pd.DataFrame,
     *,
     ninth_df: pd.DataFrame,
     scenarios: Iterable[str],
+    projection_economy: str = DIRECT_DEMAND_PROJECTION_ECONOMY,
 ) -> pd.DataFrame:
     if mapping_status.empty or ninth_df.empty:
         return pd.DataFrame(columns=["economy", "scenario", "sheet", "fuel_label", "year", "value", "source"])
 
     scenario_map = {str(k).strip().lower(): str(v).strip() for k, v in DIRECT_DEMAND_SCENARIO_MAP.items()}
-    scenario_tokens = {
-        str(item).strip().lower(): str(item).strip()
-        for item in scenarios
-        if str(item).strip()
-    }
+    scenario_labels_by_projection: dict[str, str] = {}
+    for item in scenarios:
+        label = str(item).strip()
+        if not label:
+            continue
+        projection_label = scenario_map.get(label.lower(), label.lower()).strip().lower()
+        if projection_label:
+            scenario_labels_by_projection[projection_label] = label
 
     ninth = ninth_df.copy()
     ninth["economy"] = ninth["economy"].astype(str).str.strip()
@@ -2908,13 +3268,13 @@ def _build_projection_rows_from_ninth(
     ninth_long["year"] = pd.to_numeric(ninth_long["year"], errors="coerce").astype("Int64")
     ninth_long["value"] = pd.to_numeric(ninth_long["value"], errors="coerce")
     ninth_long = ninth_long[
-        (ninth_long["economy"] == DIRECT_DEMAND_PROJECTION_ECONOMY)
-        & ninth_long["scenarios"].isin(scenario_map.keys())
+        (ninth_long["economy"] == str(projection_economy).strip())
+        & ninth_long["scenarios"].isin(scenario_labels_by_projection.keys())
         & ninth_long["year"].notna()
     ].copy()
     if ninth_long.empty:
         return pd.DataFrame(columns=["economy", "scenario", "sheet", "fuel_label", "year", "value", "source"])
-    ninth_long["scenario"] = ninth_long["scenarios"].map(scenario_map)
+    ninth_long["scenario"] = ninth_long["scenarios"].map(scenario_labels_by_projection)
 
     mapping_subset = mapping_status[
         ["sheet", "fuel_label", "sector_code_9th", "ninth_fuel_code"]
@@ -2944,10 +3304,6 @@ def _build_projection_rows_from_ninth(
     projection_rows = projection_rows[
         ["economy", "scenario", "sheet", "fuel_label", "year", "value", "source"]
     ].copy()
-    if scenario_tokens:
-        projection_rows = projection_rows[
-            projection_rows["scenario"].astype(str).isin(set(scenario_tokens.values()))
-        ].copy()
     return projection_rows.reset_index(drop=True)
 
 
@@ -3030,23 +3386,113 @@ def _build_balance_demand_scenario_map(scenarios: Iterable[str]) -> dict[str, st
     return scenario_map
 
 
+def _compact_economy_code(economy: str) -> str:
+    """Return the compact ESTO economy code used by the base-year table."""
+    return str(economy or "").strip().replace("_", "")
+
+
+def _resolve_balance_demand_workbooks_for_economy(economy: str) -> tuple[Path, Path]:
+    """Return REF/TGT LEAP balance export workbooks for one economy."""
+    economy_text = str(economy or "").strip()
+    if not economy_text:
+        raise ValueError("Balance-export economy cannot be blank.")
+    if economy_text == DIRECT_DEMAND_PROJECTION_ECONOMY:
+        return _resolve(BALANCE_DEMAND_REF_WORKBOOK_PATH), _resolve(BALANCE_DEMAND_TGT_WORKBOOK_PATH)
+    ref_workbook = resolve_balance_export_workbook(
+        economy=economy_text,
+        scenario="REF",
+        date_id=BALANCE_DEMAND_REF_BALANCE_EXPORT_DATE_ID,
+        exports_root=BALANCE_DEMAND_EXPORTS_ROOT,
+    )
+    tgt_workbook = resolve_balance_export_workbook(
+        economy=economy_text,
+        scenario="TGT",
+        date_id=BALANCE_DEMAND_TGT_BALANCE_EXPORT_DATE_ID,
+        exports_root=BALANCE_DEMAND_EXPORTS_ROOT,
+    )
+    return ref_workbook, tgt_workbook
+
+
+def _build_projection_only_mapping_status(balance_mapping_workbook: Path | str) -> pd.DataFrame:
+    """Build demand mapping metadata directly from the augmented mapping workbook."""
+    workbook = _resolve(balance_mapping_workbook)
+    ninth = pd.read_excel(workbook, sheet_name=DIRECT_DEMAND_NINTH_MAPPING_SHEET).fillna("")
+    esto = pd.read_excel(workbook, sheet_name=DIRECT_DEMAND_ESTO_MAPPING_SHEET).fillna("")
+    required_ninth = ["leap_sector_name_full_path", "raw_leap_fuel_name", "ninth_sector", "ninth_fuel"]
+    required_esto = ["leap_sector_name_full_path", "raw_leap_fuel_name", "esto_flow", "esto_product"]
+    missing_ninth = [col for col in required_ninth if col not in ninth.columns]
+    missing_esto = [col for col in required_esto if col not in esto.columns]
+    if missing_ninth or missing_esto:
+        raise KeyError(
+            "Cannot build projection-only demand mappings. "
+            f"Missing ninth columns={missing_ninth}; missing ESTO columns={missing_esto}."
+        )
+
+    for frame in (ninth, esto):
+        if "remove_row" in frame.columns:
+            frame["_remove_row_bool"] = frame["remove_row"].fillna(False).astype(str).str.strip().str.lower().isin(
+                {"true", "1", "yes"}
+            )
+            frame.drop(frame[frame["_remove_row_bool"]].index, inplace=True)
+            frame.drop(columns=["_remove_row_bool"], inplace=True)
+
+    joined = ninth[required_ninth].merge(
+        esto[required_esto],
+        on=["leap_sector_name_full_path", "raw_leap_fuel_name"],
+        how="inner",
+    )
+    if joined.empty:
+        return pd.DataFrame(
+            columns=["sheet", "fuel_label", "sector_code_9th", "ninth_fuel_code", "esto_flow", "esto_product"]
+        )
+    for col in joined.columns:
+        joined[col] = joined[col].fillna("").astype(str).str.strip()
+    joined = joined[
+        joined["ninth_sector"].ne("")
+        & joined["ninth_fuel"].ne("")
+        & joined["esto_flow"].ne("")
+        & joined["esto_product"].ne("")
+    ].copy()
+    out = pd.DataFrame(
+        {
+            "sector_code_9th": joined["ninth_sector"],
+            "ninth_fuel_code": joined["ninth_fuel"],
+            "esto_flow": joined["esto_flow"],
+            "esto_product": joined["esto_product"],
+            "mapping_source": "projection_only_mapping_workbook",
+            "mapping_note": "",
+        }
+    )
+    out = out.drop_duplicates(
+        subset=["sector_code_9th", "ninth_fuel_code", "esto_flow", "esto_product"]
+    ).reset_index(drop=True)
+    out["sheet"] = out["esto_flow"]
+    out["fuel_label"] = out["esto_product"]
+    out["measure"] = "Energy balance (PJ)"
+    return out[
+        [
+            "sheet",
+            "fuel_label",
+            "sector_code_9th",
+            "ninth_fuel_code",
+            "esto_flow",
+            "esto_product",
+            "measure",
+            "mapping_source",
+            "mapping_note",
+        ]
+    ]
+
+
 def load_balance_demand_inputs(
     *,
     economies: Iterable[str],
     scenarios: Iterable[str],
     workbook_dir: Path | str = LEAP_RESULTS_TABLES_DIR,
+    allow_projection_only_without_balance_exports: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """Build comparison_long + mapping_status in-memory from LEAP balance exports."""
     economy_list = workflow_common.normalize_economies(economies or ECONOMIES)
-    unsupported = [
-        value for value in economy_list if str(value).strip() != DIRECT_DEMAND_PROJECTION_ECONOMY
-    ]
-    if unsupported:
-        raise ValueError(
-            "Balance-export demand loading is currently configured only for "
-            f"{DIRECT_DEMAND_PROJECTION_ECONOMY}. Unsupported economies: {unsupported}"
-        )
-
     balance_scenarios = _filter_balance_scenarios(scenarios)
     scenario_map = _build_balance_demand_scenario_map(balance_scenarios)
     if not scenario_map:
@@ -3059,61 +3505,132 @@ def load_balance_demand_inputs(
     known_issues = _load_optional_json_dict(BALANCE_DEMAND_KNOWN_ISSUES_CONFIG_PATH)
     balance_mapping_workbook = _build_augmented_balance_demand_mapping_workbook()
 
-    conversion = convert_leap_balances_to_esto_long_table(
-        ref_workbook_path=BALANCE_DEMAND_REF_WORKBOOK_PATH,
-        tgt_workbook_path=BALANCE_DEMAND_TGT_WORKBOOK_PATH,
-        template_sheet=BALANCE_DEMAND_TEMPLATE_SHEET,
-        mapping_pairs_path=balance_mapping_workbook,
-        codebook_path=BALANCE_DEMAND_CODEBOOK_PATH,
-        structure_config=structure_config,
-        known_issues=known_issues,
-        projection_economy=DIRECT_DEMAND_PROJECTION_ECONOMY,
-        max_output_year=FINAL_YEAR,
-        explicit_pair_mappings_only=True,
-    )
-    comparison = build_balance_comparison_esto_axis(
-        leap_long=conversion["leap_long"],
-        mapping_status=conversion["mapping_status"],
-        base_year=DIRECT_DEMAND_BASE_YEAR,
-        projection_years=tuple(year for year in DIRECT_DEMAND_PROJECTION_YEARS if year <= FINAL_YEAR),
-        base_economy=DIRECT_DEMAND_BASE_ECONOMY,
-        projection_economy=DIRECT_DEMAND_PROJECTION_ECONOMY,
-        scenario_map=scenario_map,
-        sheet_map_path=BALANCE_DEMAND_SHEET_MAP_PATH,
-        backup_mappings_path=BALANCE_DEMAND_BACKUP_MAPPINGS_PATH,
-        codebook_path=BALANCE_DEMAND_CODEBOOK_PATH,
-        canonical_pairs_path=BALANCE_DEMAND_NINTH_TO_ESTO_MAPPING,
-        explicit_mappings_path=BALANCE_DEMAND_EXPLICIT_MAPPINGS_PATH,
-        explicit_reassignments_path=BALANCE_DEMAND_EXPLICIT_REASSIGNMENTS_PATH,
-        synthetic_reference_rows_path=BALANCE_DEMAND_SYNTHETIC_REFERENCE_ROWS_PATH,
-        esto_table_path=BALANCE_DEMAND_BASE_TABLE_PATH,
-        projection_table_path=BALANCE_DEMAND_PROJECTION_TABLE_PATH,
-        chart_navigation_guide_path=None,
-        known_issues=known_issues,
-    )
-
-    issues = conversion["issues"].copy()
-    matching_diagnostics = conversion.get("matching_diagnostics", pd.DataFrame()).copy()
     scenario_set = {str(item).strip().lower() for item in balance_scenarios if str(item).strip()}
-    comparison_long = comparison["comparison_long"].copy()
-    mapping_status = comparison["mapping_status"].copy()
-    if scenario_set:
-        comparison_long = comparison_long[
-            comparison_long["scenario"].astype(str).str.strip().str.lower().isin(scenario_set)
-        ].copy()
-        if "scenario" in mapping_status.columns:
-            mapping_status = mapping_status[
-                mapping_status["scenario"].astype(str).str.strip().str.lower().isin(scenario_set)
-            ].copy()
-        if "scenario" in issues.columns:
-            issues = issues[
-                issues["scenario"].astype(str).str.strip().str.lower().isin(scenario_set)
-            ].copy()
-        if "scenario" in matching_diagnostics.columns:
-            matching_diagnostics = matching_diagnostics[
-                matching_diagnostics["scenario"].astype(str).str.strip().str.lower().isin(scenario_set)
-            ].copy()
+    comparison_long_parts: list[pd.DataFrame] = []
+    mapping_status_parts: list[pd.DataFrame] = []
+    issue_parts: list[pd.DataFrame] = []
+    matching_diagnostics_parts: list[pd.DataFrame] = []
+    projection_only_mapping_status: pd.DataFrame | None = None
+    projection_ninth_df: pd.DataFrame | None = None
 
+    def _projection_only_mapping_status() -> pd.DataFrame:
+        nonlocal projection_only_mapping_status
+        if projection_only_mapping_status is None:
+            projection_only_mapping_status = _build_projection_only_mapping_status(balance_mapping_workbook)
+        return projection_only_mapping_status.copy()
+
+    def _projection_ninth_table() -> pd.DataFrame:
+        nonlocal projection_ninth_df
+        if projection_ninth_df is None:
+            projection_ninth_df = _load_projection_only_ninth_table()
+        return projection_ninth_df.copy()
+
+    for economy in economy_list:
+        economy_text = str(economy or "").strip()
+        try:
+            ref_workbook_path, tgt_workbook_path = _resolve_balance_demand_workbooks_for_economy(economy_text)
+        except FileNotFoundError:
+            if not allow_projection_only_without_balance_exports:
+                raise
+            mapping_status = _projection_only_mapping_status()
+            comparison_long = _build_projection_rows_from_ninth(
+                mapping_status,
+                ninth_df=_projection_ninth_table(),
+                scenarios=balance_scenarios,
+                projection_economy=economy_text,
+            )
+            issues = pd.DataFrame()
+            matching_diagnostics = pd.DataFrame()
+            print(
+                "[INFO] No LEAP balance exports found for "
+                f"{economy_text}; using 9th projection-only demand for baseline_seed."
+            )
+            comparison_long_parts.append(comparison_long)
+            mapping_status_parts.append(mapping_status)
+            issue_parts.append(issues)
+            matching_diagnostics_parts.append(matching_diagnostics)
+            continue
+        base_economy = (
+            DIRECT_DEMAND_BASE_ECONOMY
+            if economy_text == DIRECT_DEMAND_PROJECTION_ECONOMY
+            else _compact_economy_code(economy_text)
+        )
+
+        conversion = convert_leap_balances_to_esto_long_table(
+            ref_workbook_path=ref_workbook_path,
+            tgt_workbook_path=tgt_workbook_path,
+            template_sheet=BALANCE_DEMAND_TEMPLATE_SHEET,
+            mapping_pairs_path=balance_mapping_workbook,
+            codebook_path=BALANCE_DEMAND_CODEBOOK_PATH,
+            structure_config=structure_config,
+            known_issues=known_issues,
+            projection_economy=economy_text,
+            max_output_year=FINAL_YEAR,
+            explicit_pair_mappings_only=True,
+            allow_descendant_mapping_expansion=False,
+        )
+        comparison = build_balance_comparison_esto_axis(
+            leap_long=conversion["leap_long"],
+            mapping_status=conversion["mapping_status"],
+            base_year=DIRECT_DEMAND_BASE_YEAR,
+            projection_years=tuple(year for year in DIRECT_DEMAND_PROJECTION_YEARS if year <= FINAL_YEAR),
+            base_economy=base_economy,
+            projection_economy=economy_text,
+            scenario_map=scenario_map,
+            sheet_map_path=BALANCE_DEMAND_SHEET_MAP_PATH,
+            backup_mappings_path=BALANCE_DEMAND_BACKUP_MAPPINGS_PATH,
+            codebook_path=BALANCE_DEMAND_CODEBOOK_PATH,
+            canonical_pairs_path=BALANCE_DEMAND_NINTH_TO_ESTO_MAPPING,
+            explicit_mappings_path=BALANCE_DEMAND_EXPLICIT_MAPPINGS_PATH,
+            explicit_reassignments_path=BALANCE_DEMAND_EXPLICIT_REASSIGNMENTS_PATH,
+            synthetic_reference_rows_path=BALANCE_DEMAND_SYNTHETIC_REFERENCE_ROWS_PATH,
+            esto_table_path=BALANCE_DEMAND_BASE_TABLE_PATH,
+            projection_table_path=BALANCE_DEMAND_PROJECTION_TABLE_PATH,
+            chart_navigation_guide_path=None,
+            known_issues=known_issues,
+        )
+
+        issues = conversion["issues"].copy()
+        matching_diagnostics = conversion.get("matching_diagnostics", pd.DataFrame()).copy()
+        comparison_long = comparison["comparison_long"].copy()
+        mapping_status = comparison["mapping_status"].copy()
+        for frame in (comparison_long, mapping_status, issues, matching_diagnostics):
+            if "economy" not in frame.columns:
+                frame["economy"] = economy_text
+        if scenario_set:
+            comparison_long = comparison_long[
+                comparison_long["scenario"].astype(str).str.strip().str.lower().isin(scenario_set)
+            ].copy()
+            if "scenario" in mapping_status.columns:
+                mapping_status = mapping_status[
+                    mapping_status["scenario"].astype(str).str.strip().str.lower().isin(scenario_set)
+                ].copy()
+            if "scenario" in issues.columns:
+                issues = issues[
+                    issues["scenario"].astype(str).str.strip().str.lower().isin(scenario_set)
+                ].copy()
+            if "scenario" in matching_diagnostics.columns:
+                matching_diagnostics = matching_diagnostics[
+                    matching_diagnostics["scenario"].astype(str).str.strip().str.lower().isin(scenario_set)
+                ].copy()
+        comparison_long_parts.append(comparison_long)
+        mapping_status_parts.append(mapping_status)
+        issue_parts.append(issues)
+        matching_diagnostics_parts.append(matching_diagnostics)
+
+    comparison_long = pd.concat(comparison_long_parts, ignore_index=True) if comparison_long_parts else pd.DataFrame()
+    mapping_status = pd.concat(mapping_status_parts, ignore_index=True) if mapping_status_parts else pd.DataFrame()
+    issues = pd.concat(issue_parts, ignore_index=True) if issue_parts else pd.DataFrame()
+    matching_diagnostics = (
+        pd.concat(matching_diagnostics_parts, ignore_index=True)
+        if matching_diagnostics_parts
+        else pd.DataFrame()
+    )
+
+    if "year" not in comparison_long.columns:
+        comparison_long["year"] = pd.Series(dtype="Int64")
+    if "value" not in comparison_long.columns:
+        comparison_long["value"] = pd.Series(dtype="float")
     comparison_long["year"] = pd.to_numeric(comparison_long["year"], errors="coerce").astype("Int64")
     comparison_long["value"] = pd.to_numeric(comparison_long["value"], errors="coerce")
     return (
@@ -3179,80 +3696,11 @@ def _query_leap_value_series_for_fuels(
     filter_dimensions: tuple[str, ...],
     required: bool = False,
 ) -> dict[str, dict[int, float]]:
-    """Query LEAP ValueRS for specific fuel labels across candidate branches."""
-    series_by_label: dict[str, dict[int, float]] = {}
-    variable_obj = None
-    resolved_branch = ""
-
-    for branch_path in branch_candidates:
-        try:
-            resolved = leap_results_workflow._resolve_existing_branch_path(app, branch_path)
-            candidate_var = leap_results_workflow._resolve_branch_variable(
-                app,
-                resolved,
-                variable_name,
-                allow_substitution=False,
-            )
-            leap_results_workflow.set_axes(app, x_axis="Years", legend="Fuel")
-            leap_results_workflow.set_context(
-                app,
-                scenario=scenario,
-                region=region,
-                branch_path=resolved,
-            )
-            try:
-                app.ShowResultsViewTable()
-            except Exception:
-                pass
-            variable_obj = candidate_var
-            resolved_branch = resolved
-            break
-        except Exception:
-            continue
-
-    if variable_obj is None:
-        if required:
-            raise RuntimeError(
-                "Failed to resolve required LEAP variable on candidate branches: "
-                f"variable={variable_name}, branches={branch_candidates}, scenario={scenario}, region={region}"
-            )
-        return {}
-
-    for label in fuel_labels:
-        label_text = str(label or "").strip()
-        if not label_text:
-            continue
-        values: dict[int, float] = {}
-        for year in years:
-            value = None
-            for dim_label in filter_dimensions:
-                filter_str = f"{dim_label}={label_text}"
-                try:
-                    queried = variable_obj.ValueRS(region, scenario, int(year), "", filter_str)
-                except Exception:
-                    continue
-                numeric = pd.to_numeric(queried, errors="coerce")
-                if pd.isna(numeric):
-                    continue
-                value = float(numeric)
-                break
-            if value is None:
-                continue
-            values[int(year)] = float(value)
-        if values:
-            series_by_label[label_text] = values
-    if not series_by_label:
-        if required:
-            raise RuntimeError(
-                "Required LEAP Results query returned no values: "
-                f"branch={resolved_branch}, variable={variable_name}, scenario={scenario}, "
-                f"region={region}, fuels={fuel_labels[:8]}"
-            )
-        print(
-            f"[INFO] LEAP Results refresh found no values for {resolved_branch} / {variable_name} "
-            f"with {len(fuel_labels)} candidate fuel(s)."
-        )
-    return series_by_label
+    """Disabled legacy LEAP Results API value query."""
+    raise RuntimeError(
+        "LEAP Results API value queries are disabled in results_supply_link_workflow. "
+        "Use exported LEAP balance workbooks instead."
+    )
 
 
 def _refresh_transformation_measures_from_leap_results(
@@ -3263,164 +3711,78 @@ def _refresh_transformation_measures_from_leap_results(
     base_year: int,
     final_year: int,
 ) -> list[dict]:
-    """
-    Refresh transformation output/feedstock series from LEAP Results by fuel filters.
-
-    Method:
-    - Query parent/process branches (not fuel-child branches)
-    - Use explicit fuel-label filters against Results variables
-    - Keep original record values when LEAP queries do not return data
-    """
-    if not rows:
-        return rows
-    if not leap_api.is_available():
-        print("[INFO] LEAP API unavailable; skipping transformation Results refresh.")
-        return rows
-    try:
-        app = leap_results_workflow.connect_leap()
-    except Exception as exc:
-        print(f"[WARN] Failed to connect LEAP for transformation Results refresh: {exc}")
-        return rows
-
-    years = list(range(int(base_year), int(final_year) + 1))
-    refreshed: list[dict] = []
-    refreshed_output_count = 0
-    refreshed_feedstock_count = 0
-    refreshed_feedstock_variable_counts = {"Inputs": 0, "Outputs by Feedstock Fuel": 0}
-
-    for record in rows:
-        out = copy.deepcopy(record)
-        sector_name = str(out.get("sector_title") or "").strip()
-        process_name = str(out.get("process_name") or "").strip()
-        economy = str(out.get("economy") or "").strip()
-        if not sector_name:
-            refreshed.append(out)
-            continue
-        if not economy:
-            raise RuntimeError(
-                "Transformation Results refresh requires 'economy' on each record "
-                f"(sector={sector_name}, process={process_name})."
-            )
-
-        (
-            template_variables_by_sector,
-            template_variables_by_sector_norm,
-            template_sector_name_by_norm,
-        ) = _load_transformation_template_variable_sets(economy, scenario)
-        sector_template_variables = template_variables_by_sector.get(sector_name, set())
-        sector_branch_name = sector_name
-        if not sector_template_variables:
-            for norm_key in _sector_match_keys(sector_name):
-                sector_template_variables = template_variables_by_sector_norm.get(norm_key, set())
-                if sector_template_variables:
-                    sector_branch_name = template_sector_name_by_norm.get(norm_key, sector_name)
-                    break
-        if not sector_template_variables:
-            raise RuntimeError(
-                "No transformation template variables found for sector in results template workbook: "
-                f"economy={economy}, scenario={scenario}, sector={sector_name}"
-            )
-
-        sector_branch = f"Transformation\\{sector_branch_name}"
-        process_collection_branch = f"{sector_branch}\\Processes"
-        process_branch = (
-            f"{process_collection_branch}\\{process_name}"
-            if process_name
-            else process_collection_branch
-        )
-        branch_candidates = [process_branch, process_collection_branch, sector_branch]
-
-        output_labels = [
-            str(label).strip()
-            for label in (out.get("output_values") or {}).keys()
-            if str(label).strip()
-        ]
-        feedstock_labels = [
-            str(label).strip()
-            for label in (out.get("feedstock_values") or {}).keys()
-            if str(label).strip()
-        ]
-
-        if output_labels:
-            if "Outputs by Output Fuel" not in sector_template_variables:
-                raise RuntimeError(
-                    "Required template measure missing for output extraction: "
-                    f"economy={economy}, scenario={scenario}, sector={sector_name}, "
-                    "required='Outputs by Output Fuel'"
-                )
-            refreshed_output = _query_leap_value_series_for_fuels(
-                app,
-                branch_candidates=branch_candidates,
-                variable_name="Outputs by Output Fuel",
-                scenario=scenario,
-                region=region,
-                years=years,
-                fuel_labels=output_labels,
-                filter_dimensions=("Output Fuel", "Fuel"),
-                required=True,
-            )
-            out["output_values"] = refreshed_output
-            refreshed_output_count += 1
-
-        if feedstock_labels:
-            feedstock_variable_candidates = [
-                name
-                for name in ("Inputs", "Outputs by Feedstock Fuel")
-                if name in sector_template_variables
-            ]
-            if not feedstock_variable_candidates:
-                raise RuntimeError(
-                    "No required feedstock measure found in transformation template for sector: "
-                    f"economy={economy}, scenario={scenario}, sector={sector_name}, "
-                    "required_one_of=['Inputs', 'Outputs by Feedstock Fuel']"
-                )
-
-            refreshed_feedstock: dict[str, dict[int, float]] = {}
-            feedstock_variable_used = ""
-            last_exc: Exception | None = None
-            for feedstock_variable in feedstock_variable_candidates:
-                try:
-                    refreshed_feedstock = _query_leap_value_series_for_fuels(
-                        app,
-                        branch_candidates=branch_candidates,
-                        variable_name=feedstock_variable,
-                        scenario=scenario,
-                        region=region,
-                        years=years,
-                        fuel_labels=feedstock_labels,
-                        filter_dimensions=("Feedstock Fuel", "Fuel"),
-                        required=True,
-                    )
-                except Exception as exc:
-                    last_exc = exc
-                    continue
-                if refreshed_feedstock:
-                    feedstock_variable_used = feedstock_variable
-                    break
-            if not refreshed_feedstock:
-                if last_exc:
-                    raise last_exc
-                raise RuntimeError(
-                    "Required feedstock extraction failed for all candidate variables: "
-                    f"economy={economy}, scenario={scenario}, sector={sector_name}, process={process_name}"
-                )
-            out["feedstock_values"] = refreshed_feedstock
-            refreshed_feedstock_count += 1
-            if feedstock_variable_used:
-                refreshed_feedstock_variable_counts[feedstock_variable_used] += 1
-
-        refreshed.append(out)
-
-    print(
-        "[INFO] Transformation Results refresh summary: "
-        f"records={len(rows)}, output_refreshed={refreshed_output_count}, "
-        f"feedstock_refreshed={refreshed_feedstock_count}, "
-        f"feedstock_inputs_used={refreshed_feedstock_variable_counts['Inputs']}, "
-        "feedstock_outputs_by_feedstock_used="
-        f"{refreshed_feedstock_variable_counts['Outputs by Feedstock Fuel']}, "
-        f"scenario={scenario}, region={region}"
+    """Disabled legacy LEAP Results API transformation refresh."""
+    raise RuntimeError(
+        "REFRESH_TRANSFORMATION_MEASURES_FROM_LEAP_RESULTS is disabled in "
+        "results_supply_link_workflow. Keep it False and use workbook-based "
+        "transformation inputs plus LEAP balance exports."
     )
-    return refreshed
+
+
+def _apply_own_use_ratio_feedback(record: dict, years: list[int]) -> dict:
+    """
+    Recalibrate auxiliary_ratios using LEAP-refreshed feedstock_values and the
+    ESTO-derived own_use_ratios stored on the record.
+
+    For each fuel F where 0 < own_use_ratio < 1 and F appears in feedstock_values:
+      LEAP 'Inputs' reports feedstock-only consumption for F.
+      We estimate the own-use portion using the ESTO ratio:
+        estimated_own_use(year) = feedstock(year) × ratio / (1 − ratio)
+      The new auxiliary ratio (per unit of output) is:
+        new_aux_ratio(year) = estimated_own_use(year) / total_output(year)
+
+    Fuels that are purely feedstock (ratio=0) or purely own-use (ratio=1, not in
+    feedstock_values) are left unchanged.
+
+    NOTE: LEAP does not expose own-use separately from transformation inputs in its
+    energy balance output.  This function therefore cannot cross-check the estimate
+    against actual LEAP-reported own-use values — the split is entirely ESTO-derived.
+    """
+    own_use_ratios = record.get("own_use_ratios", {})
+    if not own_use_ratios:
+        return record
+
+    feedstock_values = record.get("feedstock_values", {})
+    output_values = record.get("output_values", {})
+    auxiliary_ratios = dict(record.get("auxiliary_ratios", {}))
+
+    # Sum output across all output fuels per year.
+    output_total_by_year: dict[int, float] = {}
+    for year_vals in output_values.values():
+        for year, val in (year_vals or {}).items():
+            yr = int(year)
+            output_total_by_year[yr] = output_total_by_year.get(yr, 0.0) + float(val or 0.0)
+
+    updated_count = 0
+    for fuel, ratio in own_use_ratios.items():
+        if ratio <= 0.0 or ratio >= 1.0:
+            continue
+        feedstock_by_year = feedstock_values.get(fuel)
+        if not feedstock_by_year:
+            continue
+        new_ratio_by_year: dict[int, float] = {}
+        for year in years:
+            feedstock_pj = float((feedstock_by_year or {}).get(year, 0.0))
+            output_pj = output_total_by_year.get(year, 0.0)
+            if output_pj <= 0.0 or feedstock_pj <= 0.0:
+                new_ratio_by_year[year] = auxiliary_ratios.get(fuel, {}).get(year, 0.0)
+                continue
+            est_own_use = feedstock_pj * ratio / (1.0 - ratio)
+            new_ratio_by_year[year] = est_own_use / output_pj
+        if new_ratio_by_year:
+            auxiliary_ratios[fuel] = new_ratio_by_year
+            updated_count += 1
+
+    if updated_count:
+        economy = record.get("economy", "")
+        process = record.get("process_name", "")
+        print(
+            f"[INFO] Own-use ratio feedback applied: {updated_count} auxiliary ratio(s) "
+            f"recalibrated from LEAP feedstock readback ({economy} / {process})."
+        )
+    out = dict(record)
+    out["auxiliary_ratios"] = auxiliary_ratios
+    return out
 
 
 def _normalize_template_header_value(value: object) -> str:
@@ -3767,8 +4129,54 @@ def load_results_demand_table(
     source_priority: tuple[str, ...] = DEMAND_SOURCE_PRIORITY,
     comparison_long_df: pd.DataFrame | None = None,
     mapping_status_df: pd.DataFrame | None = None,
+    economies: list[str] | None = None,
 ) -> pd.DataFrame:
-    """Aggregate mapped LEAP demand to ESTO products, with projection fallback."""
+    """Aggregate mapped LEAP demand to ESTO products, with projection fallback.
+
+    When USE_AGGREGATED_DEMAND_AS_DUMMY is True:
+      - For single economy or aggregate sentinel (00_APEC): uses ESTO/ninth
+        aggregated demand for that economy/aggregate.
+      - For multiple individual economies: builds aggregated demand for each
+        economy separately (no cross-economy aggregation), then stacks them.
+
+    Useful for baseline_seed passes on new economies with no balance exports.
+    """
+    if not USE_AGGREGATED_DEMAND_AS_DUMMY or not economies:
+        # Normal path: read LEAP balance exports or use projection fallback
+        pass
+    else:
+        # Aggregated demand path
+        from codebase.aggregated_demand_workflow import (
+            build_aggregated_demand_as_dummy,
+            _is_aggregate_economy,
+            LEAP_SCENARIOS,
+        )
+
+        is_aggregate = len(economies) == 1 and _is_aggregate_economy(economies[0])
+        if is_aggregate:
+            # Single aggregate (00_APEC): sum all member economies
+            print(f"[INFO] USE_AGGREGATED_DEMAND_AS_DUMMY=True: loading ESTO/ninth aggregated demand for {economies[0]}.")
+            dummy = build_aggregated_demand_as_dummy(
+                economy=economies[0],
+                scenarios=list(LEAP_SCENARIOS),
+                final_year=FINAL_YEAR,
+            )
+            return dummy
+        else:
+            # Multiple individual economies: build each separately (no cross-economy aggregation)
+            print(f"[INFO] USE_AGGREGATED_DEMAND_AS_DUMMY=True: loading ESTO/ninth aggregated demand for {len(economies)} economies separately.")
+            parts = [
+                build_aggregated_demand_as_dummy(
+                    economy=econ,
+                    scenarios=list(LEAP_SCENARIOS),
+                    final_year=FINAL_YEAR,
+                )
+                for econ in economies
+            ]
+            dummy = pd.concat(parts, ignore_index=True)
+            return dummy
+
+    # Normal LEAP balance export path (fallback when USE_AGGREGATED_DEMAND_AS_DUMMY is False or no economies)
     sector_table = load_results_sector_demand_table(
         comparison_long_path=comparison_long_path,
         mapping_status_path=mapping_status_path,
@@ -4729,6 +5137,47 @@ def _build_capacity_process_catalog(
     return catalog, sorted(unmapped_labels)
 
 
+def _validate_capacity_priority_coverage(process_catalog: pd.DataFrame) -> None:
+    """Raise if any ESTO product is produced by 2+ modules but has no entry in CAPACITY_UNMET_PRIORITY_BY_PRODUCT.
+
+    Products produced by only one module are unambiguous — that module is the implicit default.
+    Products produced by multiple modules require an explicit priority ordering so the
+    allocation loop doesn't silently depend on sort order.
+    """
+    if process_catalog.empty:
+        return
+
+    modules_by_product: dict[str, set[str]] = {}
+    for _, row in process_catalog[["esto_product", "module"]].drop_duplicates().iterrows():
+        product = str(row["esto_product"]).strip()
+        module = str(row["module"]).strip()
+        if not product or not module:
+            continue
+        modules_by_product.setdefault(product, set()).add(module)
+
+    missing: dict[str, list[str]] = {}
+    for product, modules in modules_by_product.items():
+        if len(modules) <= 1:
+            continue
+        if _resolve_capacity_priority_modules(product):
+            continue
+        missing[product] = sorted(modules)
+
+    if not missing:
+        return
+
+    lines = [
+        "capacity_unmet_iterative_balanced: the following ESTO products are produced by "
+        "multiple transformation modules but have no entry in CAPACITY_UNMET_PRIORITY_BY_PRODUCT.\n"
+        "Add them to CAPACITY_UNMET_PRIORITY_BY_PRODUCT with an ordered list of modules so the "
+        "allocation is deterministic.\n"
+    ]
+    for product, modules in sorted(missing.items()):
+        module_list = ", ".join(f'"{m}"' for m in modules)
+        lines.append(f'  "{product}": [{module_list}],')
+    raise ValueError("\n".join(lines))
+
+
 def _resolve_capacity_priority_modules(esto_product: str) -> list[str]:
     """Return ordered priority module names configured for one ESTO product."""
     candidates = [
@@ -5022,13 +5471,13 @@ def _run_capacity_unmet_iterative_pass(
             if remaining_output <= 0.0:
                 break
             module_name = str(candidate.get("module") or "")
-            module_upper_limit = _lookup_module_capacity_upper_limit(
+            _raw_cap_rule = _lookup_module_capacity_upper_limit(
                 economy=economy,
                 scenario=scenario_key,
                 module=module_name,
             )
             module_headroom = float("inf")
-            if module_upper_limit is not None:
+            if _raw_cap_rule is not None:
                 baseline_module_output = module_baseline_output_lookup.get(
                     (_state_token(economy), _state_token(module_name), int(year)),
                     0.0,
@@ -5037,10 +5486,12 @@ def _run_capacity_unmet_iterative_pass(
                     (_state_token(economy), _state_token(scenario_key), _state_token(module_name), int(year)),
                     0.0,
                 )
-                module_headroom = max(
-                    float(module_upper_limit) - float(baseline_module_output) - float(prior_module_added),
-                    0.0,
-                )
+                module_upper_limit = _resolve_module_cap_rule(_raw_cap_rule, baseline_module_output)
+                if module_upper_limit is not None:
+                    module_headroom = max(
+                        float(module_upper_limit) - float(baseline_module_output) - float(prior_module_added),
+                        0.0,
+                    )
             if module_headroom <= 0.0:
                 clipping_rows.append(
                     {
@@ -5246,6 +5697,8 @@ def _run_capacity_unmet_iterative_balanced_pass(
             f"for capacity_unmet_iterative_balanced: {preview}"
         )
 
+    _validate_capacity_priority_coverage(process_catalog)
+
     run_mode = _resolve_capacity_unmet_pass_mode()
     state = _read_capacity_unmet_state(state_path=state_path, run_mode=run_mode)
     cumulative_capacity_map = _parse_runtime_capacity_additions_from_state(
@@ -5435,17 +5888,18 @@ def _run_capacity_unmet_iterative_balanced_pass(
             )
             prior_primary = float(cumulative_primary_map.get(primary_key, 0.0))
             max_prod = pd.to_numeric(row.get("max_production"), errors="coerce")
+            constrained_prod = max(float(row.get("constrained_production", 0.0)), 0.0)
             configured_max_prod = _lookup_production_upper_limit(
                 economy=economy,
                 scenario=scenario_key,
                 esto_product=esto_product,
+                baseline_production=constrained_prod,
             )
             if configured_max_prod is not None:
                 if pd.isna(max_prod):
                     max_prod = float(configured_max_prod)
                 else:
                     max_prod = min(float(max_prod), float(configured_max_prod))
-            constrained_prod = max(float(row.get("constrained_production", 0.0)), 0.0)
             if pd.isna(max_prod):
                 primary_headroom = float("inf")
             else:
@@ -5486,6 +5940,27 @@ def _run_capacity_unmet_iterative_balanced_pass(
                     )
 
         if remaining_output <= 0.0:
+            continue
+
+        # Production-only products skip the transformation lever entirely so
+        # that e.g. LNG regasification never absorbs a natural-gas gap that
+        # should come from the well.  Any residual goes to import fallback via
+        # the unresolved_rows path below.
+        if _is_production_only_product(esto_product):
+            unresolved_rows.append(
+                {
+                    "economy": economy,
+                    "scenario": scenario_key,
+                    "esto_product": esto_product,
+                    "year": int(year),
+                    "unresolved_output_uplift": float(remaining_output),
+                    "reason": (
+                        "Production-only product: transformation lever skipped "
+                        f"(see CAPACITY_UNMET_PRODUCTION_ONLY_PRODUCTS). "
+                        f"Remaining gap of {remaining_output:.3f} routed to import fallback."
+                    ),
+                }
+            )
             continue
 
         output_state_key = _output_addition_state_key(
@@ -5591,13 +6066,13 @@ def _run_capacity_unmet_iterative_balanced_pass(
                 remaining_transform -= float(reusable_output)
                 if remaining_transform <= 0.0:
                     break
-            module_upper_limit = _lookup_module_capacity_upper_limit(
+            _raw_cap_rule = _lookup_module_capacity_upper_limit(
                 economy=economy,
                 scenario=scenario_key,
                 module=module_name,
             )
             module_headroom = float("inf")
-            if module_upper_limit is not None:
+            if _raw_cap_rule is not None:
                 baseline_module_output = module_baseline_output_lookup.get(
                     (_state_token(economy), _state_token(module_name), int(year)),
                     0.0,
@@ -5606,10 +6081,12 @@ def _run_capacity_unmet_iterative_balanced_pass(
                     (_state_token(economy), _state_token(scenario_key), _state_token(module_name), int(year)),
                     0.0,
                 )
-                module_headroom = max(
-                    float(module_upper_limit) - float(baseline_module_output) - float(prior_module_added),
-                    0.0,
-                )
+                module_upper_limit = _resolve_module_cap_rule(_raw_cap_rule, baseline_module_output)
+                if module_upper_limit is not None:
+                    module_headroom = max(
+                        float(module_upper_limit) - float(baseline_module_output) - float(prior_module_added),
+                        0.0,
+                    )
             if module_headroom <= 0.0:
                 clipping_rows.append(
                     {
@@ -6368,6 +6845,7 @@ def apply_transformation_target_overrides_for_scenario(
                 for year, value in output_total_by_year.items()
             }
             record["capacity_units"] = str(CAPACITY_CONSTRAINT_UNITS)
+            record["capacity_scale"] = str(CAPACITY_CONSTRAINT_SCALE)
             record["historical_production_by_year"] = {
                 int(year): max(float(value), 0.0)
                 for year, value in output_total_by_year.items()
@@ -6393,8 +6871,11 @@ def save_transformation_exports_with_split_targets(
     full_branch_catalog_df: pd.DataFrame | None = None,
 ) -> list[Path]:
     """Save scenario-specific transformation LEAP workbooks with split import/export targets."""
-    if reconciliation_table.empty or not process_records:
+    if not process_records:
         return []
+    if reconciliation_table.empty:
+        print("[INFO] save_transformation_exports: reconciliation_table is empty (baseline seed); "
+              "exporting transformation rows without supply-link overrides.")
     output_path = _resolve(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
@@ -6415,58 +6896,76 @@ def save_transformation_exports_with_split_targets(
         }
     )
     for scenario in scenario_list:
-        scenario_process_records = process_records
-        scenario_process_targets = process_target_rows
         projection_scenario = _projection_scenario_for_export(scenario)
+        # Collect scenario-specific records for all economies once per scenario, then
+        # split by economy so each export file only contains one economy's records.
+        # Without this per-economy split, multiple economies that share the same sector
+        # name (e.g. "BKB and PB plants") emit identical Branch_Path rows that are
+        # summed in finalise_export_df, producing Output Share > 100%.
+        all_scenario_records = process_records
+        all_scenario_targets = process_target_rows
         try:
-            scenario_process_records = transformation_workflow.collect_transformation_rows(
+            all_scenario_records = transformation_workflow.collect_transformation_rows(
                 economies=base_economies or None,
                 projection_scenario=projection_scenario,
             )
-            scenario_process_targets, scenario_process_records = build_transformation_trade_target_rows(
+            all_scenario_targets, all_scenario_records = build_transformation_trade_target_rows(
                 economies=base_economies or None,
-                process_records=scenario_process_records,
+                process_records=all_scenario_records,
             )
         except Exception as exc:
             print(
                 f"[WARN] Failed to build scenario-specific transformation baseline for "
                 f"{scenario} (projection={projection_scenario}); falling back to default baseline: {exc}"
             )
-        scenario_records = apply_transformation_target_overrides_for_scenario(
-            scenario_process_records,
-            scenario_process_targets,
-            reconciliation_table,
-            scenario,
-        )
-        transformation_workflow.core.consolidate_transformation_output_rows(
-            scenario_records,
-            include_output_series=transformation_workflow.core.INCLUDE_OUTPUT_SERIES_IN_LEAP_EXPORT,
-            use_output_targets=bool(
-                transformation_workflow.core.TRANSFORMATION_OUTPUT_VARIABLES.get("output_import_target")
-                or transformation_workflow.core.TRANSFORMATION_OUTPUT_VARIABLES.get("output_export_target")
-            ),
-        )
-        economy_label = transformation_workflow._infer_primary_economy(scenario_records)
-        export_filename = transformation_workflow.format_export_filename(
-            economy_label,
-            [scenario],
-            filename_template,
-        )
-        export_path = transformation_workflow.core.save_transformation_export(
-            scenario_records,
-            transformation_workflow.core.EXPORT_REGION,
-            transformation_workflow.core.EXPORT_BASE_YEAR,
-            transformation_workflow.core.EXPORT_FINAL_YEAR,
-            transformation_workflow.core.code_to_name_mapping,
-            str(output_path),
-            export_filename,
-            transformation_workflow.core.EXPORT_MODEL_NAME,
-            [scenario],
-            full_branch_catalog_df=full_branch_catalog_df,
-        )
-        if export_path:
-            export_file = Path(export_path)
-            saved_paths.append(export_file)
+        for economy in (base_economies or [transformation_workflow._infer_primary_economy(all_scenario_records)]):
+            economy_records = [r for r in all_scenario_records if str(r.get("economy") or "").strip() == economy]
+            economy_targets = (
+                all_scenario_targets[all_scenario_targets["economy"].astype(str).str.strip() == economy].copy()
+                if not (isinstance(all_scenario_targets, pd.DataFrame) and all_scenario_targets.empty)
+                and isinstance(all_scenario_targets, pd.DataFrame)
+                else all_scenario_targets
+            )
+            if not economy_records:
+                continue
+            scenario_records = apply_transformation_target_overrides_for_scenario(
+                economy_records,
+                economy_targets,
+                reconciliation_table,
+                scenario,
+            )
+            transformation_workflow.core.consolidate_transformation_output_rows(
+                scenario_records,
+                include_output_series=transformation_workflow.core.INCLUDE_OUTPUT_SERIES_IN_LEAP_EXPORT,
+                use_output_targets=bool(
+                    transformation_workflow.core.TRANSFORMATION_OUTPUT_VARIABLES.get("output_import_target")
+                    or transformation_workflow.core.TRANSFORMATION_OUTPUT_VARIABLES.get("output_export_target")
+                ),
+            )
+            export_filename = transformation_workflow.format_export_filename(
+                economy,
+                [scenario],
+                filename_template,
+            )
+            export_path = transformation_workflow.core.save_transformation_export(
+                scenario_records,
+                transformation_workflow.core.EXPORT_REGION,
+                transformation_workflow.core.EXPORT_BASE_YEAR,
+                transformation_workflow.core.EXPORT_FINAL_YEAR,
+                transformation_workflow.core.code_to_name_mapping,
+                str(output_path),
+                export_filename,
+                transformation_workflow.core.EXPORT_MODEL_NAME,
+                [scenario],
+                full_branch_catalog_df=full_branch_catalog_df,
+                in_scope_sector_titles=(
+                    transformation_workflow.core.get_analyzed_sector_titles()
+                    | transfers_workflow.get_transfer_sector_titles()
+                ),
+            )
+            if export_path:
+                export_file = Path(export_path)
+                saved_paths.append(export_file)
     return saved_paths
 
 
@@ -6476,6 +6975,7 @@ def save_transfer_exports_with_supply_overrides(
     scenarios: Iterable[str],
     output_dir: Path | str = TRANSFORMATION_EXPORT_OUTPUT_DIR,
     filename_template: str = transfers_workflow.EXPORT_FILENAME_TEMPLATE,
+    full_branch_catalog_df=None,
 ) -> list[Path]:
     """Save scenario-specific transfer workbooks with supply-linked Process Share overrides."""
     output_path = _resolve(output_dir)
@@ -6536,6 +7036,11 @@ def save_transfer_exports_with_supply_overrides(
                 export_filename,
                 transformation_workflow.core.EXPORT_MODEL_NAME,
                 [scenario],
+                full_branch_catalog_df=full_branch_catalog_df,
+                in_scope_sector_titles=(
+                    transformation_workflow.core.get_analyzed_sector_titles()
+                    | transfers_workflow.get_transfer_sector_titles()
+                ),
             )
             if export_path:
                 export_file = Path(export_path)
@@ -6595,7 +7100,7 @@ def _merge_workbook_sheets(
         merged.append(data)
     normalized = [frame.reindex(columns=ordered_columns) for frame in merged]
     merged_data = pd.concat(normalized, ignore_index=True, sort=False)
-    dedupe_cols = [col for col in ["Branch Path", "Variable", "Scenario", "Region", "Expression"] if col in merged_data.columns]
+    dedupe_cols = [col for col in ["Branch Path", "Variable", "Scenario", "Region"] if col in merged_data.columns]
     if dedupe_cols:
         merged_data = merged_data.drop_duplicates(subset=dedupe_cols, keep="last")
     else:
@@ -6864,6 +7369,378 @@ def run_other_loss_own_use_proxy_leap_import(
             except Exception as exc:
                 print(
                     "[WARN] Other loss/own-use LEAP import failed for "
+                    f"{workbook_path.name} ({scenario}): {exc}"
+                )
+    return imported
+
+
+def build_aggregated_demand_workbooks_for_results_supply(
+    *,
+    economies: Iterable[str],
+    scenarios: Iterable[str],
+    output_dir: Path | str = EXPORT_OUTPUT_DIR,
+    region: str = LEAP_IMPORT_REGION,
+) -> list[Path]:
+    """
+    Write Demand\\All demand aggregated\\{fuel} LEAP import workbooks for each economy.
+
+    Called when USE_AGGREGATED_DEMAND_AS_DUMMY and WRITE_AGGREGATED_DEMAND_WORKBOOK
+    are both True so that the aggregated demand branches are actually written to LEAP
+    (not just used internally for reconciliation).
+    Returns a list of written workbook paths.
+    """
+    from codebase.aggregated_demand_workflow import (
+        save_aggregated_demand_as_leap_workbook,
+        LEAP_SCENARIOS,
+        PROJECTION_DATA_PATH,
+        FUEL_MAPPINGS_PATH,
+        BASE_YEAR,
+        PROJECTION_END_YEAR,
+    )
+
+    economy_list = workflow_common.normalize_economies(economies)
+    scenario_list = workflow_common.normalize_workflow_scenarios(scenarios, SCENARIOS)
+    out_dir = _resolve(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    paths: list[Path] = []
+    for economy in economy_list:
+        econ_token = workflow_common.format_filename_segment(economy) or "economy"
+        out_path = out_dir / f"aggregated_demand_{econ_token}.xlsx"
+        print(f"[INFO] Building aggregated demand workbook for LEAP: economy={economy}")
+        result = save_aggregated_demand_as_leap_workbook(
+            economy=economy,
+            output_path=out_path,
+            scenarios=scenario_list,
+            region=region,
+            base_year=BASE_YEAR,
+            final_year=PROJECTION_END_YEAR,
+            data_path=PROJECTION_DATA_PATH,
+            fuel_mappings_path=FUEL_MAPPINGS_PATH,
+            exclude_own_use_td_losses=bool(AGGREGATED_DEMAND_EXCLUDE_OWN_USE_TD_LOSSES),
+            id_lookup_path=AGGREGATED_DEMAND_ID_LOOKUP_PATH,
+        )
+        if result is not None:
+            paths.append(result)
+    return paths
+
+
+def write_per_economy_combined_workbooks(
+    *,
+    economies: Iterable[str],
+    supply_workbook_dir: Path | str = EXPORT_OUTPUT_DIR,
+    aggregated_demand_dir: Path | str = EXPORT_OUTPUT_DIR,
+    output_dir: Path | str = OUTPUT_DIR,
+    id_lookup_path: Path | str | None = None,
+) -> list[Path]:
+    """
+    For each economy, combine supply_leap_imports_{econ}_*.xlsx and
+    aggregated_demand_{econ}.xlsx into a single per-economy LEAP import workbook
+    (leap_import_{econ}.xlsx) in output_dir.
+
+    IDs (BranchID/VariableID/ScenarioID) are merged from id_lookup_path when provided.
+    RegionID is always 1. Region is set to the economy-specific name from APEC_ECONOMY_REGION_MAP.
+    """
+    from codebase.functions.supply_data_pipeline import get_region_for_economy, APEC_ECONOMY_REGION_MAP
+    from codebase.aggregated_demand_workflow import _build_id_lookups
+
+    supply_dir = _resolve(supply_workbook_dir)
+    agg_dir = _resolve(aggregated_demand_dir)
+    out_dir = _resolve(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    id_lookup_resolved = Path(id_lookup_path) if id_lookup_path is not None else None
+    branch_to_id: dict[str, int] = {}
+    variable_to_id: dict[str, int] = {}
+    scenario_to_id: dict[str, int] = {}
+    if id_lookup_resolved is not None and id_lookup_resolved.exists():
+        branch_to_id, variable_to_id, scenario_to_id = _build_id_lookups(id_lookup_resolved)
+    elif id_lookup_resolved is not None:
+        print(f"[WARN] ID lookup path not found, IDs will be -1: {id_lookup_resolved}")
+
+    def _read_leap_data(path: Path) -> tuple[pd.DataFrame, list]:
+        raw = pd.read_excel(path, sheet_name="LEAP", header=None)
+        for idx in range(min(6, len(raw))):
+            vals = [str(v).strip().lower() for v in raw.iloc[idx].tolist() if str(v) not in ("nan", "")]
+            if "branch path" in vals and "variable" in vals:
+                header = raw.iloc[idx].tolist()
+                data = raw.iloc[idx + 1:].copy()
+                data.columns = header
+                data = data.dropna(how="all").reset_index(drop=True)
+                return data, header
+        raise ValueError(f"Could not find LEAP header in {path.name}")
+
+    def _ensure_ids(data: pd.DataFrame, region: str) -> pd.DataFrame:
+        data = data.copy()
+        if "Region" in data.columns:
+            data["Region"] = region
+        if "BranchID" not in data.columns:
+            data.insert(0, "BranchID", data["Branch Path"].map(
+                lambda x: branch_to_id.get(str(x).strip(), -1)))
+            data.insert(1, "VariableID", data["Variable"].map(
+                lambda x: variable_to_id.get(str(x).strip(), -1)))
+            data.insert(2, "ScenarioID", data["Scenario"].map(
+                lambda x: scenario_to_id.get(str(x).strip(), -1)))
+            data.insert(3, "RegionID", 1)
+        else:
+            data["RegionID"] = 1
+        return data
+
+    economy_list = workflow_common.normalize_economies(economies)
+    run_stamp = datetime.now().strftime("%Y%m%d")
+    written: list[Path] = []
+
+    for economy in economy_list:
+        econ_token = workflow_common.format_filename_segment(economy) or economy
+        region = get_region_for_economy(economy)
+        frames: list[pd.DataFrame] = []
+
+        # Use combined supply+transformation workbook when available (already includes
+        # supply, transformation, and transfer rows); otherwise stack each separately.
+        combined_st_files = sorted(
+            supply_dir.glob(f"combined_supply_transformation_leap_imports_{econ_token}_*.xlsx")
+        )
+        if combined_st_files:
+            for cf in combined_st_files:
+                try:
+                    data, _ = _read_leap_data(cf)
+                    frames.append(_ensure_ids(data, region))
+                except Exception as exc:
+                    print(f"[WARN] Failed reading {cf.name}: {exc}")
+        else:
+            for prefix in (
+                f"supply_leap_imports_{econ_token}_",
+                f"transformation_leap_imports_{econ_token}_",
+                f"transfer_leap_imports_{econ_token}_",
+            ):
+                for sf in sorted(supply_dir.glob(f"{prefix}*.xlsx")):
+                    try:
+                        data, _ = _read_leap_data(sf)
+                        frames.append(_ensure_ids(data, region))
+                    except Exception as exc:
+                        print(f"[WARN] Failed reading {sf.name}: {exc}")
+
+        agg_path = agg_dir / f"aggregated_demand_{econ_token}.xlsx"
+        if agg_path.exists():
+            try:
+                data, _ = _read_leap_data(agg_path)
+                frames.append(_ensure_ids(data, region))
+            except Exception as exc:
+                print(f"[WARN] Failed reading {agg_path.name}: {exc}")
+
+        if not frames:
+            print(f"[INFO] No data to combine for economy={economy}, skipping.")
+            continue
+
+        combined = pd.concat(frames, ignore_index=True, sort=False)
+
+        # Enforce column order: IDs → metadata → Expression → year cols → Level cols
+        _meta = ["BranchID", "VariableID", "ScenarioID", "RegionID",
+                 "Branch Path", "Variable", "Scenario", "Region",
+                 "Scale", "Units", "Per...", "Expression"]
+        _year_cols = sorted(
+            [c for c in combined.columns if isinstance(c, (int, float)) and 500 < float(c) < 2200],
+            key=float,
+        )
+        _level_cols = [c for c in combined.columns if str(c).startswith("Level")]
+        _other = [c for c in combined.columns
+                  if c not in _meta and c not in _year_cols and c not in _level_cols]
+        ordered_cols = (
+            [c for c in _meta if c in combined.columns]
+            + _year_cols
+            + _level_cols
+            + _other
+        )
+        combined = combined.reindex(columns=ordered_cols)
+        cols = list(combined.columns)
+
+        preamble_row = {c: pd.NA for c in cols}
+        preamble_row["Branch Path"] = "Area:"
+        preamble_row["Scenario"] = "Ver:"
+        preamble_row["Region"] = "2"
+        blank_row = {c: pd.NA for c in cols}
+
+        full_df = pd.concat([
+            pd.DataFrame([preamble_row]),
+            pd.DataFrame([blank_row]),
+            pd.DataFrame([cols], columns=cols),
+            combined,
+        ], ignore_index=True)
+
+        out_path = out_dir / f"leap_import_baseline_seed_{econ_token}_{run_stamp}.xlsx"
+        for existing in out_dir.glob(f"leap_import_baseline_seed_{econ_token}_*.xlsx"):
+            archive_dir = out_dir / "archive"
+            archive_dir.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(existing), str(archive_dir / existing.name))
+
+        with pd.ExcelWriter(out_path, engine="openpyxl") as writer:
+            full_df.to_excel(writer, sheet_name="LEAP", index=False, header=False)
+            full_df.to_excel(writer, sheet_name="FOR_VIEWING", index=False, header=False)
+
+        print(f"[INFO] Wrote {len(combined)} rows for economy={economy} -> {out_path.name} (stamp={run_stamp})")
+        written.append(out_path)
+
+    return written
+
+
+def run_aggregated_demand_leap_import(
+    workbook_paths: Iterable[Path],
+    *,
+    scenarios: Iterable[str],
+    import_scenarios: Iterable[str] | str | None = None,
+    region: str = LEAP_IMPORT_REGION,
+    fill_branches: bool = LEAP_IMPORT_FILL_BRANCHES,
+    include_current_accounts: bool = LEAP_IMPORT_INCLUDE_CURRENT_ACCOUNTS,
+) -> list[Path]:
+    """Import aggregated-demand workbooks into LEAP via the API."""
+    paths = [Path(item) for item in workbook_paths if item and Path(item).exists()]
+    if not paths:
+        return []
+    if not bool(AGGREGATED_DEMAND_INCLUDE_IN_LEAP_IMPORT):
+        print(
+            "[INFO] Skipping aggregated-demand LEAP import; workbook(s) still written "
+            "for manual LEAP import."
+        )
+        return []
+    if get_analysis_input_write_mode() == "api" and not leap_api.is_available():
+        print("[INFO] LEAP API unavailable; skipping aggregated-demand LEAP import.")
+        return []
+    if not bool(fill_branches):
+        print("[INFO] Skipping aggregated-demand LEAP import because fill_branches=False.")
+        return []
+
+    scenario_choices = workflow_common.resolve_import_scenarios(
+        [str(item) for item in scenarios if str(item).strip()],
+        import_scenarios,
+    )
+    if not scenario_choices:
+        return []
+
+    from codebase.functions.leap_core import connect_to_leap, fill_branches_from_export_file
+
+    leap_app = connect_to_leap()
+    imported: list[Path] = []
+    for workbook_path in paths:
+        for index, scenario in enumerate(scenario_choices):
+            try:
+                fill_branches_from_export_file(
+                    leap_app,
+                    workbook_path,
+                    sheet_name="LEAP",
+                    scenario=scenario,
+                    region=region,
+                    RAISE_ERROR_ON_FAILED_SET=True,
+                    HANDLE_CURRENT_ACCOUNTS_TOO=include_current_accounts and index == 0,
+                    RUN_FUEL_CATALOG_PREFLIGHT=False,
+                )
+                imported.append(workbook_path)
+            except Exception as exc:
+                print(
+                    f"[WARN] Aggregated-demand LEAP import failed for "
+                    f"{workbook_path.name} ({scenario}): {exc}"
+                )
+    return imported
+
+
+def build_other_demand_zeroing_workbooks(
+    *,
+    scenarios: Iterable[str],
+    output_dir: Path | str = EXPORT_OUTPUT_DIR,
+    region: str = LEAP_IMPORT_REGION,
+    source_path: Path | str | None = None,
+    source_sheet: str = "Export",
+) -> list[Path]:
+    """
+    Generate a LEAP import workbook that zeros all non-share demand branches.
+
+    Reads (Branch Path, Variable, Scenario) rows from source_path (defaults to
+    RESULTS_VERIFICATION_EXPORT_PATH) and produces a workbook with Expression="0"
+    for every row except Demand\\All demand aggregated\\... and share variables.
+    Returns a list containing the output path, or empty if nothing was written.
+    """
+    from codebase.aggregated_demand_workflow import save_demand_zeroing_workbook
+
+    scenario_list = workflow_common.normalize_workflow_scenarios(scenarios, SCENARIOS)
+    resolved_source = Path(source_path) if source_path else _resolve(RESULTS_VERIFICATION_EXPORT_PATH)
+    out_dir = _resolve(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    econ_token = workflow_common.format_filename_segment(
+        ECONOMIES[0] if ECONOMIES else "economy"
+    ) or "economy"
+    out_path = out_dir / f"demand_zeroing_{econ_token}.xlsx"
+
+    from codebase.aggregated_demand_workflow import DEMAND_OTHER_LOSS_OWN_USE_BRANCH_PREFIX
+
+    exclude_prefixes: list[str] = []
+    if ZERO_OTHER_DEMAND_EXCLUDE_OWN_USE_PROXY_BRANCHES:
+        exclude_prefixes.append(DEMAND_OTHER_LOSS_OWN_USE_BRANCH_PREFIX)
+
+    result = save_demand_zeroing_workbook(
+        output_path=out_path,
+        source_path=resolved_source,
+        sheet_name=source_sheet,
+        scenarios=scenario_list,
+        region=region,
+        exclude_branch_prefixes=exclude_prefixes if exclude_prefixes else None,
+    )
+    return [result] if result is not None else []
+
+
+def run_other_demand_zeroing_leap_import(
+    workbook_paths: Iterable[Path],
+    *,
+    scenarios: Iterable[str],
+    import_scenarios: Iterable[str] | str | None = None,
+    region: str = LEAP_IMPORT_REGION,
+    fill_branches: bool = LEAP_IMPORT_FILL_BRANCHES,
+    include_current_accounts: bool = LEAP_IMPORT_INCLUDE_CURRENT_ACCOUNTS,
+) -> list[Path]:
+    """Import demand-zeroing workbooks into LEAP via the API."""
+    paths = [Path(item) for item in workbook_paths if item and Path(item).exists()]
+    if not paths:
+        return []
+    if not bool(ZERO_OTHER_DEMAND_INCLUDE_IN_LEAP_IMPORT):
+        print(
+            "[INFO] Skipping demand-zeroing LEAP import; workbook(s) still written "
+            "for manual LEAP import."
+        )
+        return []
+    if get_analysis_input_write_mode() == "api" and not leap_api.is_available():
+        print("[INFO] LEAP API unavailable; skipping demand-zeroing LEAP import.")
+        return []
+    if not bool(fill_branches):
+        print("[INFO] Skipping demand-zeroing LEAP import because fill_branches=False.")
+        return []
+
+    scenario_choices = workflow_common.resolve_import_scenarios(
+        [str(item) for item in scenarios if str(item).strip()],
+        import_scenarios,
+    )
+    if not scenario_choices:
+        return []
+
+    from codebase.functions.leap_core import connect_to_leap, fill_branches_from_export_file
+
+    leap_app = connect_to_leap()
+    imported: list[Path] = []
+    for workbook_path in paths:
+        for index, scenario in enumerate(scenario_choices):
+            try:
+                fill_branches_from_export_file(
+                    leap_app,
+                    workbook_path,
+                    sheet_name="LEAP",
+                    scenario=scenario,
+                    region=region,
+                    RAISE_ERROR_ON_FAILED_SET=True,
+                    HANDLE_CURRENT_ACCOUNTS_TOO=include_current_accounts and index == 0,
+                    RUN_FUEL_CATALOG_PREFLIGHT=False,
+                )
+                imported.append(workbook_path)
+            except Exception as exc:
+                print(
+                    f"[WARN] Demand-zeroing LEAP import failed for "
                     f"{workbook_path.name} ({scenario}): {exc}"
                 )
     return imported
@@ -8213,7 +9090,7 @@ def _build_conventional_row_backbone() -> list[str]:
         "Liquefaction/regasification plants",
         "Natural gas blending plants",
         "Gas-to-liquids plants",
-        "Oil refineries",
+        "Oil Refining",
         "Coal transformation",
         "Coke ovens",
         "Blast furnaces",
@@ -8237,7 +9114,7 @@ def _build_conventional_row_backbone() -> list[str]:
         "Patent fuel plants (own-use)",
         "BKB/PB plants (own-use)",
         "Liquefaction plants (Coal to Oil)",
-        "Oil refineries (own-use)",
+        "Oil Refining (own-use)",
         "Oil and gas extraction",
         "Pump storage plants",
         "Nuclear industry",
@@ -8278,7 +9155,7 @@ def _normalize_conventional_sector_name(label: object) -> str:
     text = _strip_esto_sector_prefix(label)
     replacements = {
         "NG Liquefaction": "Liquefaction/regasification plants",
-        "NG Regasification": "Liquefaction/regasification plants",
+        "LNG regasification": "Liquefaction/regasification plants",
         "09_13_hydrogen_transformation": "Hydrogen transformation",
         "Total Primary Supply": "Total primary energy supply",
         "Total Transformation": "Total transformation sector",
@@ -8336,7 +9213,7 @@ def _get_conventional_section_layout() -> list[tuple[str, list[str]]]:
                 "Liquefaction/regasification plants",
                 "Natural gas blending plants",
                 "Gas-to-liquids plants",
-                "Oil refineries",
+                "Oil Refining",
                 "Coal transformation",
                 "Coke ovens",
                 "Blast furnaces",
@@ -8366,7 +9243,7 @@ def _get_conventional_section_layout() -> list[tuple[str, list[str]]]:
                 "Patent fuel plants (own-use)",
                 "BKB/PB plants (own-use)",
                 "Liquefaction plants (Coal to Oil)",
-                "Oil refineries (own-use)",
+                "Oil Refining (own-use)",
                 "Oil and gas extraction",
                 "Pump storage plants",
                 "Nuclear industry",
@@ -9284,13 +10161,40 @@ def _archive_results_file_snapshot(
     return archived_path
 
 
+def _abbreviate_scenario(name: str) -> str:
+    """Return a short uppercase token for a scenario name.
+
+    Multi-word names use initials ("Current Accounts" -> "CA");
+    single-word names use the first three characters ("Target" -> "TAR").
+    """
+    normalized = " ".join(str(name or "").strip().lower().split())
+    explicit = {
+        "reference": "REF",
+        "target": "TGT",
+        "current accounts": "CA",
+        "current account": "CA",
+    }
+    if normalized in explicit:
+        return explicit[normalized]
+
+    words = str(name).strip().split()
+    if not words:
+        return "SCN"
+    if len(words) == 1:
+        token = re.sub(r"[^A-Za-z0-9]+", "", words[0])[:3]
+        return token.upper() if token else "SCN"
+    return "".join(w[0] for w in words if w).upper()
+
+
 def _resolve_results_single_file_name(
     base_name: str,
     *,
     trade_mode: str,
     iteration_run_mode: str,
+    economies: list[str] | None = None,
+    scenarios: list[str] | None = None,
 ) -> str:
-    """Return single-workbook filename with iterative mode suffix when applicable."""
+    """Return single-workbook filename with iterative mode, economy, and scenario suffixes."""
     raw_name = str(base_name or "").strip() or "results_supply_link_run_test.xlsx"
     path = Path(raw_name)
     stem = path.stem
@@ -9301,6 +10205,16 @@ def _resolve_results_single_file_name(
         safe_mode = re.sub(r"[^a-z0-9_-]+", "_", mode_token).strip("_")
         if safe_mode and not stem.lower().endswith(f"_{safe_mode}".lower()):
             stem = f"{stem}_{safe_mode}"
+    if economies:
+        economy_token = "-".join(
+            re.sub(r"[^A-Za-z0-9_]+", "", str(e)) for e in economies if str(e).strip()
+        )
+        if economy_token:
+            stem = f"{stem}_{economy_token}"
+    if scenarios:
+        scenario_token = "_".join(_abbreviate_scenario(s) for s in scenarios)
+        if scenario_token:
+            stem = f"{stem}_{scenario_token}"
     return f"{stem}{suffix}"
 
 
@@ -9324,6 +10238,7 @@ def save_results_linked_single_workbook(
     transfer_export_paths: Iterable[Path],
     combined_export_path: Path | None,
     other_loss_own_use_proxy_paths: Iterable[Path] | None,
+    aggregated_demand_workbook_paths: Iterable[Path] | None,
     probe_catalog_path: Path | None,
     leap_import_result: dict[str, object],
     output_dir: Path | str = OUTPUT_DIR,
@@ -9878,16 +10793,49 @@ def save_results_linked_single_workbook(
         source_dedup = source_dedup[key_cols + id_cols]
 
         out = df.copy()
+        # Drop any pre-existing ID columns so the merge doesn't produce BranchID_x/BranchID_y suffixes.
+        out = out.drop(columns=[col for col in id_cols if col in out.columns], errors="ignore")
         for col in ["Branch Path", "Variable", "Scenario", "Region"]:
             out[f"__k_{col}"] = out[col].map(_normalize_merge_text)
+
+        # Pass 1 — exact match on all four keys (Branch Path + Variable + Scenario + Region).
         out = out.merge(source_dedup, on=key_cols, how="left")
-        matched = int(out["BranchID"].notna().sum())
+        matched_pass1 = int(out["BranchID"].notna().sum())
         total = int(len(out))
         print(
             "[INFO] Merged IDs from verification export using "
             "Branch Path/Variable/Scenario/Region keys: "
-            f"matched {matched}/{total}, unmatched {total - matched}."
+            f"matched {matched_pass1}/{total}, unmatched {total - matched_pass1}."
         )
+
+        # Pass 2 — fallback for rows still unmatched: look up by Branch Path + Variable only.
+        # BranchID and VariableID are branch-structure properties (not scenario/region-specific),
+        # so a row in another region's export is still a valid source for these IDs.
+        still_unmatched_mask = out["BranchID"].isna()
+        if still_unmatched_mask.any():
+            bp_var_key = ["__k_Branch Path", "__k_Variable"]
+            source_bp_var = (
+                source_data[required_source_cols].copy()
+                .assign(**{
+                    f"__k_{col}": source_data[col].map(_normalize_merge_text)
+                    for col in ["Branch Path", "Variable"]
+                })
+                .drop_duplicates(subset=bp_var_key, keep="first")
+                [bp_var_key + id_cols]
+            )
+            fallback = out.loc[still_unmatched_mask, [c for c in out.columns if c not in id_cols]].merge(
+                source_bp_var, on=bp_var_key, how="left"
+            )
+            for col in id_cols:
+                out.loc[still_unmatched_mask, col] = fallback[col].values
+            matched_pass2 = int(out["BranchID"].notna().sum()) - matched_pass1
+            if matched_pass2 > 0:
+                print(
+                    f"[INFO] Fallback merge (Branch Path + Variable only) recovered "
+                    f"{matched_pass2} additional ID matches."
+                )
+
+        matched = int(out["BranchID"].notna().sum())
         unmatched = out[out["BranchID"].isna()][
             ["Branch Path", "Variable", "Scenario", "Region"]
         ].copy()
@@ -10290,7 +11238,71 @@ def save_results_linked_single_workbook(
                     continue
                 method_by_key[key] = _infer_method_from_expression(row.get("Expression"))
 
-    export_df = viewing_data.copy()
+    # Merge other-loss / own-use proxy data into the export.
+    proxy_viewing_frames: list[pd.DataFrame] = []
+    for proxy_path_item in other_loss_own_use_proxy_paths or []:
+        proxy_path = Path(proxy_path_item)
+        if not proxy_path.exists():
+            print(f"[WARN] other_loss_own_use proxy workbook not found, skipping: {proxy_path}")
+            continue
+        try:
+            _, proxy_viewing, _ = _read_workbook_sheet_with_header_detection(proxy_path, "FOR_VIEWING")
+            _, proxy_leap, _ = _read_workbook_sheet_with_header_detection(proxy_path, "LEAP")
+        except Exception as exc:
+            print(f"[WARN] Failed reading other_loss_own_use proxy workbook {proxy_path.name}: {exc}")
+            continue
+        if not proxy_viewing.empty:
+            proxy_viewing_frames.append(proxy_viewing)
+        if not proxy_leap.empty and "Expression" in proxy_leap.columns:
+            key_cols_proxy = ["Branch Path", "Variable", "Scenario", "Region"]
+            if all(col in proxy_leap.columns for col in key_cols_proxy):
+                for _, row in proxy_leap.iterrows():
+                    key = tuple(str(row.get(col) or "").strip() for col in key_cols_proxy)
+                    if not all(key):
+                        continue
+                    method_by_key.setdefault(key, _infer_method_from_expression(row.get("Expression")))
+
+    if proxy_viewing_frames:
+        combined_viewing = pd.concat([viewing_data] + proxy_viewing_frames, ignore_index=True)
+        print(
+            f"[INFO] Merged {sum(len(f) for f in proxy_viewing_frames)} other_loss_own_use proxy rows "
+            f"into Export sheet ({len(proxy_viewing_frames)} workbook(s))."
+        )
+    else:
+        combined_viewing = viewing_data
+
+    # Merge aggregated demand workbook data into the export.
+    agg_demand_viewing_frames: list[pd.DataFrame] = []
+    for agg_path_item in aggregated_demand_workbook_paths or []:
+        agg_path = Path(agg_path_item)
+        if not agg_path.exists():
+            print(f"[WARN] aggregated demand workbook not found, skipping: {agg_path}")
+            continue
+        try:
+            _, agg_viewing, _ = _read_workbook_sheet_with_header_detection(agg_path, "FOR_VIEWING")
+            _, agg_leap, _ = _read_workbook_sheet_with_header_detection(agg_path, "LEAP")
+        except Exception as exc:
+            print(f"[WARN] Failed reading aggregated demand workbook {agg_path.name}: {exc}")
+            continue
+        if not agg_viewing.empty:
+            agg_demand_viewing_frames.append(agg_viewing)
+        if not agg_leap.empty and "Expression" in agg_leap.columns:
+            key_cols_agg = ["Branch Path", "Variable", "Scenario", "Region"]
+            if all(col in agg_leap.columns for col in key_cols_agg):
+                for _, row in agg_leap.iterrows():
+                    key = tuple(str(row.get(col) or "").strip() for col in key_cols_agg)
+                    if not all(key):
+                        continue
+                    method_by_key.setdefault(key, _infer_method_from_expression(row.get("Expression")))
+
+    if agg_demand_viewing_frames:
+        combined_viewing = pd.concat([combined_viewing] + agg_demand_viewing_frames, ignore_index=True)
+        print(
+            f"[INFO] Merged {sum(len(f) for f in agg_demand_viewing_frames)} aggregated demand rows "
+            f"into Export sheet ({len(agg_demand_viewing_frames)} workbook(s))."
+        )
+
+    export_df = combined_viewing.copy()
     key_cols = ["Branch Path", "Variable", "Scenario", "Region"]
     export_df["Method"] = [
         method_by_key.get(
@@ -10339,6 +11351,7 @@ def save_results_linked_single_workbook(
         source_data=verification_data,
         source_path=verification_path,
     )
+    nonzero_missing_id_rows: pd.DataFrame = pd.DataFrame()
     metadata_mismatch_rows = _collect_metadata_mismatches_against_reference(
         export_df,
         source_data=verification_data,
@@ -10574,6 +11587,38 @@ def save_results_linked_single_workbook(
             )
         if len(unmatched_id_rows) > 30:
             print(f"  ... plus {len(unmatched_id_rows) - 30} more unmatched rows")
+
+        # Identify unmatched rows that carry non-zero values — these will be silently
+        # skipped by LEAP on import (LEAP matches by BranchID; -1 rows are ignored),
+        # causing feedstock/process shares or other variables to sum to less than 100%.
+        # Collected here and surfaced at the end of the workflow so all outputs are
+        # already saved before the error is presented to the user.
+        year_cols_in_export = [c for c in export_df.columns if _is_year_header(c)]
+        if year_cols_in_export:
+            unmatched_key_cols = ["Branch Path", "Variable", "Scenario", "Region"]
+            unmatched_keys = set(
+                tuple(str(r.get(c) or "").strip() for c in unmatched_key_cols)
+                for _, r in unmatched_id_rows.iterrows()
+            )
+            nonzero_missing_id_rows = export_df[
+                export_df.apply(
+                    lambda r: (
+                        tuple(str(r.get(c) or "").strip() for c in unmatched_key_cols)
+                        in unmatched_keys
+                    ),
+                    axis=1,
+                )
+                & export_df[year_cols_in_export].apply(
+                    lambda r: any(
+                        abs(float(v)) > 1e-9
+                        for v in r
+                        if v is not None and not (isinstance(v, float) and pd.isna(v))
+                    ),
+                    axis=1,
+                )
+            ][unmatched_key_cols + year_cols_in_export[:1]].copy()
+        else:
+            nonzero_missing_id_rows = pd.DataFrame()
     else:
         if unmatched_report_path.exists():
             try:
@@ -10674,7 +11719,7 @@ def save_results_linked_single_workbook(
         "[INFO] Saved single-file results workbook in full-model Export structure to "
         f"{workbook_path}"
     )
-    return workbook_path
+    return workbook_path, nonzero_missing_id_rows
 
 
 def run_results_linked_transformation_supply_workflow(
@@ -10779,6 +11824,7 @@ def run_results_linked_transformation_supply_workflow(
         economies=economy_list,
         scenarios=balance_scenario_list,
         workbook_dir=LEAP_RESULTS_TABLES_DIR,
+        allow_projection_only_without_balance_exports=_is_capacity_unmet_baseline_seed_pass(),
     )
     balance_demand_issues = _annotate_balance_demand_issue_scope(balance_demand_issues)
     sector_demand_table = load_results_sector_demand_table(
@@ -10790,6 +11836,7 @@ def run_results_linked_transformation_supply_workflow(
         source_priority=DEMAND_SOURCE_PRIORITY,
         comparison_long_df=comparison_long_df,
         mapping_status_df=mapping_status_df,
+        economies=economy_list,
     )
     timer.lap("load balance demand inputs")
     if economy_list:
@@ -10933,23 +11980,6 @@ def run_results_linked_transformation_supply_workflow(
     overrides = build_supply_overrides(reconciliation_table)
     dataset_map, sector_config, code_to_name_mapping, _, _ = assets
     supply_measures = _build_supply_measures_for_trade_mode()
-    export_paths = supply_data_pipeline.generate_supply_exports(
-        dataset_map,
-        sector_config,
-        code_to_name_mapping,
-        projection_lookup=supply_data_pipeline.SUPPLY_PROJECTION_LOOKUP,
-        projection_years=supply_data_pipeline.PROJECTION_YEAR_RANGE,
-        dataset_key=export_dataset_key,
-        economies=economy_list,
-        scenario_names=export_scenario_list,
-        base_year=BASE_YEAR,
-        final_year=FINAL_YEAR,
-        export_output_dir=EXPORT_OUTPUT_DIR,
-        filename_template=EXPORT_FILENAME_TEMPLATE,
-        flow_value_overrides_by_economy=overrides,
-        supply_measures=supply_measures,
-        keep_all_zero_rows=bool(KEEP_ALL_ZERO_SUPPLY_ROWS),
-    )
     # Build catalog from static sources (LEAP probe + full-model export) so aux-fuel
     # branches not covered by the current run can be explicitly zeroed in LEAP.
     pre_run_catalog_df = _build_transformation_supply_fuel_catalog_df(
@@ -10957,43 +11987,108 @@ def run_results_linked_transformation_supply_workflow(
         supply_export_paths=[],
         include_print_summary=False,
     )
-    transformation_export_paths = save_transformation_exports_with_split_targets(
-        reconciliation_table,
-        transformation_target_rows,
-        transformation_process_records,
-        scenarios=export_scenario_list,
-        output_dir=TRANSFORMATION_EXPORT_OUTPUT_DIR,
-        filename_template=TRANSFORMATION_EXPORT_FILENAME_TEMPLATE,
-        full_branch_catalog_df=pre_run_catalog_df if not pre_run_catalog_df.empty else None,
-    )
-    transfer_export_paths = save_transfer_exports_with_supply_overrides(
-        reconciliation_table,
-        economies=economy_list,
-        scenarios=export_scenario_list,
-        output_dir=TRANSFORMATION_EXPORT_OUTPUT_DIR,
-        filename_template=transfers_workflow.EXPORT_FILENAME_TEMPLATE,
-    )
-    combined_export_path = save_combined_supply_transformation_export(
-        supply_export_paths=[path for _, path in export_paths],
-        transformation_export_paths=transformation_export_paths,
-        transfer_export_paths=transfer_export_paths,
-        output_dir=EXPORT_OUTPUT_DIR,
-        filename_template=COMBINED_EXPORT_FILENAME_TEMPLATE,
-        economy_label=economy_list[0] if economy_list else "economy",
-        scenarios=export_scenario_list,
-    )
+    # Process each economy fully through all export steps before moving to the next.
+    # This means a failure in one economy leaves all other economies' outputs intact.
+    export_paths: list[tuple[str, Path]] = []
+    transformation_export_paths: list[Path] = []
+    transfer_export_paths: list[Path] = []
     other_loss_own_use_proxy_paths: list[Path] = []
-    if RUN_OTHER_LOSS_OWN_USE_PROXY:
-        other_loss_own_use_proxy_paths = build_other_loss_own_use_proxy_workbooks_for_results_supply(
-            economies=economy_list,
+    aggregated_demand_workbook_paths: list[Path] = []
+    combined_export_path: Path | None = None
+    _economy_export_errors: list[tuple[str, Exception]] = []
+    for economy in economy_list:
+        try:
+            econ_supply_paths = supply_data_pipeline.generate_supply_exports(
+                dataset_map,
+                sector_config,
+                code_to_name_mapping,
+                projection_lookup=supply_data_pipeline.SUPPLY_PROJECTION_LOOKUP,
+                projection_years=supply_data_pipeline.PROJECTION_YEAR_RANGE,
+                dataset_key=export_dataset_key,
+                economies=[economy],
+                scenario_names=export_scenario_list,
+                base_year=BASE_YEAR,
+                final_year=FINAL_YEAR,
+                export_output_dir=EXPORT_OUTPUT_DIR,
+                filename_template=EXPORT_FILENAME_TEMPLATE,
+                flow_value_overrides_by_economy=overrides,
+                supply_measures=supply_measures,
+                keep_all_zero_rows=bool(KEEP_ALL_ZERO_SUPPLY_ROWS),
+            )
+            econ_process_records = [
+                r for r in transformation_process_records
+                if str(r.get("economy") or "").strip() == economy
+            ]
+            econ_transformation_paths = save_transformation_exports_with_split_targets(
+                reconciliation_table,
+                transformation_target_rows,
+                econ_process_records,
+                scenarios=export_scenario_list,
+                output_dir=TRANSFORMATION_EXPORT_OUTPUT_DIR,
+                filename_template=TRANSFORMATION_EXPORT_FILENAME_TEMPLATE,
+                full_branch_catalog_df=pre_run_catalog_df if not pre_run_catalog_df.empty else None,
+            )
+            econ_transfer_paths = save_transfer_exports_with_supply_overrides(
+                reconciliation_table,
+                economies=[economy],
+                scenarios=export_scenario_list,
+                output_dir=TRANSFORMATION_EXPORT_OUTPUT_DIR,
+                filename_template=transfers_workflow.EXPORT_FILENAME_TEMPLATE,
+                full_branch_catalog_df=pre_run_catalog_df if not pre_run_catalog_df.empty else None,
+            )
+            econ_combined_path = save_combined_supply_transformation_export(
+                supply_export_paths=[path for _, path in econ_supply_paths],
+                transformation_export_paths=econ_transformation_paths,
+                transfer_export_paths=econ_transfer_paths,
+                output_dir=EXPORT_OUTPUT_DIR,
+                filename_template=COMBINED_EXPORT_FILENAME_TEMPLATE,
+                economy_label=economy,
+                scenarios=export_scenario_list,
+            )
+            if econ_combined_path is not None:
+                combined_export_path = econ_combined_path
+            if RUN_OTHER_LOSS_OWN_USE_PROXY:
+                econ_other_loss = build_other_loss_own_use_proxy_workbooks_for_results_supply(
+                    economies=[economy],
+                    scenarios=export_scenario_list,
+                    import_scenarios=import_scenarios,
+                    proxy_stage=OTHER_LOSS_OWN_USE_PROXY_STAGE,
+                    iteration_run_mode=CAPACITY_UNMET_PASS_MODE,
+                    output_fuel_scope=OTHER_LOSS_OWN_USE_OUTPUT_FUEL_SCOPE,
+                    leap_balance_workbook_path=OTHER_LOSS_OWN_USE_LEAP_BALANCE_WORKBOOK_PATH,
+                    leap_balance_scenario=OTHER_LOSS_OWN_USE_LEAP_BALANCE_SCENARIO,
+                    leap_balance_date_id=OTHER_LOSS_OWN_USE_LEAP_BALANCE_DATE_ID,
+                )
+                other_loss_own_use_proxy_paths.extend(econ_other_loss)
+            if WRITE_AGGREGATED_DEMAND_WORKBOOK and USE_AGGREGATED_DEMAND_AS_DUMMY:
+                econ_agg_demand = build_aggregated_demand_workbooks_for_results_supply(
+                    economies=[economy],
+                    scenarios=export_scenario_list,
+                    output_dir=EXPORT_OUTPUT_DIR,
+                    region=LEAP_IMPORT_REGION,
+                )
+                aggregated_demand_workbook_paths.extend(econ_agg_demand)
+            export_paths.extend(econ_supply_paths)
+            transformation_export_paths.extend(econ_transformation_paths)
+            transfer_export_paths.extend(econ_transfer_paths)
+            print(f"[INFO] Economy {economy}: all exports complete.")
+        except Exception as _econ_exc:
+            import traceback as _tb
+            print(f"[ERROR] Economy {economy}: export failed — {_econ_exc!r}. Continuing to next economy.")
+            _tb.print_exc()
+            _economy_export_errors.append((economy, _econ_exc))
+    if _economy_export_errors:
+        _failed_labels = ", ".join(econ for econ, _ in _economy_export_errors)
+        print(
+            f"[WARN] Export errors in {len(_economy_export_errors)} economy/economies: {_failed_labels}. "
+            "Re-run with just these economies to retry."
+        )
+    demand_zeroing_paths: list[Path] = []
+    if ZERO_OTHER_DEMAND_BRANCHES_FROM_EXPORT and USE_AGGREGATED_DEMAND_AS_DUMMY:
+        demand_zeroing_paths = build_other_demand_zeroing_workbooks(
             scenarios=export_scenario_list,
-            import_scenarios=import_scenarios,
-            proxy_stage=OTHER_LOSS_OWN_USE_PROXY_STAGE,
-            iteration_run_mode=CAPACITY_UNMET_PASS_MODE,
-            output_fuel_scope=OTHER_LOSS_OWN_USE_OUTPUT_FUEL_SCOPE,
-            leap_balance_workbook_path=OTHER_LOSS_OWN_USE_LEAP_BALANCE_WORKBOOK_PATH,
-            leap_balance_scenario=OTHER_LOSS_OWN_USE_LEAP_BALANCE_SCENARIO,
-            leap_balance_date_id=OTHER_LOSS_OWN_USE_LEAP_BALANCE_DATE_ID,
+            output_dir=EXPORT_OUTPUT_DIR,
+            region=LEAP_IMPORT_REGION,
         )
     fuel_branch_catalog_df = _build_transformation_supply_fuel_catalog_df(
         transformation_export_paths=transformation_export_paths,
@@ -11013,6 +12108,8 @@ def run_results_linked_transformation_supply_workflow(
         "transformation_imported": [],
         "transfer_imported": [],
         "other_loss_own_use_imported": [],
+        "aggregated_demand_imported": [],
+        "demand_zeroing_imported": [],
     }
     if include_leap_import:
         leap_import_result = run_results_linked_leap_import(
@@ -11043,16 +12140,41 @@ def run_results_linked_transformation_supply_workflow(
                 or RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT
             ),
         )
+        leap_import_result["aggregated_demand_imported"] = run_aggregated_demand_leap_import(
+            aggregated_demand_workbook_paths,
+            scenarios=export_scenario_list,
+            import_scenarios=import_scenarios,
+            region=LEAP_IMPORT_REGION,
+            fill_branches=LEAP_IMPORT_FILL_BRANCHES,
+            include_current_accounts=(
+                LEAP_IMPORT_INCLUDE_CURRENT_ACCOUNTS
+                or RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT
+            ),
+        )
+        leap_import_result["demand_zeroing_imported"] = run_other_demand_zeroing_leap_import(
+            demand_zeroing_paths,
+            scenarios=export_scenario_list,
+            import_scenarios=import_scenarios,
+            region=LEAP_IMPORT_REGION,
+            fill_branches=LEAP_IMPORT_FILL_BRANCHES,
+            include_current_accounts=(
+                LEAP_IMPORT_INCLUDE_CURRENT_ACCOUNTS
+                or RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT
+            ),
+        )
         timer.lap("run LEAP import")
 
     results_workbook_path: Path | None = None
+    _nonzero_missing_id_rows: pd.DataFrame = pd.DataFrame()
     if RESULTS_SINGLE_FILE_OUTPUT:
         resolved_single_file_name = _resolve_results_single_file_name(
             RESULTS_SINGLE_FILE_NAME,
             trade_mode=ACTIVE_SUPPLY_LINK_METHOD,
             iteration_run_mode=CAPACITY_UNMET_PASS_MODE,
+            economies=economy_list,
+            scenarios=export_scenario_list,
         )
-        results_workbook_path = save_results_linked_single_workbook(
+        results_workbook_path, _nonzero_missing_id_rows = save_results_linked_single_workbook(
             reconciliation_table=reconciliation_table,
             sector_demand_table=sector_demand_table,
             demand_table=demand_table,
@@ -11071,6 +12193,7 @@ def run_results_linked_transformation_supply_workflow(
             transfer_export_paths=transfer_export_paths,
             combined_export_path=combined_export_path,
             other_loss_own_use_proxy_paths=other_loss_own_use_proxy_paths,
+            aggregated_demand_workbook_paths=aggregated_demand_workbook_paths,
             probe_catalog_path=probe_catalog_path,
             leap_import_result=leap_import_result,
             output_dir=OUTPUT_DIR,
@@ -11080,6 +12203,15 @@ def run_results_linked_transformation_supply_workflow(
             archive_every_run=RESULTS_SINGLE_FILE_ARCHIVE_EVERY_RUN,
         )
         timer.lap("write consolidated run workbook")
+
+    write_per_economy_combined_workbooks(
+        economies=economy_list,
+        supply_workbook_dir=EXPORT_OUTPUT_DIR,
+        aggregated_demand_dir=EXPORT_OUTPUT_DIR,
+        output_dir=OUTPUT_DIR,
+        id_lookup_path=AGGREGATED_DEMAND_ID_LOOKUP_PATH,
+    )
+    timer.lap("write per-economy combined workbooks")
 
     balance_matching_diagnostics_path = _resolve(RESULTS_CHECKS_DIR) / RESULTS_BALANCE_MATCHING_DIAGNOSTICS_FILENAME
     balance_matching_diagnostics_path.parent.mkdir(parents=True, exist_ok=True)
@@ -11142,10 +12274,33 @@ def run_results_linked_transformation_supply_workflow(
             )
     else:
         balance_demand_issue_path = None
+    # Surface BranchID=-1 non-zero rows here, at the very end, so all outputs are
+    # already saved before the user sees the error.
+    if RESULTS_SINGLE_FILE_OUTPUT and not _nonzero_missing_id_rows.empty:
+        print(
+            f"\n{'='*70}\n"
+            f"[ERROR] {len(_nonzero_missing_id_rows)} rows have BranchID=-1 AND non-zero values.\n"
+            f"        LEAP silently skips these on import — feedstock/process shares will\n"
+            f"        sum to less than 100%. All outputs above have been saved.\n"
+            f"        Fix: export a fresh 'full model export.xlsx' from LEAP that includes\n"
+            f"        all active branches, then re-run.\n"
+            f"{'='*70}"
+        )
+        unmatched_key_cols = ["Branch Path", "Variable", "Scenario", "Region"]
+        for _, row in _nonzero_missing_id_rows.head(30).iterrows():
+            print(
+                "  [ERROR] BranchID=-1 | non-zero | "
+                + " | ".join(
+                    f"{c}='{str(row.get(c) or '').strip()}'" for c in unmatched_key_cols
+                )
+            )
+        if len(_nonzero_missing_id_rows) > 30:
+            print(f"  ... plus {len(_nonzero_missing_id_rows) - 30} more")
+        print()
+
     timer.finish()
     if WRITE_WORKFLOW_TIMING_CSV:
         timer.write_csv(timing_path)
-
     return {
         "results_workbook_path": results_workbook_path,
         "reconciliation_csv": reconciliation_path,
@@ -11215,34 +12370,147 @@ def run_results_linked_supply_workflow(
 # OTHER_LOSS_OWN_USE_LEAP_BALANCE_SCENARIO = "Target"
 # OTHER_LOSS_OWN_USE_LEAP_BALANCE_DATE_ID = None
 #%%
-ECONOMIES = ["20_USA"]
-SCENARIOS = ['Target', 'Current Accounts']#list(workflow_cfg.SUPPLY_NOTEBOOK_SCENARIOS)#'Target', 
+# ---------------------------------------------------------------------------
+# SCOPE  (change these regularly)
+# , "02_BD", "03_CDA", "04_CHL", "05_PRC", "06_HKC", "07_INA", 
+# "08_JPN", "09_ROK", "10_MAS", "11_MEX", "12_NZ", "13_PNG", "14_PE", 
+# "15_PHL", "16_RUS", "17_SGP", "18_CT", "19_THA", "20_USA", "21_VN"---------------------------------------------------------------------------
+ECONOMIES = ["20_USA"]#"01_AUS", "02_BD", "03_CDA", "04_CHL", "05_PRC", "06_HKC", "07_INA", 
+# "08_JPN", "09_ROK", "10_MAS", "11_MEX", "12_NZ", "13_PNG", "14_PE", 
+# "15_PHL", "16_RUS", "17_SGP", "18_CT", "19_THA", "20_USA", "21_VN"]
+# [, "20_USA"
+#     "01_AUS", "02_BD", "05_PRC", "10_MAS", "12_NZ", "15_PHL", "13_PNG", "19_THA", "05_PRC", "21_VN",
+# ]
+#power imported "21_VN", "13_PNG", "15_PHL","12_NZ","10_MAS", "05_PRC", "01_AUS",   "02_BD","19_THA",  
+#error  > data not in tha region. 
+# 06_KHC still needs to be run in this script. the area hasnt been prepared yet. do that alongside eveyrhting in here thats not in the power imported list above: , "02_BD", "03_CDA", "04_CHL", "05_PRC", "06_HKC", "07_INA", 
+# "08_JPN", "09_ROK", "10_MAS", "11_MEX", "12_NZ", "13_PNG", "14_PE", 
+# "15_PHL", "16_RUS", "17_SGP", "18_CT", "19_THA", "20_USA", "21_VN"
+SCENARIOS = ["Target", "Current Accounts"]
+# backedup tha, aus 15_PHL done: MAS prc , bd  12nz  DOING: ,  13_PNG 21_VN
+#%%
+# ---------------------------------------------------------------------------
+# RUN PRESETS
+# ---------------------------------------------------------------------------
+# Set ACTIVE_PRESET to one of the dicts below, then run the cell.
+# ECONOMIES and SCENARIOS above are intentionally kept separate because they
+# change every run; the preset only needs to change when the pass type changes.
+# Variables are unpacked into module scope so run_with_config() picks them up.
+#
+# BASELINE_SEED  — first pass. Uses ESTO base-year data to seed supply/
+#                  transformation. LEAP results are not yet available so
+#                  own-use proxy uses "first" stage.
+#
+# RESULTS_UPDATE — iterative pass. LEAP has been recalculated after the
+#                  previous import; reads actual LEAP balance results to
+#                  close the gap, proxy runs in "second" stage.
+#
+# NOTE — SCRAPE_LEAP_RESULTS is False in both presets and should stay that
+# way indefinitely. It depends on LEAP API behaviour that has outstanding
+# bugs the LEAP developers need to fix; enabling it is likely to silently
+# produce wrong results. Treat True as experimental until further notice.
+# ---------------------------------------------------------------------------
 
-CAPACITY_UNMET_PASS_MODE = "results_update"  # baseline_seed|results_update
-SCRAPE_LEAP_RESULTS = False
-RUN_LEAP_FUEL_BRANCH_PROBE_AT_START = False
-RESULTS_SINGLE_FILE_OUTPUT = True
-RESULTS_WRITE_LEGACY_SIDECAR_FILES = False
-BALANCE_DEMAND_FAIL_ON_MAPPING_ISSUES = True
-ENABLE_WORKFLOW_TIMING = True
-WRITE_WORKFLOW_TIMING_CSV = True
-KEEP_ALL_ZERO_SUPPLY_ROWS = True
-ENABLE_COMPLETION_BEEP = True
-COMPLETION_BEEP_ON_ERROR = True
-COMPLETION_BEEP_COUNT = 1
-COMPLETION_BEEP_FREQUENCY_HZ = 880
-COMPLETION_BEEP_DURATION_MS = 180
-COMPLETION_BEEP_PAUSE_SECONDS = 0.12
-RESULTS_SINGLE_FILE_ARCHIVE_MIN_HOURS = 24
-RESULTS_SINGLE_FILE_ARCHIVE_EVERY_RUN = True
-RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT = False
-RUN_OTHER_LOSS_OWN_USE_PROXY = True
-OTHER_LOSS_OWN_USE_PROXY_STAGE = "auto"  # auto|first|second
-OTHER_LOSS_OWN_USE_OUTPUT_FUEL_SCOPE = "economy"  # economy|all_economies
-OTHER_LOSS_OWN_USE_INCLUDE_IN_LEAP_IMPORT = True
-OTHER_LOSS_OWN_USE_LEAP_BALANCE_WORKBOOK_PATH = None
-OTHER_LOSS_OWN_USE_LEAP_BALANCE_SCENARIO = "Target"
-OTHER_LOSS_OWN_USE_LEAP_BALANCE_DATE_ID = None
+_PRESET_BASELINE_SEED = {
+    # --- Pass mode ---
+    "CAPACITY_UNMET_PASS_MODE": "baseline_seed",
+    "SCRAPE_LEAP_RESULTS": False,          # keep False — see note above
+    "RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT": False,
+
+    # --- Demand source ---
+    # When True, use ESTO/ninth aggregated demand (aggregated_demand_workflow)
+    # instead of LEAP balance exports. Only works for single-economy runs.
+    "USE_AGGREGATED_DEMAND_AS_DUMMY": True,
+
+    # Write Demand\All demand aggregated\{fuel} branches to a LEAP import workbook
+    # so LEAP receives the aggregated demand values (not just used internally).
+    "WRITE_AGGREGATED_DEMAND_WORKBOOK": True,
+    "AGGREGATED_DEMAND_INCLUDE_IN_LEAP_IMPORT": True,
+    # Exclude own-use/T&D loss sectors from the aggregated demand sum since the
+    # other_loss_own_use proxy handles those in the same pass.
+    "AGGREGATED_DEMAND_EXCLUDE_OWN_USE_TD_LOSSES": True,
+
+    # When True, also generate a LEAP import workbook that zeros every non-share
+    # Demand branch from the full model export, so those branches produce no energy
+    # use while the aggregated demand branches provide the actual demand values.
+    "ZERO_OTHER_DEMAND_BRANCHES_FROM_EXPORT": True,
+    "ZERO_OTHER_DEMAND_INCLUDE_IN_LEAP_IMPORT": True,
+    # Don't zero Demand\Other loss and own use — the proxy sets those in this pass.
+    "ZERO_OTHER_DEMAND_EXCLUDE_OWN_USE_PROXY_BRANCHES": True,
+
+    # --- Other loss / own-use proxy ---
+    "RUN_OTHER_LOSS_OWN_USE_PROXY": True,
+    "OTHER_LOSS_OWN_USE_PROXY_STAGE": "first",
+    "OTHER_LOSS_OWN_USE_OUTPUT_FUEL_SCOPE": "economy",
+    "OTHER_LOSS_OWN_USE_INCLUDE_IN_LEAP_IMPORT": True,
+    "OTHER_LOSS_OWN_USE_LEAP_BALANCE_WORKBOOK_PATH": None,
+    "OTHER_LOSS_OWN_USE_LEAP_BALANCE_SCENARIO": "Target",
+    "OTHER_LOSS_OWN_USE_LEAP_BALANCE_DATE_ID": None,
+
+    # --- Output ---
+    "RESULTS_SINGLE_FILE_OUTPUT": True,
+    "RESULTS_WRITE_LEGACY_SIDECAR_FILES": False,
+    "RESULTS_SINGLE_FILE_ARCHIVE_MIN_HOURS": 24,
+    "RESULTS_SINGLE_FILE_ARCHIVE_EVERY_RUN": True,
+    "KEEP_ALL_ZERO_SUPPLY_ROWS": True,
+
+    # --- Diagnostics ---
+    "RUN_LEAP_FUEL_BRANCH_PROBE_AT_START": False,
+    "BALANCE_DEMAND_FAIL_ON_MAPPING_ISSUES": True,
+    "ENABLE_WORKFLOW_TIMING": True,
+    "WRITE_WORKFLOW_TIMING_CSV": True,
+
+    # --- Completion beep ---
+    "ENABLE_COMPLETION_BEEP": True,
+    "COMPLETION_BEEP_ON_ERROR": True,
+    "COMPLETION_BEEP_COUNT": 1,
+    "COMPLETION_BEEP_FREQUENCY_HZ": 880,
+    "COMPLETION_BEEP_DURATION_MS": 180,
+    "COMPLETION_BEEP_PAUSE_SECONDS": 0.12,
+}
+
+_PRESET_RESULTS_UPDATE = {
+    # --- Pass mode ---
+    "CAPACITY_UNMET_PASS_MODE": "results_update",
+    "SCRAPE_LEAP_RESULTS": False,          # keep False — see note above
+    "RUN_RESET_SUPPLY_AND_TRANSFORMATION_IMPORT_EXPORT": False,
+
+    # --- Other loss / own-use proxy ---
+    "RUN_OTHER_LOSS_OWN_USE_PROXY": True,
+    "OTHER_LOSS_OWN_USE_PROXY_STAGE": "second",
+    "OTHER_LOSS_OWN_USE_OUTPUT_FUEL_SCOPE": "economy",
+    "OTHER_LOSS_OWN_USE_INCLUDE_IN_LEAP_IMPORT": True,
+    "OTHER_LOSS_OWN_USE_LEAP_BALANCE_WORKBOOK_PATH": None,
+    "OTHER_LOSS_OWN_USE_LEAP_BALANCE_SCENARIO": "Target",
+    "OTHER_LOSS_OWN_USE_LEAP_BALANCE_DATE_ID": None,
+
+    # --- Output ---
+    "RESULTS_SINGLE_FILE_OUTPUT": True,
+    "RESULTS_WRITE_LEGACY_SIDECAR_FILES": False,
+    "RESULTS_SINGLE_FILE_ARCHIVE_MIN_HOURS": 24,
+    "RESULTS_SINGLE_FILE_ARCHIVE_EVERY_RUN": True,
+    "KEEP_ALL_ZERO_SUPPLY_ROWS": True,
+
+    # --- Diagnostics ---
+    "RUN_LEAP_FUEL_BRANCH_PROBE_AT_START": False,
+    "BALANCE_DEMAND_FAIL_ON_MAPPING_ISSUES": True,
+    "ENABLE_WORKFLOW_TIMING": True,
+    "WRITE_WORKFLOW_TIMING_CSV": True,
+
+    # --- Completion beep ---
+    "ENABLE_COMPLETION_BEEP": True,
+    "COMPLETION_BEEP_ON_ERROR": True,
+    "COMPLETION_BEEP_COUNT": 1,
+    "COMPLETION_BEEP_FREQUENCY_HZ": 880,
+    "COMPLETION_BEEP_DURATION_MS": 180,
+    "COMPLETION_BEEP_PAUSE_SECONDS": 0.12,
+}
+
+# ← change this to switch presets
+ACTIVE_PRESET = _PRESET_BASELINE_SEED
+
+# Unpack preset — does not overwrite ECONOMIES/SCENARIOS set above.
+globals().update(ACTIVE_PRESET)
 
 def run_with_config() -> dict[str, object]:
     """Run the notebook-configured results-linked transformation+supply workflow."""
@@ -11252,6 +12520,8 @@ def run_with_config() -> dict[str, object]:
         RESULTS_SINGLE_FILE_NAME,
         trade_mode=ACTIVE_SUPPLY_LINK_METHOD,
         iteration_run_mode=CAPACITY_UNMET_PASS_MODE,
+        economies=list(ECONOMIES) if ECONOMIES else None,
+        scenarios=list(SCENARIOS) if SCENARIOS else None,
     )
     if int(supply_data_pipeline.EXPORT_FINAL_YEAR) > int(LEAP_IMPORT_MAX_YEAR):
         print(

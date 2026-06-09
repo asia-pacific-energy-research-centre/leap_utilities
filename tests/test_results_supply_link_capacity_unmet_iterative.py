@@ -10,6 +10,27 @@ from codebase import results_supply_link_workflow as workflow
 from codebase.configuration import workflow_config as workflow_cfg
 
 
+def test_balance_demand_workbooks_resolve_for_non_default_economy(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def _fake_resolve_balance_export_workbook(**kwargs):
+        calls.append(kwargs)
+        return tmp_path / f"{kwargs['economy']}_{kwargs['scenario']}.xlsx"
+
+    monkeypatch.setattr(workflow, "BALANCE_DEMAND_EXPORTS_ROOT", tmp_path, raising=False)
+    monkeypatch.setattr(workflow, "resolve_balance_export_workbook", _fake_resolve_balance_export_workbook)
+
+    ref_path, tgt_path = workflow._resolve_balance_demand_workbooks_for_economy("05_PRC")
+
+    assert ref_path == tmp_path / "05_PRC_REF.xlsx"
+    assert tgt_path == tmp_path / "05_PRC_TGT.xlsx"
+    assert [call["scenario"] for call in calls] == ["REF", "TGT"]
+    assert all(call["economy"] == "05_PRC" for call in calls)
+
+
 def _minimal_reconciliation_df() -> pd.DataFrame:
     return pd.DataFrame(
         [
@@ -308,6 +329,11 @@ def test_capacity_unmet_iterative_same_results_guard(
         "passes": [],
     }
     state_path.write_text(json.dumps(state_payload), encoding="utf-8")
+    # The notebook runtime block at the bottom of the workflow file overrides
+    # CAPACITY_UNMET_PASS_MODE to "baseline_seed".  Monkeypatch to
+    # "results_update" so _read_capacity_unmet_state reads (not resets) state.
+    monkeypatch.setattr(workflow, "CAPACITY_UNMET_PASS_MODE", "results_update", raising=False)
+    monkeypatch.setattr(workflow, "RESULTS_SINGLE_FILE_ARCHIVE_DIR", tmp_path / "archive", raising=False)
 
     process_catalog = pd.DataFrame(
         [

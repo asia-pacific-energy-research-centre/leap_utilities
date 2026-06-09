@@ -4,14 +4,22 @@
 # output/*
 # config/computer_generated/*
 **/archive
+**/.archive
 **/exploration
 #######################################
 # original_preparation_code/*
 *.png
 *.7z
 *.zip
+*.gz
 *.xlsx
 *.csv
+# Generated dashboard outputs (large, reproducible)
+outputs/dashboards/
+outputs/leap_exports/
+outputs/balance_tables/
+# Pandas CSV cache (regenerated automatically)
+data/.cache/
 !config/analysis_input_field_mappings.xlsx
 !config/leap_transport_branch_to_ninth_sector_map.csv
 !config/leap_transport_fuel_aliases.csv
@@ -21,6 +29,7 @@
 *.pkl
 *.dll
 *.code-workspace
+*.interactive
 !.gitkeep
 !docs/images/*.png
 env_leap/*

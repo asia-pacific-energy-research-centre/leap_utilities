@@ -192,13 +192,46 @@ def resolve_balance_export_workbook(
     return latest[0].path
 
 
+def _leap_balance_sheet_unit_to_pj_multiplier(raw: pd.DataFrame) -> float:
+    """Return the multiplier needed to convert a LEAP balance sheet to PJ."""
+    unit_text = ""
+    for row_idx in range(min(4, len(raw))):
+        for value in raw.iloc[row_idx].tolist():
+            text = str(value or "").strip()
+            match = re.search(r"units:\s*(.+)$", text, flags=re.IGNORECASE)
+            if match:
+                unit_text = match.group(1).strip().lower()
+                break
+        if unit_text:
+            break
+    if not unit_text:
+        return 1.0
+
+    unit_text = unit_text.rstrip(".")
+    if unit_text.startswith("thousand petajoule"):
+        return 1000.0
+    if unit_text.startswith("petajoule"):
+        return 1.0
+    if unit_text.startswith("terajoule"):
+        return 0.001
+    if unit_text.startswith("gigajoule"):
+        return 0.000001
+    if unit_text.startswith("million gigajoule"):
+        return 1.0
+    return 1.0
+
+
 def load_leap_balance_activity_table(
     workbook_path: Path | str,
     *,
     balance_rows: Sequence[str],
     fuels: Sequence[str],
 ) -> pd.DataFrame:
-    """Return long LEAP balance values for selected row labels and fuel columns."""
+    """Return long LEAP balance values for selected row labels and fuel columns.
+
+    Values are normalized to petajoules when the LEAP sheet subtitle declares a
+    recognized energy unit.
+    """
     workbook = _resolve_path(workbook_path)
     if not workbook.exists():
         raise FileNotFoundError(f"Missing LEAP balance workbook: {workbook}")
@@ -217,6 +250,7 @@ def load_leap_balance_activity_table(
         raw = pd.read_excel(workbook, sheet_name=sheet_name, header=None)
         if raw.shape[0] < 3 or raw.shape[1] < 2:
             continue
+        unit_multiplier = _leap_balance_sheet_unit_to_pj_multiplier(raw)
         header_row_idx = None
         best_match_count = 0
         for candidate_idx in range(min(8, len(raw))):
@@ -247,13 +281,14 @@ def load_leap_balance_activity_table(
                 value = pd.to_numeric(raw.iat[row_idx, col_idx], errors="coerce")
                 if pd.isna(value):
                     value = 0.0
+                value = float(value) * unit_multiplier
                 rows.append(
                     {
                         "source_dataset": "leap_balance",
                         "year": int(year),
                         "balance_row": row_label,
                         "fuel_label": str(fuel_label).strip(),
-                        "value": float(value),
+                        "value": value,
                     }
                 )
     columns = ["source_dataset", "year", "balance_row", "fuel_label", "value"]

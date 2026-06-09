@@ -52,8 +52,6 @@ ESTO_DATA_PATH = Path("data/00APEC_2024_low.csv")
 NINTH_DATA_PATH = Path("data/merged_file_energy_ALL_20251106.csv")
 ESTO_SUBTOTAL_MAPPING_PATH = Path("config/ESTO_subtotal_mapping.xlsx")
 LEAP_MAPPINGS_PATH = Path("config/leap_mappings.xlsx")
-LOSS_OWN_USE_EXPORT_KEY_PATH = Path("data/losses and own use export.xlsx")
-LOSS_OWN_USE_EXPORT_KEY_SHEET = "Export"
 OUTPUT_FUEL_VALIDATION_ESTO_PATHS = [
     Path("data/00APEC_2025_low_with_subtotals.csv"),
     Path("data/00APEC_2024_low_with_subtotals.csv"),
@@ -89,8 +87,8 @@ EXPORT_FILENAME_TEMPLATE = str(
 # ScenarioID, and RegionID to generated rows. Every generated row must match
 # this file on Branch Path + Variable + Scenario + Region, otherwise the
 # workflow raises because that means the branch/variable/scenario is unexpected.
-EXPORT_KEY_WORKBOOK_PATH = LOSS_OWN_USE_EXPORT_KEY_PATH
-EXPORT_KEY_WORKBOOK_SHEET = LOSS_OWN_USE_EXPORT_KEY_SHEET
+EXPORT_KEY_WORKBOOK_PATH = Path("data/full model export.xlsx")
+EXPORT_KEY_WORKBOOK_SHEET = "Export"
 
 # Demand branch root. Generated paths are:
 # Demand\Other loss and own use\<process>\<fuel>
@@ -373,6 +371,18 @@ LEAP_BALANCE_FUEL_SETS = {
     ],
 }
 
+# Fallback activity definitions for lightweight LEAP balance exports.
+# Some reduced-detail exports do not include process-specific rows such as
+# "Pumped hydro". For those cases we provide a deterministic fallback so
+# second-stage proxy activity remains usable.
+LEAP_BALANCE_ACTIVITY_FALLBACKS = {
+    "pump_storage_plants": {
+        "balance_rows": ["Electricity Generation"],
+        "fuel_set": "electricity_output",
+        "value_mode": "positive_only",
+    },
+}
+
 
 def make_proxy_config(
     *,
@@ -449,7 +459,7 @@ def make_proxy_config(
 # without changing the builder functions.
 PROXY_CONFIG = [
     make_proxy_config(
-        enabled=False,
+        enabled=True,#coal mines own-use/losses cannot be easily handled by auxiliary branch in leap since they are a supply related flow rather than a transformation flow, so keeping enabled for now
         process_key="coal_mines",
         process_label="Coal mines",
         activity_label="Primary coal and coal-products production",
@@ -476,7 +486,7 @@ PROXY_CONFIG = [
         ),
     ),
     make_proxy_config(
-        enabled=True,
+        enabled=True,#cannot be easily handled by auxiliary branch in leap since it includes both electricity and heat output, so keeping enabled for now
         process_key="electricity_chp_and_heat_plants",
         process_label="Electricity, CHP and heat plants",
         activity_label="Electricity and heat output from electricity, CHP, and heat plants",
@@ -504,7 +514,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: total electricity plus heat output from main/autoproducer electricity, CHP, and heat plants.",
     ),
     make_proxy_config(
-        enabled=False,
+        enabled=False,#can be handled by auxiliary branch in leap so keeping disabled for now
         process_key="gas_works_plants",
         process_label="Gas works plants",
         activity_label="Gas works gas output",
@@ -518,7 +528,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: positive gas works gas output. If a LEAP balance export has no Gas works gas column, LEAP-balance mode returns zero for this proxy instead of failing.",
     ),
     make_proxy_config(
-        enabled=True,
+        enabled=True,#cannot be easily handled by auxiliary branch in leap since it includes both liquefaction and regasification, so keeping enabled
         process_key="liquefaction_regasification_plants",
         process_label="Liquefaction/regasification plants",
         activity_label="Natural gas and LNG throughput/output",
@@ -535,7 +545,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: positive output of natural gas and LNG from liquefaction/regasification.",
     ),
     make_proxy_config(
-        enabled=True,
+        enabled=False,#can be handled by auxiliary branch in leap so keeping disabled for now
         process_key="gas_to_liquids_plants",
         process_label="Gas-to-liquids plants",
         activity_label="Gas-to-liquids petroleum-product output",
@@ -554,11 +564,11 @@ PROXY_CONFIG = [
         leap_balance_fuel_set="gas_to_liquids_output",
         activity_value_mode="positive_only",
         esto_target_flows=["10.01.04 Gas-to-liquids plants"],
-        ninth_target_sectors=["10_01_04_gastoliquids_plants"],
+        ninth_target_sectors=["10_01_04_gas_to_liquids_plants"],
         notes="Starter proxy: positive petroleum-product output from gas-to-liquids plants.",
     ),
     make_proxy_config(
-        enabled=False,
+        enabled=False,#can be handled by auxiliary branch in leap so keeping disabled for now
         process_key="coke_ovens",
         process_label="Coke ovens",
         activity_label="Coke oven coal-product output",
@@ -572,7 +582,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: positive coke oven coke, coke oven gas, and coal tar output. If this detailed 9th proxy is zero while ESTO activity exists, the workflow falls back to broader parent 9th activity.",
     ),
     make_proxy_config(
-        enabled=False,
+        enabled=False,#can be handled by auxiliary branch in leap so keeping disabled for now
         process_key="blast_furnaces",
         process_label="Blast furnaces",
         activity_label="Blast furnace gas output",
@@ -586,7 +596,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: positive blast furnace gas output. If this detailed 9th proxy is zero while ESTO activity exists, the workflow falls back to broader parent 9th activity.",
     ),
     make_proxy_config(
-        enabled=True,
+        enabled=False,#can be handled by auxiliary branch in leap so keeping disabled for now
         process_key="patent_fuel_plants",
         process_label="Patent fuel plants",
         activity_label="Patent fuel output",
@@ -600,7 +610,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: positive patent fuel output. If this detailed 9th proxy is zero while ESTO activity exists, the workflow falls back to broader parent 9th activity.",
     ),
     make_proxy_config(
-        enabled=True,
+        enabled=False,#can be handled by auxiliary branch in leap so keeping disabled for now, but enabling here to have the data in the export workbook for now since it is an esto own-use/loss flow in the 2024 dataset
         process_key="bkb_pb_plants",
         process_label="BKB/PB plants",
         activity_label="BKB/PB output",
@@ -614,7 +624,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: positive BKB/PB output. If this detailed 9th proxy is zero while ESTO activity exists, the workflow falls back to broader parent 9th activity.",
     ),
     make_proxy_config(
-        enabled=True,
+        enabled=False,#can be handled by auxiliary branch in leap so keeping disabled for now
         process_key="liquefaction_plants_coal_to_oil",
         process_label="Liquefaction plants (Coal to Oil)",
         activity_label="Coal-to-oil petroleum-product output",
@@ -631,9 +641,9 @@ PROXY_CONFIG = [
         notes="Starter proxy: positive petroleum-product output from coal-to-oil liquefaction. If this detailed 9th proxy is zero while ESTO activity exists, the workflow falls back to broader parent 9th activity.",
     ),
     make_proxy_config(
-        enabled=True,
+        enabled=False,#Can be handled by auxiliary branch in leap so keeping disabled for now
         process_key="oil_refineries",
-        process_label="Oil refineries",
+        process_label="Oil Refining",
         activity_label="Oil refinery petroleum-product output",
         esto_activity_flows=["09.07 Oil refineries"],
         esto_activity_product_prefixes=["07."],
@@ -662,7 +672,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: positive petroleum-product output from oil refineries.",
     ),
     make_proxy_config(
-        enabled=True,
+        enabled=True,#cannot be easily handled by auxiliary branch in leap since it includes both production and processing own-use/losses, so keeping enabled
         process_key="oil_and_gas_extraction",
         process_label="Oil and gas extraction",
         activity_label="Primary oil and gas production",
@@ -696,7 +706,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: primary production of crude oil/NGL/other hydrocarbons and gas products.",
     ),
     make_proxy_config(
-        enabled=True,
+        enabled=True,#cannot be easily handled by auxiliary branch in leap since it includes both pumping and generation, so keeping enabled
         process_key="pump_storage_plants",
         process_label="Pump storage plants",
         activity_label="Pump storage electricity output",
@@ -711,7 +721,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: 9th pump-storage electricity output. ESTO and simple LEAP balance exports do not isolate pump storage, so LEAP balance mode falls back to total electricity production unless refined later.",
     ),
     make_proxy_config(
-        enabled=True,
+        enabled=True,#cannot be easily handled by auxiliary branch in leap since it includes both pumping and generation, so keeping enabled
         process_key="nuclear_industry",
         process_label="Nuclear industry",
         activity_label="Primary nuclear production",
@@ -728,7 +738,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: primary nuclear production.",
     ),
     make_proxy_config(
-        enabled=True,
+        enabled=False,#can be handled by auxiliary branch in leap so keeping disabled for now
         process_key="charcoal_production_plants",
         process_label="Charcoal production plants",
         activity_label="Charcoal output",
@@ -742,7 +752,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: positive charcoal output from charcoal processing.",
     ),
     make_proxy_config(
-        enabled=True,
+        enabled=True,#not a transformation module in LEAP, so cannot be handled by auxiliary branch. 
         process_key="gasification_plants_for_biogases",
         process_label="Gasification plants for biogases",
         activity_label="Biogas production",
@@ -759,7 +769,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: biogas production. There is no direct ESTO 09 gasification activity row, so this uses primary biogas production.",
     ),
     make_proxy_config(
-        enabled=False,
+        enabled=False,#can be handled by auxiliary branch in leap so keeping disabled for now
         process_key="nonspecified_own_uses",
         process_label="Non-specified own uses",
         activity_label="Non-specified transformation positive output",
@@ -773,7 +783,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: positive output from non-specified transformation. Fuel set is based on nonzero ESTO/9th activity fuels across all economies.",
     ),
     make_proxy_config(
-        enabled=True,
+        enabled=True,#besides electricity own-use/losses, transmission and distribution losses for other fuels cannot be easily isolated in LEAP balances or auxiliary branches, so keeping enabled for now
         process_key="transmission_and_distribution_losses",
         process_label="Transmission and distribution losses",
         leap_process_label="Transmission and distribution loss",
@@ -794,6 +804,7 @@ PROXY_CONFIG = [
         notes="Starter proxy: total positive production excluding electricity, so LEAP-balance activity is not driven by produced electricity.",
     ),
     make_proxy_config(
+        enabled=False,#CCS own-use/losses are not clearly isolated in either ESTO or 9th, so keeping disabled for now
         process_key="ccs",
         process_label="CCS",
         esto_target_flows=[],
@@ -1163,7 +1174,7 @@ def build_leap_balance_proxy_activity_series(
     leap_cfg = config["activity_sources"].get("leap_balance", {})
     fuel_set_name = str(leap_cfg.get("fuel_set", "")).strip()
     fuels = LEAP_BALANCE_FUEL_SETS.get(fuel_set_name, [])
-    return build_leap_balance_activity_series(
+    series = build_leap_balance_activity_series(
         leap_balance_activity,
         balance_rows=leap_cfg.get("balance_rows", []),
         fuels=fuels,
@@ -1171,6 +1182,36 @@ def build_leap_balance_proxy_activity_series(
         base_year=base_year,
         final_year=final_year,
     )
+    if any(abs(float(value)) > 0.0 for value in series.values()):
+        return series
+
+    process_key = str(config.get("process_key", "")).strip()
+    fallback_cfg = LEAP_BALANCE_ACTIVITY_FALLBACKS.get(process_key)
+    if not isinstance(fallback_cfg, dict):
+        return series
+
+    fallback_rows = [str(item) for item in fallback_cfg.get("balance_rows", []) if str(item).strip()]
+    fallback_fuel_set = str(fallback_cfg.get("fuel_set", "")).strip()
+    fallback_fuels = LEAP_BALANCE_FUEL_SETS.get(fallback_fuel_set, [])
+    if not fallback_rows or not fallback_fuels:
+        return series
+
+    fallback_series = build_leap_balance_activity_series(
+        leap_balance_activity,
+        balance_rows=fallback_rows,
+        fuels=fallback_fuels,
+        value_mode=str(fallback_cfg.get("value_mode", leap_cfg.get("value_mode", "signed_sum")) or "signed_sum"),
+        base_year=base_year,
+        final_year=final_year,
+    )
+    if any(abs(float(value)) > 0.0 for value in fallback_series.values()):
+        print(
+            "[INFO] LEAP-balance proxy activity fallback applied for "
+            f"{process_key}: rows={fallback_rows}, fuel_set={fallback_fuel_set}."
+        )
+        return fallback_series
+
+    return series
 
 
 def build_proxy_activity_series(
@@ -2187,9 +2228,10 @@ def build_proxy_log_rows(
             units.setdefault(key, {}).update(dict(value))
 
     rows: list[dict[str, object]] = []
-    child_activity_rows: list[dict[str, object]] = []
+    child_process_labels: list[str] = []
     process_group_col = "leap_process_label" if "leap_process_label" in detail_df.columns else "process_label"
     for process_label, process_group in detail_df.groupby(process_group_col, dropna=False):
+        child_process_labels.append(str(process_label))
         for fuel_label, fuel_group in process_group.groupby("fuel_branch_label", dropna=False):
             if not str(fuel_label or "").strip():
                 continue
@@ -2208,14 +2250,6 @@ def build_proxy_log_rows(
                     str(units[ACTIVITY_VARIABLE].get("per", "")),
                 )
             )
-            for year, value in activity_by_year.items():
-                child_activity_rows.append(
-                    {
-                        "process_label": str(process_label),
-                        "year": int(year),
-                        "value": float(value),
-                    }
-                )
             intensity_by_year = fuel_group.set_index("year")["intensity"].to_dict()
             rows.extend(
                 build_year_rows(
@@ -2228,39 +2262,22 @@ def build_proxy_log_rows(
                     str(units[INTENSITY_VARIABLE].get("per", "")),
                 )
             )
-    if child_activity_rows:
-        activity_totals = pd.DataFrame(child_activity_rows)
-        root_path = build_branch_path(DEMAND_ROOT_PARTS)
-        root_activity_by_year = (
-            activity_totals.groupby("year", dropna=False)["value"].sum().to_dict()
+
+    # Write root and process Activity Level rows with Units="No data" and all
+    # values = 0. This explicitly clears any stale values in the LEAP template
+    # export files without feeding a real activity into the hierarchy (which
+    # would cause LEAP to cascade-multiply parent × child × leaf × intensity).
+    all_years = sorted({int(y) for y in detail_df["year"].dropna().unique()}) if not detail_df.empty else []
+    zero_by_year = {y: 0.0 for y in all_years}
+    parent_paths = [build_branch_path(DEMAND_ROOT_PARTS)] + [
+        build_branch_path([*DEMAND_ROOT_PARTS, label]) for label in child_process_labels
+    ]
+    parent_rows: list[dict[str, object]] = []
+    for path in parent_paths:
+        parent_rows.extend(
+            build_year_rows(path, ACTIVITY_VARIABLE, scenario, zero_by_year, "No data", "", "")
         )
-        parent_rows = build_year_rows(
-            root_path,
-            ACTIVITY_VARIABLE,
-            scenario,
-            root_activity_by_year,
-            str(units[ACTIVITY_VARIABLE].get("units", "")),
-            str(units[ACTIVITY_VARIABLE].get("scale", "")),
-            str(units[ACTIVITY_VARIABLE].get("per", "")),
-        )
-        for process_label, process_totals in activity_totals.groupby("process_label", dropna=False):
-            process_path = build_branch_path([*DEMAND_ROOT_PARTS, str(process_label)])
-            process_activity_by_year = (
-                process_totals.groupby("year", dropna=False)["value"].sum().to_dict()
-            )
-            parent_rows.extend(
-                build_year_rows(
-                    process_path,
-                    ACTIVITY_VARIABLE,
-                    scenario,
-                    process_activity_by_year,
-                    str(units[ACTIVITY_VARIABLE].get("units", "")),
-                    str(units[ACTIVITY_VARIABLE].get("scale", "")),
-                    str(units[ACTIVITY_VARIABLE].get("per", "")),
-                )
-            )
-        rows = parent_rows + rows
-    return rows
+    return parent_rows + rows
 
 
 def build_expression_export_df(export_df: pd.DataFrame, *, base_year: int) -> pd.DataFrame:
@@ -2312,6 +2329,18 @@ def load_export_key_table(
     for col in ["Branch Path", "Variable", "Scenario", "Region"]:
         df[col] = df[col].fillna("").astype(str).str.strip()
     df = df[df["Branch Path"].ne("") & df["Variable"].ne("") & df["Scenario"].ne("") & df["Region"].ne("")].copy()
+
+    # Scope key rows to the branch/variables managed by this workflow before
+    # duplicate validation. Full-model exports can legitimately contain
+    # duplicate key tuples in unrelated parts of the model; those should not
+    # block Other loss/own-use import generation.
+    managed_root = build_branch_path(DEMAND_ROOT_PARTS)
+    managed_variables = {ACTIVITY_VARIABLE, INTENSITY_VARIABLE}
+    df = df[
+        df["Branch Path"].astype(str).str.startswith(managed_root)
+        & df["Variable"].isin(managed_variables)
+    ].copy()
+
     duplicate_mask = df.duplicated(["Branch Path", "Variable", "Scenario", "Region"], keep=False)
     if duplicate_mask.any():
         duplicates = df.loc[duplicate_mask, ["Branch Path", "Variable", "Scenario", "Region"]].head(20)
@@ -2467,7 +2496,7 @@ def add_export_id_sheet(
     export_key_sheet: str = EXPORT_KEY_WORKBOOK_SHEET,
     output_sheet_name: str = "LEAP_WITH_IDS",
     model_name: str = EXPORT_MODEL_NAME,
-    keep_only_id_sheet: bool = True,
+    keep_only_id_sheet: bool = False,
     include_zero_rows_for_unset_values: bool = True,
     base_year: int = EXPORT_BASE_YEAR,
     final_year: int = EXPORT_FINAL_YEAR,
@@ -2773,6 +2802,7 @@ def assemble_proxy_workbook(
         include_zero_rows_for_unset_values=True,
         base_year=EXPORT_BASE_YEAR,
         final_year=EXPORT_FINAL_YEAR,
+
     )
 
     if include_leap_import:

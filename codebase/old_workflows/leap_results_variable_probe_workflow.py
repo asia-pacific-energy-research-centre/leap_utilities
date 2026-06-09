@@ -212,7 +212,7 @@ LEAP_IMPORT_WORKBOOK_PATH = (
     / "transformation_leap_imports_20_USA_Reference.xlsx"
 )
 PROBE_SCENARIO = "Reference"
-PROBE_REGION = "United States of America"
+PROBE_REGION = "United States"
 PROBE_BRANCH_FILTER = None
 PROBE_VARIABLE_FILTER = None
 PROBE_LIMIT = 20

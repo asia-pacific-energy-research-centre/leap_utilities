@@ -3,10 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 # Legacy power-only configuration.
-# This file is kept for reference, but it is no longer used by the official
-# `codebase/leap_results_dashboard_v2_workflow.py` path. The official dashboard
-# now derives one consistent transformation-gap metric from the shared
-# sheet-map-driven inputs and outputs instead.
+# This file is kept for reference and is not part of the current
+# leap_utilities transformation workflow path.
 
 
 SCENARIOS = ("Reference", "Target")

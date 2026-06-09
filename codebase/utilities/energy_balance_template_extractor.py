@@ -259,12 +259,14 @@ class TemplateBalanceExtractor:
         codebook_path: Path,
         reinterpret_fuel_rows_as_parent_sector: bool = False,
         explicit_pair_mappings_only: bool = False,
+        allow_descendant_mapping_expansion: bool = True,
     ) -> None:
         self.template_sheet = template_sheet
         self.mapping_pairs_path = mapping_pairs_path
         self.codebook_path = codebook_path
         self.reinterpret_fuel_rows_as_parent_sector = bool(reinterpret_fuel_rows_as_parent_sector)
         self.explicit_pair_mappings_only = bool(explicit_pair_mappings_only)
+        self.allow_descendant_mapping_expansion = bool(allow_descendant_mapping_expansion)
         self._flow_name_to_codes: dict[str, list[str]] = {}
         self._fuel_name_to_codes: dict[str, list[str]] = {}
         self._flow_name_to_esto: dict[str, list[str]] = {}
@@ -1282,9 +1284,13 @@ class TemplateBalanceExtractor:
         # Some LEAP balance exports expose a mapped child branch only as its parent
         # row. Use descendant mappings only when that child row is absent from
         # the current sheet, otherwise the parent would double-count the child.
-        use_descendant_records = bool(descendant_esto or descendant_ninth) and (
-            self._balance_detail_mode == "less_detail" or not full_path_esto
-        ) and not descendant_source_present
+        use_descendant_records = (
+            self.allow_descendant_mapping_expansion
+            and not self.explicit_pair_mappings_only
+            and bool(descendant_esto or descendant_ninth)
+            and (self._balance_detail_mode == "less_detail" or not full_path_esto)
+            and not descendant_source_present
+        )
         if use_descendant_records:
             if descendant_esto:
                 full_path_esto = descendant_esto

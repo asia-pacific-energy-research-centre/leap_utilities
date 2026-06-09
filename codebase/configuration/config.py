@@ -4,9 +4,6 @@
 
 #%%
 # --- Branch Type Constants ---
-import re
-
-
 BRANCH_DEMAND_CATEGORY = 1
 BRANCH_DEMAND_TECHNOLOGY = 4
 BRANCH_DEMAND_FUEL = 36
@@ -168,7 +165,7 @@ region_id_name_dict = {
     },
     "20_USA": {
         "region_id": 1,
-        "region_name": "United States of America",
+        "region_name": "United States",
         "region_code": "20_USA",
     },
 }
@@ -179,22 +176,9 @@ region_id_name_dict = {
 import os
 import sys
 from pathlib import Path
-import re
 
-# identify if this is Finn's PC by checking the path pattern, or allow override
-override_root = os.environ.get("LEAP_UTILITIES_REPO_ROOT", "").strip()
-if override_root:
-    REPO_ROOT = Path(override_root)
-else:
-    finn_pc_pattern = r"C:\\Users\\Work\\github"
-    wsl_pc_pattern = r"/mnt/c/Users/Work/github"
-    cwd_lower = str(Path.cwd()).lower()
-    if re.match(finn_pc_pattern.lower(), cwd_lower):
-        REPO_ROOT = Path("C:/Users/Work/github/leap_utilities")
-    elif re.match(wsl_pc_pattern.lower(), cwd_lower):
-        REPO_ROOT = Path("/mnt/c/Users/Work/github/leap_utilities")
-    else:
-        raise ValueError("Unrecognized PC - please set REPO_ROOT manually.")
+_env_root = os.environ.get("LEAP_UTILITIES_REPO_ROOT", "").strip()
+REPO_ROOT = Path(_env_root) if _env_root else Path(__file__).resolve().parents[2]
 #add paths to sys.path so we can import config files. This is complicated by the way other files from different repos import this and run it, so we have to add paths to sys.path instead of changing cwd.
 
 #Path(__file__).resolve().parents[1]

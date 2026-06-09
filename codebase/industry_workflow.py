@@ -69,7 +69,7 @@ SOURCE_SCENARIO_FOR_MISSING = {
 }
 FILL_ALL_SCENARIOS = True
 CREATE_BRANCHES_FOR_ALL_SCENARIOS = True  # Use all configured non-current-account scenarios.
-REGION = "United States of America"
+REGION = "United States"
 sheet_name = "Export"
 
 CURRENT_ACCOUNT_LABELS = {"current accounts", "current account"}

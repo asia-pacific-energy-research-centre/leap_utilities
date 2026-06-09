@@ -27,7 +27,7 @@ def test_find_and_validate_export_helpers(tmp_path: Path) -> None:
             "Branch Path": ["Demand\\A"],
             "Variable": ["Activity Level"],
             "Scenario": ["Target"],
-            "Region": ["United States of America"],
+            "Region": ["United States"],
         }
     )
     with pd.ExcelWriter(new_path, engine="openpyxl") as writer:
@@ -39,4 +39,4 @@ def test_find_and_validate_export_helpers(tmp_path: Path) -> None:
     )
     assert found == new_path
     assert leap_exports.list_scenarios(new_path, sheet_name="LEAP") == ["Target"]
-    leap_exports.validate_region(new_path, "United States of America", sheet_name="LEAP")
+    leap_exports.validate_region(new_path, "United States", sheet_name="LEAP")

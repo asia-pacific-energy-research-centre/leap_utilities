@@ -30,7 +30,7 @@ OUTPUT_DIR = Path("data/leap results tables")
 SCENARIOS: list[str] = ["Reference", "Target"]
 # List of (economy_code, region_display_name)
 ECONOMIES: list[tuple[str, str]] = [
-    ("USA", "United States of America"),
+    ("USA", "United States"),
     # Add more, e.g., ("CAN", "Canada")
 ]
 FILENAME_TEMPLATE = "demand_others_results_20_{econ}_{scenario}.xlsx"

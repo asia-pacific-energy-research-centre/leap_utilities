@@ -61,7 +61,7 @@ SOURCE_SCENARIO_FOR_MISSING = {
 }
 FILL_ALL_SCENARIOS = True
 CREATE_BRANCHES_FOR_ALL_SCENARIOS = True
-REGION = "United States of America"
+REGION = "United States"
 sheet_name = "refining"
 
 CURRENT_ACCOUNT_LABELS = {"current accounts", "current account"}

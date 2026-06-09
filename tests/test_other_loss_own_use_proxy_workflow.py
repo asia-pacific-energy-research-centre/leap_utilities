@@ -907,7 +907,7 @@ def test_merge_export_ids_adds_key_columns() -> None:
                 "Branch Path": "Demand\\Other loss and own use\\Coal mines",
                 "Variable": "Activity Level",
                 "Scenario": "Target",
-                "Region": "United States of America",
+                "Region": "United States",
                 "Expression": "Data(2022,1)",
             },
         ]
@@ -922,7 +922,7 @@ def test_merge_export_ids_adds_key_columns() -> None:
                 "Branch Path": "Demand\\Other loss and own use\\Coal mines",
                 "Variable": "Activity Level",
                 "Scenario": "Target",
-                "Region": "United States of America",
+                "Region": "United States",
             },
         ]
     )
@@ -940,7 +940,7 @@ def test_merge_export_ids_raises_for_unexpected_rows() -> None:
                 "Branch Path": "Demand\\Other loss and own use\\Coal mines",
                 "Variable": "Activity Level",
                 "Scenario": "Target",
-                "Region": "United States of America",
+                "Region": "United States",
                 "Expression": "Data(2022,1)",
             },
         ]
@@ -973,7 +973,7 @@ def test_add_zero_rows_for_unset_values() -> None:
                 "Branch Path": "Demand\\Other loss and own use\\Coal mines\\Electricity",
                 "Variable": "Activity Level",
                 "Scenario": "Target",
-                "Region": "United States of America",
+                "Region": "United States",
                 "Scale": "",
                 "Units": "Unspecified Unit",
                 "Per...": "",
@@ -995,7 +995,7 @@ def test_add_zero_rows_for_unset_values() -> None:
                 "Branch Path": "Demand\\Other loss and own use\\Coal mines\\Electricity",
                 "Variable": "Activity Level",
                 "Scenario": "Target",
-                "Region": "United States of America",
+                "Region": "United States",
             },
             {
                 "BranchID": 1,
@@ -1005,7 +1005,7 @@ def test_add_zero_rows_for_unset_values() -> None:
                 "Branch Path": "Demand\\Other loss and own use\\Coal mines\\Electricity",
                 "Variable": "Final Energy Intensity",
                 "Scenario": "Target",
-                "Region": "United States of America",
+                "Region": "United States",
             },
             {
                 "BranchID": 1,
@@ -1015,7 +1015,7 @@ def test_add_zero_rows_for_unset_values() -> None:
                 "Branch Path": "Demand\\Other loss and own use\\Coal mines\\Electricity",
                 "Variable": "Demand Cost",
                 "Scenario": "Target",
-                "Region": "United States of America",
+                "Region": "United States",
             },
         ]
     )
@@ -1042,7 +1042,7 @@ def test_add_export_id_sheet_can_keep_only_id_sheet(tmp_path) -> None:
                 "Branch Path": "Demand\\Other loss and own use\\Coal mines",
                 "Variable": "Activity Level",
                 "Scenario": "Target",
-                "Region": "United States of America",
+                "Region": "United States",
                 "Expression": "Data(2022,1)",
             },
         ]
@@ -1069,7 +1069,7 @@ def test_add_export_id_sheet_can_keep_only_id_sheet(tmp_path) -> None:
                 "Branch Path": "Demand\\Other loss and own use\\Coal mines",
                 "Variable": "Activity Level",
                 "Scenario": "Target",
-                "Region": "United States of America",
+                "Region": "United States",
             },
         ]
     )

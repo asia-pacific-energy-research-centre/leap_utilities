@@ -57,6 +57,7 @@ RUN_COAL_TRANSFORMATION_ANALYSIS = core.RUN_COAL_TRANSFORMATION_ANALYSIS
 RUN_OTHER_TRANSFORMATION_ANALYSIS = core.RUN_OTHER_TRANSFORMATION_ANALYSIS
 RUN_CHARCOAL_PROCESSING_ANALYSIS = core.RUN_CHARCOAL_PROCESSING_ANALYSIS
 RUN_NONSPECIFIED_TRANSFORMATION_ANALYSIS = core.RUN_NONSPECIFIED_TRANSFORMATION_ANALYSIS
+RUN_OIL_REFINERY_ANALYSIS = core.RUN_OIL_REFINERY_ANALYSIS
 RUN_HYDROGEN_TRANSFORMATION_ANALYSIS = core.RUN_HYDROGEN_TRANSFORMATION_ANALYSIS
 
 ANALYSIS_REGISTRY = [
@@ -75,6 +76,10 @@ ANALYSIS_REGISTRY = [
     ("biofuels_processing", core.run_flow_sector_analysis, RUN_OTHER_TRANSFORMATION_ANALYSIS),
     ("charcoal_processing", core.run_flow_sector_analysis, RUN_CHARCOAL_PROCESSING_ANALYSIS),
     ("nonspecified_transformation", core.run_flow_sector_analysis, RUN_NONSPECIFIED_TRANSFORMATION_ANALYSIS),
+    # Oil refineries: currently uses run_flow_sector_analysis which captures only the primary
+    # output fuel.  A full multi-output analysis (similar to hydrogen) is needed to represent
+    # all product streams (gasoline, diesel, jet fuel, etc.).
+    ("oil_refineries", core.run_flow_sector_analysis, RUN_OIL_REFINERY_ANALYSIS),
     ("hydrogen_transformation", core.run_hydrogen_transformation_analysis, RUN_HYDROGEN_TRANSFORMATION_ANALYSIS),
 ]
 
@@ -123,6 +128,8 @@ def build_transformation_rows(economies: Iterable[str] | None = None) -> list[di
     override = economies is not None
     if override:
         core.ECONOMIES_TO_ANALYZE = list(economies)
+    core.reset_dropped_fuel_log()
+    core.reset_analyzed_sector_titles()
     rows: list[dict] = []
     try:
         for sector_key, callback, enabled in ANALYSIS_REGISTRY:
@@ -130,6 +137,8 @@ def build_transformation_rows(economies: Iterable[str] | None = None) -> list[di
     finally:
         if override:
             core.ECONOMIES_TO_ANALYZE = original_economies
+    report_path = Path(core.EXPORT_OUTPUT_DIR) / "dropped_input_fuels_report.csv"
+    core.save_dropped_fuel_report(report_path)
     return rows
 
 
@@ -477,6 +486,7 @@ def assemble_transformation_workbook(
             export_filename,
             core.EXPORT_MODEL_NAME,
             scenario_list,
+            in_scope_sector_titles=core.get_analyzed_sector_titles(),
         )
         return [Path(export_path)] if export_path else []
     finally:

@@ -147,9 +147,34 @@ EXPORT_FILENAME_REGEX = re.compile(
     re.IGNORECASE,
 )
 EXPORT_MODEL_NAME = "USA transport supply imports"
-EXPORT_REGION = "United States of America"
+EXPORT_REGION = "United States"
 EXPORT_BASE_YEAR = BASE_YEAR
 EXPORT_FINAL_YEAR = PROJECTION_END_YEAR
+
+APEC_ECONOMY_REGION_MAP: dict[str, str] = {
+    "01_AUS": "Australia",
+    "02_BD": "Brunei Darussalam",
+    "03_CDA": "Canada",
+    "04_CHL": "Chile",
+    "05_PRC": "China",
+    "06_HKC": "Hong Kong, China",
+    "07_INA": "Indonesia",
+    "08_JPN": "Japan",
+    "09_ROK": "Republic of Korea",
+    "10_MAS": "Malaysia",
+    "11_MEX": "Mexico",
+    "12_NZ": "New Zealand",
+    "13_PNG": "Papua New Guinea",
+    "14_PE": "Peru",
+    "15_PHL": "The Philippines",
+    "16_RUS": "Russia",
+    "17_SGP": "Singapore",
+    "18_CT": "Chinese Taipei",
+    "19_THA": "Thailand",
+    "20_USA": "United States",
+    "21_VN": "Viet Nam",
+}
+
 EXPORT_ECONOMY_REGION_OVERRIDES = {"20USA": EXPORT_REGION}
 SAVE_PROJECTION_DIAGNOSTICS = False
 PROJECTION_DIAGNOSTICS_PATH = REPO_ROOT / "outputs" / "ninth_supply_projection_fallbacks.csv"
@@ -229,9 +254,13 @@ ESTO_PRODUCT_CLASSIFICATION = {
 
 def _normalize_supply_lookup_fuel_name(value):
     """Normalize a fuel label into a stable lookup key for branch-root resolution."""
+    import re as _re
     text = str(value or "").strip()
     if not text:
         return ""
+    # Strip leading ESTO product code prefix (e.g. "02.08 " or "07.04.01 ") so that
+    # "02.08 BKB and PB" and "BKB and PB" both normalize to the same key.
+    text = _re.sub(r"^\d+(\.\d+)*\s+", "", text).strip()
     sanitized = sanitize_leap_name(text)
     normalized = " ".join(str(sanitized or "").strip().lower().split())
     return normalized
@@ -1375,7 +1404,10 @@ def build_supply_value_by_year(
 def get_region_for_economy(economy_code):
     """Return the LEAP region name that should be used for an economy."""
     try:
-        return EXPORT_ECONOMY_REGION_OVERRIDES.get(economy_code, EXPORT_REGION)
+        code = str(economy_code).strip()
+        if code in APEC_ECONOMY_REGION_MAP:
+            return APEC_ECONOMY_REGION_MAP[code]
+        return EXPORT_ECONOMY_REGION_OVERRIDES.get(code, EXPORT_REGION)
     except Exception as exc:
         print(f"Failed to resolve region for {economy_code}: {exc}")
         try_debug_breakpoint()

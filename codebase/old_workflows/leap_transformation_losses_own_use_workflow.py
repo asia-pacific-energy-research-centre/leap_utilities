@@ -93,7 +93,7 @@ def run_workflow(
 ) -> dict[str, object]:
     ensure_repo_root()
     output_dir = _resolve(cfg.OUTPUT_ROOT) / economy
-    regions = tuple(cfg.REGIONS) if cfg.REGIONS else ("United States of America",)
+    regions = tuple(cfg.REGIONS) if cfg.REGIONS else ("United States",)
 
     if dry_run:
         raw_df = empty_raw_result_pulls()

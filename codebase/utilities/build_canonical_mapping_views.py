@@ -449,7 +449,7 @@ def run_mapping_views_workflow(
     codebook_path: Path | str = Path("config/sector_fuel_codes_to_names.xlsx"),
     sheet_map_path: Path | str = Path("config/leap_results_sheet_map.csv"),
     override_path: Path | str = Path("config/backup_leap_mappings.xlsx"),
-    leap_long_path: Path | str = Path("outputs/dashboards/leap_results_dashboard/USA/leap_long.csv"),
+    leap_long_path: Path | str | None = None,
     projection_table_path: Path | str = Path("data/merged_file_energy_ALL_20251106.csv"),
     output_dir: Path | str = Path("config/computer_generated_config/leap_mapping_views/USA"),
     fail_on_hard_conflicts: bool = False,
@@ -463,11 +463,11 @@ def run_mapping_views_workflow(
     codebook_path = _resolve_path(codebook_path)
     sheet_map_path = _resolve_path(sheet_map_path)
     override_path = _resolve_path(override_path)
-    leap_long_path = _resolve_path(leap_long_path)
+    leap_long_path = _resolve_path(leap_long_path) if leap_long_path else None
     projection_table_path = _resolve_path(projection_table_path)
     output_dir = _resolve_path(output_dir)
 
-    effective_leap_long = leap_long_path if leap_long_path.exists() else None
+    effective_leap_long = leap_long_path if leap_long_path and leap_long_path.exists() else None
     exit_code = build_views(
         canonical_pairs_path=canonical_pairs_path,
         codebook_path=codebook_path,

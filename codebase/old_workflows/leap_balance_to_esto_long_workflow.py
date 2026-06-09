@@ -116,6 +116,7 @@ def run_workflow() -> dict[str, object]:
         projection_economy=PROJECTION_ECONOMY,
         max_output_year=MAX_OUTPUT_YEAR,
         explicit_pair_mappings_only=True,
+        allow_descendant_mapping_expansion=False,
     )
     ingestion = conversion["ingestion"]
 
